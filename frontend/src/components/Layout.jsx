@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { isAdmin, roleLabel } from '../utils/roles';
+import { isAdmin, isChecker, roleLabel } from '../utils/roles';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const admin = isAdmin(user);
+  const checker = isChecker(user);
 
   const handleLogout = () => {
     logout();
@@ -46,10 +47,31 @@ export default function Layout() {
                 Finance
               </NavLink>
               <NavLink
-                to="/admin"
+                to="/review"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
                 Reviews
+              </NavLink>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Admin
+              </NavLink>
+            </>
+          ) : checker ? (
+            <>
+              <NavLink
+                to="/review"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Reviews
+              </NavLink>
+              <NavLink
+                to="/terminology"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Terminology
               </NavLink>
             </>
           ) : (
@@ -91,7 +113,7 @@ export default function Layout() {
             <span className="user-badge">
               {user?.name}
               <span className={`role-badge role-${user?.role}`}>{roleLabel(user)}</span>
-              {!admin && (
+              {!admin && !checker && (
                 <span className={`status-badge status-${user?.status}`} style={{ marginLeft: 4 }}>
                   {user?.status?.replace('_', ' ')}
                 </span>

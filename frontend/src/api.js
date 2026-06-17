@@ -37,6 +37,32 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function downloadRequest(path, fallbackFilename) {
+  const headers = {};
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, { headers });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || `Download failed (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match?.[1] || fallbackFilename;
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function uploadRequest(path, formData) {
   const headers = {};
   const token = getToken();
@@ -79,6 +105,10 @@ export const api = {
   getLabels: (id) => request(`/assignments/${id}/labels`),
   saveLabels: (id, body) =>
     request(`/assignments/${id}/labels`, { method: 'PUT', body: JSON.stringify(body) }),
+  exportLabels: (id, variant = 'post') =>
+    downloadRequest(`/assignments/${id}/export?variant=${variant}`, `labels_${variant}.json`),
+  exportSubmission: (id, variant = 'post') =>
+    downloadRequest(`/admin/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
   getAdminStats: () => request('/admin/stats'),
   createLabeller: (body) =>
     request('/admin/labellers', { method: 'POST', body: JSON.stringify(body) }),
@@ -103,10 +133,22 @@ export const api = {
   importClips: () => request('/admin/import-clips', { method: 'POST' }),
   getSubmissions: () => request('/admin/submissions'),
   reviewSubmission: (id, body) =>
-    request(`/admin/submissions/${id}/review`, {
+    request(`/review/submissions/${id}/review`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  getReviewSubmissions: (status = 'submitted') =>
+    request(`/review/submissions?status=${status}`),
+  getReviewSubmission: (id, variant = 'post') =>
+    request(`/review/submissions/${id}?variant=${variant}`),
+  validateSubmissionEvents: (id, body) =>
+    request(`/review/submissions/${id}/validate`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  getCheckers: () => request('/admin/checkers'),
+  createChecker: (body) =>
+    request('/admin/checkers', { method: 'POST', body: JSON.stringify(body) }),
   createAssignment: (body) =>
     request('/assignments', { method: 'POST', body: JSON.stringify(body) }),
   getFinanceDashboard: () => request('/admin/finance/dashboard'),

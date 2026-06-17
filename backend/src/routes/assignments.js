@@ -83,6 +83,50 @@ router.post('/:id/claim', auth, async (req, res) => {
   }
 });
 
+router.get('/:id/export', auth, async (req, res) => {
+  try {
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      assignment.assignedTo?.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: 'You are not assigned to this video' });
+    }
+
+    if (!assignment.clipId) {
+      return res.status(400).json({ message: 'Assignment has no clipId for export' });
+    }
+
+    const filter = { assignmentId: req.params.id };
+    if (isLabeller(req.user)) {
+      filter.userId = req.user._id;
+    }
+
+    const submission = await LabelSubmission.findOne(filter);
+    if (!submission) {
+      return res.status(404).json({ message: 'No labels found' });
+    }
+
+    const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const payload = exportAnnotation(submission.events, {
+      gameTime: assignment.gameTime || '1 - 00:00',
+      variant,
+    });
+    const filename = getExportFilename(assignment.clipId, variant);
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(JSON.stringify(payload, null, 2));
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
 router.get('/:id/labels', auth, async (req, res) => {
   try {
     const filter = { assignmentId: req.params.id };

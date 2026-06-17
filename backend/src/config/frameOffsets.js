@@ -1,4 +1,4 @@
-const FPS = 30;
+const FPS = 25;
 
 const FRAME_OFFSETS = {
   default: -2,

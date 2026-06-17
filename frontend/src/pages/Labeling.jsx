@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import {
   applyFrameOffset,
-  canImmediateFollowUp,
   formatOffset,
-  frameToSeconds,
+  FPS,
   getImmediateFollowUpRule,
   resolveFrameOffset,
 } from '../config/frameOffsets';
+import FrameMagnifier from '../components/FrameMagnifier';
+import EventPickerModal from '../components/EventPickerModal';
+import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
+
+const FRAME_PLAY_INTERVAL_MS = 500;
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -19,126 +23,291 @@ function formatTime(seconds) {
 export default function Labeling() {
   const { id } = useParams();
   const videoRef = useRef(null);
+  const frameAutoTimerRef = useRef(null);
   const [assignment, setAssignment] = useState(null);
   const [eventTypes, setEventTypes] = useState([]);
   const [events, setEvents] = useState([]);
   const [currentTime, setCurrentTime] = useState(0);
-  const [selectedType, setSelectedType] = useState('');
-  const [immediateFollowUp, setImmediateFollowUp] = useState(false);
-  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [playMode, setPlayMode] = useState('paused');
+  const [magnifyEnabled, setMagnifyEnabled] = useState(false);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+
+  const fps = assignment?.fps || FPS;
+  const frameDuration = 1 / fps;
+  const maxTime = assignment?.durationSeconds || 30;
+  const currentFrame = Math.round(currentTime * fps);
+  const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
   const lastEvent = events.length > 0 ? events[events.length - 1] : null;
-  const followUpRule = useMemo(
-    () => (lastEvent ? getImmediateFollowUpRule(lastEvent.eventType, selectedType) : null),
-    [lastEvent, selectedType]
-  );
-  const showFollowUpOption = canImmediateFollowUp(selectedType) && followUpRule;
-
-  const offsetOptions = {
-    immediateFollowUp,
-    afterEvent: immediateFollowUp ? lastEvent?.eventType : null,
-  };
-  const selectedOffset = resolveFrameOffset(selectedType, offsetOptions);
-  const markedTime = applyFrameOffset(currentTime, selectedType, offsetOptions);
 
   useEffect(() => {
     Promise.all([api.getAssignment(id), api.getEvents(), api.getLabels(id)])
       .then(([assign, types, labels]) => {
         setAssignment(assign);
         setEventTypes(types);
-        setSelectedType(types[0] || '');
         setEvents(labels.events || []);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
 
-  useEffect(() => {
-    setImmediateFollowUp(Boolean(followUpRule));
-  }, [followUpRule?.id, selectedType]);
-
-  const handleTimeUpdate = useCallback(() => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+  const stopFrameAutoPlay = useCallback(() => {
+    if (frameAutoTimerRef.current) {
+      clearInterval(frameAutoTimerRef.current);
+      frameAutoTimerRef.current = null;
     }
   }, []);
 
-  const captureFrame = () => {
-    const playheadTime = videoRef.current?.currentTime ?? currentTime;
-    if (!selectedType) return;
+  const pauseAll = useCallback(() => {
+    stopFrameAutoPlay();
+    videoRef.current?.pause();
+    setPlayMode('paused');
+  }, [stopFrameAutoPlay]);
 
-    const options = {
-      immediateFollowUp,
-      afterEvent: immediateFollowUp ? lastEvent?.eventType : null,
-    };
-    const adjustedTime = applyFrameOffset(playheadTime, selectedType, options);
-    const offset = resolveFrameOffset(selectedType, options);
+  useEffect(() => () => stopFrameAutoPlay(), [stopFrameAutoPlay]);
 
-    setEvents((prev) =>
-      [
-        ...prev,
+  const handleTimeUpdate = useCallback(() => {
+    if (videoRef.current && playMode === 'normal') {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  }, [playMode]);
+
+  const seekTo = useCallback((time) => {
+    const clamped = Math.max(0, Math.min(maxTime, time));
+    if (videoRef.current) {
+      videoRef.current.currentTime = clamped;
+      setCurrentTime(clamped);
+    }
+  }, [maxTime]);
+
+  const stepFrames = useCallback(
+    (count) => {
+      pauseAll();
+      const t = videoRef.current?.currentTime ?? currentTime;
+      seekTo(t + frameDuration * count);
+    },
+    [pauseAll, seekTo, frameDuration, currentTime]
+  );
+
+  const playNormal = useCallback(async () => {
+    stopFrameAutoPlay();
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      await video.play();
+      setPlayMode('normal');
+    } catch {
+      setPlayMode('paused');
+    }
+  }, [stopFrameAutoPlay]);
+
+  const toggleFrameAutoPlay = useCallback(() => {
+    if (playMode === 'frame-auto') {
+      pauseAll();
+      return;
+    }
+
+    stopFrameAutoPlay();
+    videoRef.current?.pause();
+    setPlayMode('frame-auto');
+
+    frameAutoTimerRef.current = setInterval(() => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      const next = video.currentTime + frameDuration;
+      if (next >= maxTime) {
+        seekTo(maxTime);
+        pauseAll();
+        return;
+      }
+
+      seekTo(next);
+    }, FRAME_PLAY_INTERVAL_MS);
+  }, [playMode, pauseAll, stopFrameAutoPlay, frameDuration, maxTime, seekTo]);
+
+  const togglePlayPause = useCallback(() => {
+    if (playMode === 'normal') {
+      pauseAll();
+      return;
+    }
+    if (playMode === 'frame-auto') {
+      pauseAll();
+      return;
+    }
+    playNormal();
+  }, [playMode, pauseAll, playNormal]);
+
+  const openEventPicker = useCallback(() => {
+    pauseAll();
+    setShowEventPicker(true);
+  }, [pauseAll]);
+
+  const markEvent = useCallback(
+    async (eventType) => {
+      pauseAll();
+      const playheadTime = videoRef.current?.currentTime ?? currentTime;
+      const followUpRule = lastEvent
+        ? getImmediateFollowUpRule(lastEvent.eventType, eventType)
+        : null;
+      const useFollowUp = Boolean(followUpRule);
+      const options = {
+        immediateFollowUp: useFollowUp,
+        afterEvent: useFollowUp ? lastEvent?.eventType : null,
+      };
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+      const offset = resolveFrameOffset(eventType, options);
+
+      const newEvents = [
+        ...events,
         {
-          eventType: selectedType,
+          eventType,
           frameTime: adjustedTime,
           playheadTime: parseFloat(playheadTime.toFixed(3)),
           frameOffset: offset,
-          immediateFollowUp,
-          afterEvent: immediateFollowUp ? lastEvent?.eventType : undefined,
-          notes,
+          immediateFollowUp: useFollowUp,
+          afterEvent: useFollowUp ? lastEvent?.eventType : undefined,
+          notes: '',
         },
-      ].sort((a, b) => a.frameTime - b.frameTime)
-    );
-    setNotes('');
-    setImmediateFollowUp(false);
-    setMessage(
-      `Marked ${selectedType} at ${formatTime(adjustedTime)} (${formatOffset(offset)} frames${immediateFollowUp ? ', immediate follow-up' : ''})`
-    );
-    setTimeout(() => setMessage(''), 2500);
-  };
+      ].sort((a, b) => a.frameTime - b.frameTime);
 
-  const removeEvent = (index) => {
-    setEvents((prev) => prev.filter((_, i) => i !== index));
-  };
+      setEvents(newEvents);
+      setShowEventPicker(false);
+      setError('');
 
-  const seekTo = (time) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  };
-
-  const stepFrame = (direction) => {
-    seekTo(Math.max(0, currentTime + frameToSeconds(direction)));
-  };
-
-  const save = async (status = 'draft') => {
-    setSaving(true);
-    setError('');
-    try {
-      await api.saveLabels(id, { events, status });
-      setMessage(status === 'submitted' ? 'Submitted for review!' : 'Draft saved');
-      if (status === 'submitted') {
-        setTimeout(() => setMessage(''), 3000);
+      try {
+        await api.saveLabels(id, { events: newEvents, status: 'draft' });
+        setMessage(
+          `Marked ${eventType} at ${formatTime(adjustedTime)} (${formatOffset(offset)} frames) — saved`
+        );
+        setTimeout(() => setMessage(''), 2500);
+      } catch (err) {
+        setError(err.message);
       }
+    },
+    [pauseAll, currentTime, lastEvent, events, id]
+  );
+
+  const save = useCallback(
+    async (status = 'draft') => {
+      setSaving(true);
+      setError('');
+      try {
+        await api.saveLabels(id, { events, status });
+        setMessage(status === 'submitted' ? 'Submitted for review!' : 'Draft saved');
+        if (status === 'submitted') {
+          setTimeout(() => setMessage(''), 3000);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [id, events]
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (showEventPicker) return;
+      if (isEditableTarget(event.target)) return;
+
+      const { key, shiftKey, ctrlKey, metaKey } = event;
+
+      if (!shiftKey && (key === 'ArrowLeft' || key === ',')) {
+        event.preventDefault();
+        stepFrames(-1);
+        return;
+      }
+      if (!shiftKey && (key === 'ArrowRight' || key === '.')) {
+        event.preventDefault();
+        stepFrames(1);
+        return;
+      }
+      if (shiftKey && (key === 'ArrowLeft' || key === ',')) {
+        event.preventDefault();
+        stepFrames(-5);
+        return;
+      }
+      if (shiftKey && (key === 'ArrowRight' || key === '.')) {
+        event.preventDefault();
+        stepFrames(5);
+        return;
+      }
+      if (key === ' ') {
+        event.preventDefault();
+        togglePlayPause();
+        return;
+      }
+      if (key === 'f' || key === 'F') {
+        event.preventDefault();
+        toggleFrameAutoPlay();
+        return;
+      }
+      if (key === 'm' || key === 'M' || key === 'Enter') {
+        event.preventDefault();
+        openEventPicker();
+        return;
+      }
+      if (key === 'g' || key === 'G') {
+        event.preventDefault();
+        setMagnifyEnabled((v) => !v);
+        return;
+      }
+      if ((ctrlKey || metaKey) && key === 's') {
+        event.preventDefault();
+        save('draft');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showEventPicker, stepFrames, togglePlayPause, toggleFrameAutoPlay, openEventPicker, save]);
+
+  const removeEvent = async (index) => {
+    const newEvents = events.filter((_, i) => i !== index);
+    setEvents(newEvents);
+    try {
+      await api.saveLabels(id, { events: newEvents, status: 'draft' });
+      setMessage('Event removed — saved');
+      setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setSaving(false);
     }
+  };
+
+  const handleExport = async (variant) => {
+    try {
+      await api.exportLabels(id, variant);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleScrub = (time) => {
+    pauseAll();
+    seekTo(time);
+  };
+
+  const handleVideoEnded = () => {
+    pauseAll();
   };
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) return <div className="alert alert-error">{error}</div>;
 
   return (
-    <div>
+    <div className="labeling-page">
       <div className="page-header">
         <h1>{assignment?.title}</h1>
         <p>{assignment?.description}</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          Clip frame rate: <strong>{fps} fps</strong> — step ±1 or ±5 frames; frame play holds each frame for 0.5s.
+        </p>
         <Link to="/assignments" style={{ fontSize: '0.88rem' }}>
           ← Back to assignments
         </Link>
@@ -147,34 +316,85 @@ export default function Labeling() {
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-success">{message}</div>}
 
-      <div className="labeling-layout">
+      <div className="labeling-workspace">
+        <aside className="labeling-hotkeys-sidebar">
+          <h3>Hotkeys</h3>
+          <div className="hotkeys-panel">
+            {LABELING_HOTKEYS.map((item) => (
+              <div key={item.keys} className="hotkey-row">
+                <kbd>{item.keys}</kbd>
+                <span>{item.action}</span>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <div className="labeling-layout">
         <div className="video-panel">
-          <video
-            ref={videoRef}
-            src={assignment?.videoUrl}
-            onTimeUpdate={handleTimeUpdate}
-            controls
-          />
-          <div className="video-controls">
-            <span className="time-display">{formatTime(currentTime)}</span>
-            <input
-              type="range"
-              className="frame-slider"
-              min={0}
-              max={assignment?.durationSeconds || 30}
-              step={0.01}
-              value={currentTime}
-              onChange={(e) => seekTo(parseFloat(e.target.value))}
+          <FrameMagnifier
+            videoRef={videoRef}
+            currentTime={currentTime}
+            isPaused={isPaused}
+            enabled={magnifyEnabled}
+            onEnabledChange={setMagnifyEnabled}
+            submissionEvents={events}
+            fps={fps}
+          >
+            <video
+              ref={videoRef}
+              src={assignment?.videoUrl}
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={handleVideoEnded}
+              onPause={() => {
+                if (playMode === 'normal') setPlayMode('paused');
+              }}
             />
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrame(-1)}>
-              −1 frame
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrame(1)}>
-              +1 frame
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => videoRef.current?.pause()}>
-              Pause
-            </button>
+          </FrameMagnifier>
+          <div className="video-controls">
+            <div className="video-controls-row">
+              <span className="time-display">{formatTime(currentTime)}</span>
+              <span className="frame-display">Frame {currentFrame}</span>
+              <input
+                type="range"
+                className="frame-slider"
+                min={0}
+                max={maxTime}
+                step={frameDuration}
+                value={currentTime}
+                onChange={(e) => handleScrub(parseFloat(e.target.value))}
+              />
+            </div>
+            <div className="video-controls-row playback-controls">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-5)}>
+                −5 frames
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-1)}>
+                −1 frame
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm${playMode === 'normal' ? ' btn-primary' : ' btn-secondary'}`}
+                onClick={togglePlayPause}
+              >
+                {playMode === 'normal' ? 'Pause' : 'Play'}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(1)}>
+                +1 frame
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(5)}>
+                +5 frames
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm${playMode === 'frame-auto' ? ' btn-primary' : ' btn-secondary'}`}
+                onClick={toggleFrameAutoPlay}
+              >
+                {playMode === 'frame-auto' ? 'Stop frame play' : 'Frame play'}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={pauseAll}>
+                Stop
+              </button>
+            </div>
           </div>
         </div>
 
@@ -184,53 +404,19 @@ export default function Labeling() {
             Default: <strong>−2</strong> · Pass/Shot: <strong>−3</strong> · Goal/Ball Out: <strong>+1</strong>
             · Immediate follow-up: <strong>0</strong> at touch
           </p>
-          <div className="add-event-form">
-            <select
-              value={selectedType}
-              onChange={(e) => {
-                setSelectedType(e.target.value);
-                setImmediateFollowUp(false);
-              }}
-            >
-              {eventTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-
-            {showFollowUpOption && (
-              <label className="follow-up-toggle">
-                <input
-                  type="checkbox"
-                  checked={immediateFollowUp}
-                  onChange={(e) => setImmediateFollowUp(e.target.checked)}
-                />
-                <span>
-                  <strong>Immediate follow-up</strong> after {lastEvent.eventType}
-                  <span className="follow-up-detail">{followUpRule.detail}</span>
-                </span>
-              </label>
-            )}
-
-            <div className="mark-preview">
-              <span>Playhead: {formatTime(currentTime)}</span>
-              <span>
-                Will mark: <strong>{formatTime(markedTime)}</strong>
-                <span className={`offset-badge inline${selectedOffset > 0 ? ' positive' : selectedOffset === 0 ? ' zero' : ''}`}>
-                  {formatOffset(selectedOffset)} frames
-                </span>
-              </span>
-            </div>
-            <input
-              type="text"
-              placeholder="Optional notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-            <button type="button" className="btn btn-primary btn-sm" onClick={captureFrame}>
-              Mark {selectedType} at {formatTime(markedTime)}
+          <div className="mark-panel">
+            <p className="mark-hint">
+              Pause on the frame, then press <kbd>Enter</kbd> or <kbd>M</kbd> to pick an event.
+              Each mark auto-saves.
+            </p>
+            <button type="button" className="btn btn-primary btn-sm" onClick={openEventPicker}>
+              Mark event at {formatTime(currentTime)}
             </button>
+            {lastEvent && (
+              <p className="mark-hint last-event">
+                Last: {lastEvent.eventType} at {formatTime(lastEvent.frameTime)}
+              </p>
+            )}
           </div>
 
           <h3>Events ({events.length})</h3>
@@ -250,7 +436,7 @@ export default function Labeling() {
                       <span className="event-followup"> ↳ after {ev.afterEvent}</span>
                     )}
                   </span>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => seekTo(ev.frameTime)}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleScrub(ev.frameTime)}>
                     Go
                   </button>
                   <button type="button" className="btn btn-danger btn-sm" onClick={() => removeEvent(i)}>
@@ -262,6 +448,26 @@ export default function Labeling() {
           </div>
 
           <div className="actions-row" style={{ marginTop: '1rem' }}>
+            {assignment?.clipId && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExport('post')}
+                  title={`Download ${assignment.clipId}_post.json`}
+                >
+                  Export _post.json
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExport('raw')}
+                  title={`Download ${assignment.clipId}.json`}
+                >
+                  Export .json
+                </button>
+              </>
+            )}
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving}>
               Save draft
             </button>
@@ -270,7 +476,17 @@ export default function Labeling() {
             </button>
           </div>
         </div>
+        </div>
       </div>
+
+      <EventPickerModal
+        open={showEventPicker}
+        eventTypes={eventTypes}
+        lastEvent={lastEvent}
+        currentTime={currentTime}
+        onSelect={markEvent}
+        onClose={() => setShowEventPicker(false)}
+      />
     </div>
   );
 }

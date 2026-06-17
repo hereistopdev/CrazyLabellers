@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { isAdmin, isLabeller } from './utils/roles';
+import { isAdmin, isLabeller, isReviewer } from './utils/roles';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -14,8 +14,10 @@ import ManageLabellers from './pages/ManageLabellers';
 import ManageVideos from './pages/ManageVideos';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Earnings from './pages/Earnings';
+import ReviewQueue from './pages/ReviewQueue';
+import ReviewSubmission from './pages/ReviewSubmission';
 
-function ProtectedRoute({ children, adminOnly = false, labellerOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, labellerOnly = false, reviewerOnly = false }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -30,8 +32,12 @@ function ProtectedRoute({ children, adminOnly = false, labellerOnly = false }) {
     return <Navigate to="/" replace />;
   }
 
+  if (reviewerOnly && !isReviewer(user)) {
+    return <Navigate to="/" replace />;
+  }
+
   if (labellerOnly && !isLabeller(user)) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={isReviewer(user) ? '/review' : '/admin'} replace />;
   }
 
   return children;
@@ -116,6 +122,22 @@ export default function App() {
           element={
             <ProtectedRoute labellerOnly>
               <Labeling />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="review"
+          element={
+            <ProtectedRoute reviewerOnly>
+              <ReviewQueue />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="review/:submissionId"
+          element={
+            <ProtectedRoute reviewerOnly>
+              <ReviewSubmission />
             </ProtectedRoute>
           }
         />

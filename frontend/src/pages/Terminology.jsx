@@ -26,8 +26,8 @@ export default function Terminology() {
         <h1>Event Terminology Guide</h1>
         <p>
           Official event definitions for labeling. Study these carefully before the knowledge test
-          and while labeling clips. Frame offsets: default <strong>−2</strong>, Pass/Shot{' '}
-          <strong>−3</strong>, Goal/Ball Out of Play <strong>+1</strong>.
+          and while labeling clips. All videos are <strong>25 fps</strong>. Frame offsets: default{' '}
+          <strong>−2</strong>, Pass/Shot <strong>−3</strong>, Goal/Ball Out of Play <strong>+1</strong>.
         </p>
       </div>
 

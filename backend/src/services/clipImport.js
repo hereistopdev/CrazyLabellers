@@ -47,6 +47,7 @@ async function importClipsFromDir(dataDir = getVideoDataDir()) {
       videoUrl: buildVideoUrl(clipId),
       gameTime: '1 - 00:00',
       durationSeconds: 30,
+      fps: 25,
       status: 'available',
     });
     created += 1;

@@ -148,7 +148,7 @@ export default function EventFlowDiagrams() {
       <section className="flow-section">
         <h2>Frame offset rules</h2>
         <p className="flow-section-desc">
-          When marking an event, adjust from the visible moment by this many frames (at 30 fps).
+          When marking an event, adjust from the visible moment by this many frames (at 25 fps).
           Negative = mark earlier. Positive = mark later.
         </p>
         <div className="offset-table-wrap">

@@ -41,6 +41,53 @@ const upload = multer({
 
 const router = express.Router();
 
+router.post('/checkers', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return res.status(409).json({ message: 'Email already registered' });
+    }
+
+    const checker = await User.create({
+      name,
+      email,
+      password,
+      role: 'checker',
+      status: 'approved',
+    });
+
+    return res.status(201).json({
+      id: checker._id,
+      name: checker.name,
+      email: checker.email,
+      role: checker.role,
+      status: checker.status,
+      createdAt: checker.createdAt,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/checkers', auth, requireRole('admin'), async (_req, res) => {
+  try {
+    const checkers = await User.find({ role: 'checker' }).select('-password').sort({ createdAt: -1 });
+    return res.json(checkers);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
 router.post('/labellers', auth, requireRole('admin'), async (req, res) => {
   try {
     const { name, email, password, status } = req.body;

@@ -14,6 +14,21 @@ const eventLabelSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const eventValidationSchema = new mongoose.Schema(
+  {
+    eventIndex: { type: Number, required: true },
+    status: {
+      type: String,
+      enum: ['valid', 'invalid', 'pending'],
+      default: 'pending',
+    },
+    notes: { type: String, default: '' },
+    validatedAt: { type: Date },
+    validatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  },
+  { _id: false }
+);
+
 const labelSubmissionSchema = new mongoose.Schema(
   {
     assignmentId: {
@@ -23,6 +38,7 @@ const labelSubmissionSchema = new mongoose.Schema(
     },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     events: [eventLabelSchema],
+    eventValidations: [eventValidationSchema],
     status: {
       type: String,
       enum: ['draft', 'submitted', 'approved', 'rejected'],

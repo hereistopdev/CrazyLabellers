@@ -1,4 +1,4 @@
-export const FPS = 30;
+export const FPS = 25;
 
 export const FRAME_OFFSETS = {
   default: -2,

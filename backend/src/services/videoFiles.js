@@ -44,6 +44,7 @@ async function createVideoAssignment({
     videoUrl: videoUrl || buildVideoUrl(clipId),
     gameTime: gameTime || '1 - 00:00',
     durationSeconds: durationSeconds || 30,
+    fps: 25,
     status: 'available',
   });
 }

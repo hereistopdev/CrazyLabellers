@@ -7,7 +7,7 @@ const videoAssignmentSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     videoUrl: { type: String, required: true },
     gameTime: { type: String, default: '1 - 00:00' },
-    durationSeconds: { type: Number, default: 30 },
+    fps: { type: Number, default: 25 },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: {
       type: String,

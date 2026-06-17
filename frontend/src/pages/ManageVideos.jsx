@@ -126,7 +126,7 @@ export default function ManageVideos() {
               required
             />
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-              Filename can be the clip ID (30 hex chars). Otherwise a new ID is generated automatically.
+              Clips must be 25 fps. Filename can be the clip ID (30 hex chars). Otherwise a new ID is generated automatically.
             </p>
           </div>
           <div className="form-group">

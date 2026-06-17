@@ -184,13 +184,21 @@ export default function Admin() {
                   <td>{s.userId?.name}</td>
                   <td>{s.events?.length || 0}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => setReviewing(s)}
-                    >
-                      Review & score
-                    </button>
+                    <div className="actions-row">
+                      <Link
+                        to={`/review/${s._id}`}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Review with video
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setReviewing(s)}
+                      >
+                        Quick score
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

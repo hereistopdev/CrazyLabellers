@@ -1,12 +1,27 @@
-import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from './AdminDashboard';
+import { isChecker } from '../utils/roles';
+import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
   const { user } = useAuth();
 
   if (user?.role === 'admin') {
     return <AdminDashboard />;
+  }
+
+  if (isChecker(user)) {
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Hello, {user?.name}</h1>
+          <p>Review labeller submissions with video playback and reference comparison.</p>
+        </div>
+        <Link to="/review" className="btn btn-primary">
+          Open review queue
+        </Link>
+      </div>
+    );
   }
 
   const canLabel = user?.status === 'passed_test' || user?.status === 'approved';

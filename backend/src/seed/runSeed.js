@@ -32,12 +32,25 @@ async function runSeed({ force = false } = {}) {
     });
   }
 
+  const checkerEmail = 'checker@labeling.local';
+  let checker = await User.findOne({ email: checkerEmail });
+  if (!checker) {
+    checker = await User.create({
+      name: 'Checker',
+      email: checkerEmail,
+      password: 'checker123',
+      role: 'checker',
+      status: 'approved',
+    });
+  }
+
   return {
     skipped: false,
     terminology: terminologies.length,
     questions: testQuestions.length,
     assignments: await VideoAssignment.countDocuments(),
     adminEmail,
+    checkerEmail,
   };
 }
 
