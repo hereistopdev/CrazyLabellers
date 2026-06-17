@@ -12,6 +12,7 @@ const assignmentRoutes = require('./routes/assignments');
 const adminRoutes = require('./routes/admin');
 const financeRoutes = require('./routes/finance');
 const earningsRoutes = require('./routes/earnings');
+const videoRoutes = require('./routes/videos');
 const { EVENT_TYPES } = require('./config/events');
 
 const app = express();
@@ -56,9 +57,13 @@ app.use('/api/assignments', assignmentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/finance', financeRoutes);
 app.use('/api/earnings', earningsRoutes);
+app.use('/api/videos', videoRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ message: 'Video file too large (max 100MB)' });
+  }
   res.status(500).json({ message: err.message || 'Internal server error' });
 });
 

@@ -2,9 +2,11 @@ const mongoose = require('mongoose');
 
 const videoAssignmentSchema = new mongoose.Schema(
   {
+    clipId: { type: String, unique: true, sparse: true },
     title: { type: String, required: true },
     description: { type: String, default: '' },
     videoUrl: { type: String, required: true },
+    gameTime: { type: String, default: '1 - 00:00' },
     durationSeconds: { type: Number, default: 30 },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: {

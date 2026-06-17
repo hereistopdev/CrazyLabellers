@@ -1,4 +1,7 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const User = require('../models/User');
 const TestResult = require('../models/TestResult');
 const LabelSubmission = require('../models/LabelSubmission');
@@ -7,6 +10,34 @@ const { auth, requireRole } = require('../middleware/auth');
 const { LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
 const { calculateEarnings, DEFAULT_RATE_PER_POINT } = require('../config/payments');
+const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
+const { importClipsFromDir } = require('../services/clipImport');
+const {
+  ensureVideoDataDir,
+  resolveClipId,
+  createVideoAssignment,
+  removeVideoAssignment,
+} = require('../services/videoFiles');
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination(_req, _file, cb) {
+      cb(null, ensureVideoDataDir());
+    },
+    filename(_req, file, cb) {
+      const clipId = resolveClipId(file.originalname);
+      cb(null, `${clipId}.mp4`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    if (file.mimetype === 'video/mp4' || file.originalname.toLowerCase().endsWith('.mp4')) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Only .mp4 video files are allowed'));
+  },
+});
 
 const router = express.Router();
 
@@ -278,6 +309,83 @@ router.get('/assignments', auth, requireRole('admin'), async (_req, res) => {
     return res.json(assignments);
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/videos', auth, requireRole('admin'), upload.single('video'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No video file uploaded' });
+    }
+
+    const clipId = path.basename(req.file.filename, '.mp4');
+    const durationSeconds = parseInt(req.body.durationSeconds, 10) || 30;
+
+    const assignment = await createVideoAssignment({
+      clipId,
+      title: req.body.title?.trim() || clipId,
+      description: req.body.description?.trim() || '',
+      gameTime: req.body.gameTime?.trim() || '1 - 00:00',
+      durationSeconds,
+    });
+
+    return res.status(201).json(assignment);
+  } catch (error) {
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.delete('/videos/:id', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const deleteFile = req.query.deleteFile !== 'false';
+    const result = await removeVideoAssignment(req.params.id, { deleteFile });
+    return res.json({
+      message: 'Video removed',
+      clipId: result.assignment.clipId,
+      fileDeleted: result.fileDeleted,
+    });
+  } catch (error) {
+    const status = error.message === 'Video not found' ? 404 : 400;
+    return res.status(status).json({ message: error.message });
+  }
+});
+
+router.post('/import-clips', auth, requireRole('admin'), async (_req, res) => {
+  try {
+    const result = await importClipsFromDir();
+    return res.json(result);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/submissions/:id/export', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const submission = await LabelSubmission.findById(req.params.id);
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const assignment = await VideoAssignment.findById(submission.assignmentId);
+    if (!assignment?.clipId) {
+      return res.status(400).json({ message: 'Assignment has no clipId for export' });
+    }
+
+    const payload = exportAnnotation(submission.events, {
+      gameTime: assignment.gameTime || '1 - 00:00',
+      variant,
+    });
+    const filename = getExportFilename(assignment.clipId, variant);
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(JSON.stringify(payload, null, 2));
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
   }
 });
 
