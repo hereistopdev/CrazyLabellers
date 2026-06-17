@@ -2,13 +2,14 @@ const express = require('express');
 const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
+const { isLabeller } = require('../config/roles');
 
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
-    if (req.user.role === 'freelancer') {
+    if (isLabeller(req.user)) {
       if (req.user.status !== 'passed_test' && req.user.status !== 'approved') {
         return res.status(403).json({
           message: 'You must pass the knowledge test before accessing labeling assignments',
@@ -85,7 +86,7 @@ router.post('/:id/claim', auth, async (req, res) => {
 router.get('/:id/labels', auth, async (req, res) => {
   try {
     const filter = { assignmentId: req.params.id };
-    if (req.user.role === 'freelancer') {
+    if (isLabeller(req.user)) {
       filter.userId = req.user._id;
     }
 
@@ -109,7 +110,7 @@ router.put('/:id/labels', auth, async (req, res) => {
     }
 
     if (
-      req.user.role === 'freelancer' &&
+      isLabeller(req.user) &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });

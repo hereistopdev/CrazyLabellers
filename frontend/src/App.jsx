@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { isAdmin, isLabeller } from './utils/roles';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -9,8 +10,9 @@ import KnowledgeTest from './pages/KnowledgeTest';
 import Assignments from './pages/Assignments';
 import Labeling from './pages/Labeling';
 import Admin from './pages/Admin';
+import ManageLabellers from './pages/ManageLabellers';
 
-function ProtectedRoute({ children, adminOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, labellerOnly = false }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -21,8 +23,12 @@ function ProtectedRoute({ children, adminOnly = false }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && user.role !== 'admin') {
+  if (adminOnly && !isAdmin(user)) {
     return <Navigate to="/" replace />;
+  }
+
+  if (labellerOnly && !isLabeller(user)) {
+    return <Navigate to="/admin" replace />;
   }
 
   return children;
@@ -54,7 +60,23 @@ export default function App() {
         }
       />
       <Route
+        path="/labeller/login"
+        element={
+          <PublicOnlyRoute>
+            <Login />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
         path="/register"
+        element={
+          <PublicOnlyRoute>
+            <Register />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/labeller/register"
         element={
           <PublicOnlyRoute>
             <Register />
@@ -70,14 +92,43 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="terminology" element={<Terminology />} />
-        <Route path="test" element={<KnowledgeTest />} />
-        <Route path="assignments" element={<Assignments />} />
-        <Route path="label/:id" element={<Labeling />} />
+        <Route
+          path="test"
+          element={
+            <ProtectedRoute labellerOnly>
+              <KnowledgeTest />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="assignments"
+          element={
+            <ProtectedRoute labellerOnly>
+              <Assignments />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="label/:id"
+          element={
+            <ProtectedRoute labellerOnly>
+              <Labeling />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="admin"
           element={
             <ProtectedRoute adminOnly>
               <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/labellers"
+          element={
+            <ProtectedRoute adminOnly>
+              <ManageLabellers />
             </ProtectedRoute>
           }
         />

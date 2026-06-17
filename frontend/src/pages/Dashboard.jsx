@@ -1,8 +1,13 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AdminDashboard from './AdminDashboard';
 
 export default function Dashboard() {
   const { user } = useAuth();
+
+  if (user?.role === 'admin') {
+    return <AdminDashboard />;
+  }
 
   const canLabel = user?.status === 'passed_test' || user?.status === 'approved';
   const passedTest = user?.bestTestScore >= 80;
@@ -26,8 +31,8 @@ export default function Dashboard() {
 
       {canLabel && user?.status === 'passed_test' && (
         <div className="alert alert-success">
-          You passed the knowledge test! An admin will review and approve your account for paid
-          work. You can practice on sample clips in the meantime.
+          You passed the knowledge test! An admin will review and approve your account. You can
+          practice on sample clips in the meantime.
         </div>
       )}
 
@@ -68,9 +73,7 @@ export default function Dashboard() {
         <div className="step-card">
           <div className="step-number">3</div>
           <h3>Label Videos</h3>
-          <p>
-            Watch 30-second clips and mark events at the exact frame they occur.
-          </p>
+          <p>Watch 30-second clips and mark events at the exact frame they occur.</p>
           <div className="actions-row">
             {canLabel ? (
               <Link to="/assignments" className="btn btn-primary btn-sm">
@@ -83,14 +86,6 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      </div>
-
-      <div style={{ marginTop: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Event types to label</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-          Pass, Pass Received, Recovery, Interception, Ball Out of Play, Clearance, Take on,
-          Substitution, Block, Aerial Duel, Shot, Save, Foul, Goal, Highlight Start, Highlight End
-        </p>
       </div>
     </div>
   );

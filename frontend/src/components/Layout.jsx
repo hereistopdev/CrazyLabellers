@@ -1,9 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isAdmin, roleLabel } from '../utils/roles';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const admin = isAdmin(user);
 
   const handleLogout = () => {
     logout();
@@ -22,36 +24,60 @@ export default function Layout() {
           <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             Dashboard
           </NavLink>
-          <NavLink
-            to="/terminology"
-            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-          >
-            Terminology
-          </NavLink>
-          <NavLink to="/test" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-            Knowledge Test
-          </NavLink>
-          <NavLink
-            to="/assignments"
-            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-          >
-            Labeling
-          </NavLink>
-          {user?.role === 'admin' && (
+
+          {admin ? (
+            <>
+              <NavLink
+                to="/admin/labellers"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Labellers
+              </NavLink>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Admin
+              </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink
+                to="/terminology"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Terminology
+              </NavLink>
+              <NavLink to="/test" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                Knowledge Test
+              </NavLink>
+              <NavLink
+                to="/assignments"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Labeling
+              </NavLink>
+            </>
+          )}
+
+          {admin && (
             <NavLink
-              to="/admin"
+              to="/terminology"
               className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
-              Admin
+              Terminology
             </NavLink>
           )}
 
           <div className="nav-user">
             <span className="user-badge">
               {user?.name}
-              <span className={`status-badge status-${user?.status}`} style={{ marginLeft: 8 }}>
-                {user?.status?.replace('_', ' ')}
-              </span>
+              <span className={`role-badge role-${user?.role}`}>{roleLabel(user)}</span>
+              {!admin && (
+                <span className={`status-badge status-${user?.status}`} style={{ marginLeft: 4 }}>
+                  {user?.status?.replace('_', ' ')}
+                </span>
+              )}
             </span>
             <button type="button" className="btn btn-secondary btn-sm" onClick={handleLogout}>
               Logout

@@ -15,8 +15,8 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/');
+      const user = await login(email, password);
+      navigate(user.role === 'admin' ? '/admin' : '/');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -27,8 +27,12 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Welcome back</h1>
-        <p className="subtitle">Sign in to the football video labeling platform</p>
+        <div className="auth-badge">Labeller Portal</div>
+        <h1>Sign in</h1>
+        <p className="subtitle">
+          Labellers sign in here to access terminology, tests, and labeling work. Admins use the
+          same login with admin credentials.
+        </p>
 
         {error && <div className="alert alert-error">{error}</div>}
 
@@ -42,6 +46,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              placeholder="you@email.com"
             />
           </div>
           <div className="form-group">
@@ -53,6 +58,7 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              placeholder="••••••••"
             />
           </div>
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
@@ -61,7 +67,7 @@ export default function Login() {
         </form>
 
         <p className="auth-footer">
-          New freelancer? <Link to="/register">Create an account</Link>
+          New labeller? <Link to="/register">Register here</Link>
         </p>
       </div>
     </div>

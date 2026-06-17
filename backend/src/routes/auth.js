@@ -22,7 +22,7 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ message: 'Email already registered' });
     }
 
-    const user = await User.create({ name, email, password, role: 'freelancer' });
+    const user = await User.create({ name, email, password, role: 'labeller' });
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     return res.status(201).json({

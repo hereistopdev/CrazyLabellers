@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 export default function Admin() {
   const [stats, setStats] = useState(null);
-  const [freelancers, setFreelancers] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -15,10 +15,9 @@ export default function Admin() {
   });
 
   const load = () => {
-    Promise.all([api.getAdminStats(), api.getFreelancers(), api.getSubmissions()])
-      .then(([s, f, sub]) => {
+    Promise.all([api.getAdminStats(), api.getSubmissions()])
+      .then(([s, sub]) => {
         setStats(s);
-        setFreelancers(f);
         setSubmissions(sub);
       })
       .catch((err) => setError(err.message))
@@ -26,15 +25,6 @@ export default function Admin() {
   };
 
   useEffect(load, []);
-
-  const updateStatus = async (id, status) => {
-    try {
-      await api.updateFreelancerStatus(id, status);
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
 
   const reviewSubmission = async (id, status) => {
     try {
@@ -61,8 +51,11 @@ export default function Admin() {
   return (
     <div>
       <div className="page-header">
-        <h1>Admin Dashboard</h1>
-        <p>Manage freelancers, review submissions, and add video assignments.</p>
+        <h1>Admin Panel</h1>
+        <p>Platform overview, assignments, and submission reviews.</p>
+        <Link to="/admin/labellers" className="btn btn-primary btn-sm" style={{ marginTop: '0.5rem' }}>
+          Manage labellers →
+        </Link>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -70,16 +63,16 @@ export default function Admin() {
       {stats && (
         <div className="stat-grid">
           <div className="stat-card">
-            <div className="value">{stats.freelancerCount}</div>
-            <div className="label">Freelancers</div>
+            <div className="value">{stats.labellerCount}</div>
+            <div className="label">Labellers</div>
           </div>
           <div className="stat-card">
-            <div className="value">{stats.passedTestCount}</div>
-            <div className="label">Passed test</div>
+            <div className="value">{stats.pendingCount}</div>
+            <div className="label">Pending</div>
           </div>
           <div className="stat-card">
-            <div className="value">{stats.assignmentCount}</div>
-            <div className="label">Assignments</div>
+            <div className="value">{stats.approvedCount}</div>
+            <div className="label">Approved</div>
           </div>
           <div className="stat-card">
             <div className="value">{stats.submissionCount}</div>
@@ -131,58 +124,6 @@ export default function Admin() {
         </form>
       </div>
 
-      <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>Freelancers</h2>
-      <div className="card table-wrap" style={{ marginBottom: '2rem' }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th>Best score</th>
-              <th>Attempts</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {freelancers.map((f) => (
-              <tr key={f._id}>
-                <td>{f.name}</td>
-                <td>{f.email}</td>
-                <td>
-                  <span className={`status-badge status-${f.status}`}>
-                    {f.status.replace('_', ' ')}
-                  </span>
-                </td>
-                <td>{f.bestTestScore}%</td>
-                <td>{f.testAttempts}</td>
-                <td>
-                  {f.status === 'passed_test' && (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => updateStatus(f._id, 'approved')}
-                    >
-                      Approve
-                    </button>
-                  )}
-                  {f.status !== 'rejected' && (
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      style={{ marginLeft: 4 }}
-                      onClick={() => updateStatus(f._id, 'rejected')}
-                    >
-                      Reject
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
       <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>Submissions to review</h2>
       <div className="card table-wrap">
         {submissions.length === 0 ? (
@@ -192,7 +133,7 @@ export default function Admin() {
             <thead>
               <tr>
                 <th>Video</th>
-                <th>Labeler</th>
+                <th>Labeller</th>
                 <th>Events</th>
                 <th>Actions</th>
               </tr>

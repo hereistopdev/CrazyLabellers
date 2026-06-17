@@ -150,6 +150,17 @@ textarea {
   max-width: 640px;
 }
 
+.page-sub-link {
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+}
+
+.page-sub-link code {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -273,6 +284,67 @@ textarea {
   color: var(--text-muted);
   font-size: 0.9rem;
   margin-bottom: 1.5rem;
+}
+
+.auth-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  margin-bottom: 0.75rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--info);
+}
+
+.auth-steps {
+  margin-top: 1.25rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.auth-steps ol {
+  margin-top: 0.35rem;
+  padding-left: 1.2rem;
+}
+
+.auth-steps li {
+  margin-bottom: 0.2rem;
+}
+
+.form-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.add-labeller-form h3 {
+  margin-bottom: 0.35rem;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .auth-footer {
@@ -1269,4 +1341,164 @@ th {
     flex: 1;
     text-align: center;
   }
+
+  .labeller-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+}
+
+.role-admin {
+  background: rgba(236, 72, 153, 0.15);
+  color: #ec4899;
+}
+
+.role-labeller,
+.role-freelancer {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--info);
+}
+
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.admin-toolbar select {
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.toolbar-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.labeller-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.labeller-detail h3 {
+  margin-bottom: 0.25rem;
+}
+
+.detail-email {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.detail-stats div {
+  text-align: center;
+  padding: 0.5rem;
+  background: var(--bg-elevated);
+  border-radius: 6px;
+}
+
+.detail-stats strong {
+  display: block;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.detail-stats span {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.detail-actions {
+  margin-bottom: 1rem;
+}
+
+.detail-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.assign-box {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+}
+
+.assign-box h4 {
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.assign-box select {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.45rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.detail-list {
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.detail-muted {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.empty-detail {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+tr.row-selected {
+  background: var(--accent-glow);
+}
+
+tbody tr {
+  cursor: pointer;
+}
+
+tbody tr:hover {
+  background: var(--bg-elevated);
 }

@@ -55,12 +55,23 @@ export const api = {
   saveLabels: (id, body) =>
     request(`/assignments/${id}/labels`, { method: 'PUT', body: JSON.stringify(body) }),
   getAdminStats: () => request('/admin/stats'),
-  getFreelancers: () => request('/admin/freelancers'),
-  updateFreelancerStatus: (id, status) =>
-    request(`/admin/freelancers/${id}/status`, {
+  createLabeller: (body) =>
+    request('/admin/labellers', { method: 'POST', body: JSON.stringify(body) }),
+  deleteLabeller: (id) => request(`/admin/labellers/${id}`, { method: 'DELETE' }),
+  getLabellers: (status) =>
+    request(status ? `/admin/labellers?status=${status}` : '/admin/labellers'),
+  getLabeller: (id) => request(`/admin/labellers/${id}`),
+  updateLabellerStatus: (id, status) =>
+    request(`/admin/labellers/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  assignToLabeller: (labellerId, assignmentId) =>
+    request(`/admin/labellers/${labellerId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ assignmentId }),
+    }),
+  getAdminAssignments: () => request('/admin/assignments'),
   getSubmissions: () => request('/admin/submissions'),
   reviewSubmission: (id, body) =>
     request(`/admin/submissions/${id}/review`, {
