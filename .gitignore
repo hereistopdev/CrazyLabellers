@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime / cache
+.cache/
+.vite/
+*.tsbuildinfo
+.eslintcache
+
+# Test coverage
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor / IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# MongoDB memory server (local dev)
+.mongodb/
+
+# Uploads (if added later)
+uploads/
+backend/uploads/
+
+# Temp files
+tmp/
+temp/
+*.tmp
