@@ -53,6 +53,23 @@ npm run dev     # Starts app on http://localhost:5173
 
 **Important:** Start the backend first, then the frontend. The frontend proxies `/api` requests to the backend on port 5000.
 
+## Deploy to production
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for full instructions:
+
+- **Frontend** → Vercel (`frontend/` directory)
+- **Backend** → Render (`backend/` directory)
+- **Database** → MongoDB Atlas
+
+Quick env vars:
+
+| Platform | Variable | Example |
+|----------|----------|---------|
+| Render | `MONGODB_URI` | Atlas connection string |
+| Render | `CLIENT_URL` | `https://your-app.vercel.app` |
+| Render | `JWT_SECRET` | long random string |
+| Vercel | `VITE_API_URL` | `https://your-api.onrender.com/api` |
+
 ## Workflow
 
 1. **Freelancer registers** at `/register`
@@ -81,9 +98,17 @@ npm run dev     # Starts app on http://localhost:5173
 
 ```
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/football-labeling
+NODE_ENV=development
+USE_MEMORY_DB=true
+MONGODB_URI=mongodb://127.0.0.1:27017/football-labeling
 JWT_SECRET=your-secret-key
 CLIENT_URL=http://localhost:5173
+```
+
+**Frontend (`frontend/.env`) — production only:**
+
+```
+VITE_API_URL=https://your-api.onrender.com/api
 ```
 
 ## Project structure

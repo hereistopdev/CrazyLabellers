@@ -22,9 +22,10 @@ async function request(path, options = {}) {
       headers,
     });
   } catch {
-    throw new Error(
-      'Cannot reach the API server. Start the backend with: cd backend && npm run dev'
-    );
+    const hint = import.meta.env.VITE_API_URL
+      ? 'Check that the backend is running on Render.'
+      : 'Start the backend with: cd backend && npm run dev';
+    throw new Error(`Cannot reach the API server. ${hint}`);
   }
 
   const data = await response.json().catch(() => ({}));
