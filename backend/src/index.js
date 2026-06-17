@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { connectDB } = require('./db/connect');
+const { connectDB, getDbStatus } = require('./db/connect');
 const { runSeed } = require('./seed/runSeed');
 const { isAllowedOrigin } = require('./config/cors');
 
@@ -35,7 +35,12 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const db = getDbStatus();
+  res.json({
+    status: db.connected ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    database: db,
+  });
 });
 
 app.get('/api/events', (_req, res) => {
@@ -70,11 +75,19 @@ async function start() {
     console.log('Admin login: admin@labeling.local / admin123');
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (isDev) {
       console.log('Local API: http://localhost:' + PORT);
     }
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Stop the other process or set PORT in .env`);
+      process.exit(1);
+    }
+    throw err;
   });
 }
 
