@@ -88,12 +88,6 @@ export default function Admin() {
   const [reviewing, setReviewing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [newAssignment, setNewAssignment] = useState({
-    title: '',
-    description: '',
-    videoUrl: '',
-    durationSeconds: 30,
-  });
 
   const load = () => {
     Promise.all([api.getAdminStats(), api.getSubmissions(), api.getFinanceSettings()])
@@ -119,17 +113,6 @@ export default function Admin() {
     }
   };
 
-  const createAssignment = async (e) => {
-    e.preventDefault();
-    try {
-      await api.createAssignment(newAssignment);
-      setNewAssignment({ title: '', description: '', videoUrl: '', durationSeconds: 30 });
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   if (loading) return <div className="loading">Loading admin panel...</div>;
 
   return (
@@ -138,6 +121,9 @@ export default function Admin() {
         <h1>Admin Panel</h1>
         <p>Review submissions with points, manage assignments, and track payouts.</p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
+          <Link to="/admin/videos" className="btn btn-primary btn-sm">
+            Manage videos
+          </Link>
           <Link to="/admin/labellers" className="btn btn-primary btn-sm">
             Manage labellers
           </Link>
@@ -169,49 +155,6 @@ export default function Admin() {
           </div>
         </div>
       )}
-
-      <div className="card" style={{ marginBottom: '2rem' }}>
-        <h3 style={{ marginBottom: '1rem' }}>Add video assignment</h3>
-        <form onSubmit={createAssignment}>
-          <div className="form-group">
-            <label>Title</label>
-            <input
-              value={newAssignment.title}
-              onChange={(e) => setNewAssignment({ ...newAssignment, title: e.target.value })}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Description</label>
-            <input
-              value={newAssignment.description}
-              onChange={(e) => setNewAssignment({ ...newAssignment, description: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Video URL</label>
-            <input
-              value={newAssignment.videoUrl}
-              onChange={(e) => setNewAssignment({ ...newAssignment, videoUrl: e.target.value })}
-              required
-              placeholder="https://..."
-            />
-          </div>
-          <div className="form-group">
-            <label>Duration (seconds)</label>
-            <input
-              type="number"
-              value={newAssignment.durationSeconds}
-              onChange={(e) =>
-                setNewAssignment({ ...newAssignment, durationSeconds: parseInt(e.target.value, 10) })
-              }
-            />
-          </div>
-          <button type="submit" className="btn btn-primary btn-sm">
-            Create assignment
-          </button>
-        </form>
-      </div>
 
       <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>
         Submissions to review

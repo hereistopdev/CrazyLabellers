@@ -130,9 +130,6 @@ export default function EventFlowDiagrams() {
           <span className="legend-item">
             <span className="legend-swatch branch" /> One of options
           </span>
-          <span className="legend-item">
-            <span className="legend-swatch highlight" /> Highlight marker
-          </span>
         </div>
       </section>
 

@@ -1,26 +1,24 @@
 const User = require('../models/User');
-const Terminology = require('../models/Terminology');
-const TestQuestion = require('../models/TestQuestion');
 const VideoAssignment = require('../models/VideoAssignment');
 const { terminologies, testQuestions, sampleAssignments } = require('./data');
+const { syncTerminology, syncTestQuestions } = require('./syncContent');
 
 async function runSeed({ force = false } = {}) {
-  const termCount = await Terminology.countDocuments();
-  if (termCount > 0 && !force) {
-    return { skipped: true };
-  }
-
   if (force) {
-    await Promise.all([
-      Terminology.deleteMany({}),
-      TestQuestion.deleteMany({}),
-      VideoAssignment.deleteMany({}),
-    ]);
+    await VideoAssignment.deleteMany({});
   }
 
-  await Terminology.insertMany(terminologies);
-  await TestQuestion.insertMany(testQuestions);
-  await VideoAssignment.insertMany(sampleAssignments);
+  await syncTerminology();
+  await syncTestQuestions();
+
+  const assignmentCount = await VideoAssignment.countDocuments();
+  if (force || assignmentCount === 0) {
+    if (assignmentCount === 0) {
+      await VideoAssignment.insertMany(sampleAssignments);
+    } else if (force) {
+      await VideoAssignment.insertMany(sampleAssignments);
+    }
+  }
 
   const adminEmail = 'admin@labeling.local';
   let admin = await User.findOne({ email: adminEmail });
@@ -38,7 +36,7 @@ async function runSeed({ force = false } = {}) {
     skipped: false,
     terminology: terminologies.length,
     questions: testQuestions.length,
-    assignments: sampleAssignments.length,
+    assignments: await VideoAssignment.countDocuments(),
     adminEmail,
   };
 }

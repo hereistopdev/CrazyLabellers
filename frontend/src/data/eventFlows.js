@@ -4,21 +4,21 @@ export const eventPairs = [
     title: 'Pass → Pass Received',
     description: 'Always two separate events on different frames. Never mark both at the same moment.',
     events: ['Pass', 'Pass Received'],
-    rule: 'Pass Received at −2 frames on control. Pass normally at −3 frames — unless one-touch: then Pass at contact frame (0).',
+    rule: 'Pass Received when teammate gains control. Pass when player kicks or throws to a teammate.',
   },
   {
-    id: 'highlight-pair',
-    title: 'Highlight Start → Highlight End',
-    description: 'Wrap narratively important sequences. Every Highlight Start should eventually have a Highlight End.',
-    events: ['Highlight Start', 'Highlight End'],
-    rule: 'Start at build-up beginning. End when the sequence resolves (goal, save, miss, restart).',
+    id: 'shot-goal',
+    title: 'Shot → Goal',
+    description: 'Goal always comes with a Shot at the same time.',
+    events: ['Shot', 'Goal'],
+    rule: 'Label both Shot and Goal when the ball crosses the line between the posts and under the crossbar.',
   },
   {
     id: 'shot-outcome',
     title: 'Shot → Outcome',
-    description: 'A shot is always marked first. The outcome is a separate later event.',
-    events: ['Shot', 'Save / Goal / Block'],
-    rule: 'Shot = contact frame. Save/Goal/Block = the frame that outcome happens — never the same as Shot.',
+    description: 'A shot may be followed by Save or Block as separate events.',
+    events: ['Shot', 'Save / Block'],
+    rule: 'Save = goalkeeper stops the ball after a shot. Block = outfield player blocks a shot.',
   },
 ];
 
@@ -28,26 +28,24 @@ export const sequenceFlows = [
     title: 'Build-up Attack',
     subtitle: 'Typical possession sequence leading to a chance',
     steps: [
-      { event: 'Pass', note: 'Player plays ball forward' },
-      { event: 'Pass Received', note: 'Teammate controls' },
-      { event: 'Take on', note: 'Optional — 1v1 attempt', optional: true },
-      { event: 'Shot', note: 'Attempt on goal' },
+      { event: 'Pass', note: 'Kick or throw to teammate' },
+      { event: 'Pass Received', note: 'Teammate gains control' },
+      { event: 'Take on', note: 'Optional — move past opponent', optional: true },
+      { event: 'Shot', note: 'Attempt toward goal' },
       { event: 'Save / Goal', note: 'One outcome only', branch: true },
     ],
   },
   {
     id: 'counter-attack',
-    title: 'Counter Attack (Highlight)',
-    subtitle: 'Fast transition — wrap with highlight markers',
+    title: 'Counter Attack',
+    subtitle: 'Fast transition after winning the ball',
     steps: [
-      { event: 'Highlight Start', note: 'Counter begins', highlight: true },
-      { event: 'Interception / Recovery', note: 'Win the ball', branch: true },
+      { event: 'Tackle / Interception / Recovery', note: 'Win possession', branch: true },
       { event: 'Pass', note: 'Quick release' },
       { event: 'Pass Received', note: 'Runner controls' },
       { event: 'Take on', note: 'Optional beat defender', optional: true },
       { event: 'Shot', note: 'Effort on goal' },
       { event: 'Goal / Save', note: 'Outcome', branch: true },
-      { event: 'Highlight End', note: 'Sequence over', highlight: true },
     ],
   },
   {
@@ -55,8 +53,9 @@ export const sequenceFlows = [
     title: 'Defensive Sequence',
     subtitle: 'Stopping an attack under pressure',
     steps: [
-      { event: 'Block / Interception', note: 'Stop pass or shot', branch: true },
-      { event: 'Clearance', note: 'Clear danger — no target' },
+      { event: 'Tackle / Interception', note: 'Win ball from opponent', branch: true },
+      { event: 'Block', note: 'Stop an opposing shot', optional: true },
+      { event: 'Clearance', note: 'Clear danger to safety' },
       { event: 'Ball Out of Play', note: 'If ball leaves pitch', optional: true },
     ],
   },
@@ -66,9 +65,9 @@ export const sequenceFlows = [
     subtitle: 'Dead ball or contested high ball',
     steps: [
       { event: 'Ball Out of Play', note: 'Ball crossed line' },
-      { event: 'Aerial Duel', note: 'Players contest in air' },
+      { event: 'Aerial Duel', note: 'Each contesting player gets an event' },
       { event: 'Pass / Clearance / Shot', note: 'Outcome of duel', branch: true },
-      { event: 'Pass Received', note: 'If headed to teammate', optional: true },
+      { event: 'Pass Received', note: 'If teammate gains control', optional: true },
     ],
   },
   {
@@ -76,9 +75,9 @@ export const sequenceFlows = [
     title: 'Foul & Stoppage',
     subtitle: 'Infringement and restart',
     steps: [
-      { event: 'Foul', note: 'Contact / infringement frame' },
+      { event: 'Foul', note: 'Referee stops play — not offside/advantage' },
       { event: 'Ball Out of Play', note: 'Often follows', optional: true },
-      { event: 'Substitution', note: 'May occur during stoppage', optional: true },
+      { event: 'Substitution', note: 'During stoppage in play', optional: true },
     ],
   },
 ];
@@ -86,74 +85,79 @@ export const sequenceFlows = [
 export const decisionTrees = [
   {
     id: 'win-ball',
-    title: 'Winning the ball — Recovery or Interception?',
+    title: 'Winning the ball — Recovery, Tackle, or Interception?',
     question: 'How did the player get possession?',
     branches: [
       {
-        condition: 'Ball was loose / uncontested',
+        condition: 'No team had possession / loose ball',
         answer: 'Recovery',
-        example: 'Rebound off post, miscontrolled ball sitting free',
+        example: 'Rebound off post, ball directed by opponent without a tackle contest',
       },
       {
-        condition: 'Opponent was passing to a teammate',
+        condition: 'Opponent had the ball — player stops them or takes it',
+        answer: 'Tackle',
+        example: 'Challenge on a dribbling attacker and win possession',
+      },
+      {
+        condition: 'Opposing pass between two opposing players is cut out',
         answer: 'Interception',
-        example: 'Cutting out a through ball or sideways pass',
+        example: 'Stepping into a through ball passing lane',
       },
     ],
   },
   {
     id: 'defensive-contact',
-    title: 'Defensive contact — Block, Save, or Clearance?',
-    question: 'What was the intent and who made contact?',
+    title: 'Block, Save, or Clearance?',
+    question: 'What happened defensively?',
     branches: [
       {
-        condition: 'Goalkeeper stops a shot on goal',
+        condition: 'Goalkeeper stops the ball after a shot',
         answer: 'Save',
-        example: 'Dive, parry, or catch after a Shot',
+        example: 'Dive, parry, or catch following a shot',
       },
       {
-        condition: 'Outfield player blocks shot/pass in path',
+        condition: 'Outfield player blocks an opposing shot',
         answer: 'Block',
-        example: 'Leg/chest stops ball, may not gain possession',
+        example: 'Leg or body stops a shot — block is for shots only',
       },
       {
-        condition: 'Under pressure, clears danger with no target',
+        condition: 'Clears immediate threat toward own goal',
         answer: 'Clearance',
-        example: 'Hoofed away from own box',
+        example: 'Kick or header to safety under pressure',
       },
     ],
   },
   {
     id: 'pass-or-clear',
     title: 'Pass or Clearance?',
-    question: 'Was there a target teammate?',
+    question: 'Was the player passing to a teammate or clearing danger?',
     branches: [
       {
-        condition: 'Directed at a specific teammate',
+        condition: 'Kicks or throws to a teammate',
         answer: 'Pass',
         example: 'Through ball, cross to striker, short pass',
       },
       {
-        condition: 'No target — just removing danger',
+        condition: 'Eliminates immediate threat to own goal',
         answer: 'Clearance',
-        example: 'Defender kicks it long anywhere upfield',
+        example: 'Defender clears under pressure — who gets it next does not matter',
       },
     ],
   },
   {
     id: 'aerial-duel',
-    title: 'Aerial Duel or just a Pass?',
-    question: 'Is another player contesting the ball in the air?',
+    title: 'Aerial Duel or Pass?',
+    question: 'Are players competing for the same ball in the air?',
     branches: [
       {
-        condition: 'Two+ players challenging for the ball',
+        condition: 'Two+ players jump or attempt to jump for the ball',
         answer: 'Aerial Duel',
-        example: 'Corner kick, two CBs jumping together',
+        example: 'Corner or long ball — label each contesting player',
       },
       {
-        condition: 'Unchallenged header to teammate',
-        answer: 'Pass',
-        example: 'Free header with no opponent nearby',
+        condition: 'Unchallenged control in the air',
+        answer: 'Pass / Pass Received',
+        example: 'Free header or chest control with no contest',
       },
     ],
   },
@@ -181,13 +185,13 @@ export const timingRules = [
   {
     rule: 'Ball Out of Play: +1 frame',
     events: ['Ball Out of Play'],
-    detail: 'Mark 1 frame after the whole ball crosses the line.',
+    detail: 'Mark 1 frame after the ball goes out of play.',
     offset: 1,
   },
   {
     rule: 'Goal: +1 frame',
     events: ['Goal'],
-    detail: 'Mark 1 frame after the whole ball crosses the goal line.',
+    detail: 'Mark 1 frame after the whole ball crosses the goal line. Always pair with Shot.',
     offset: 1,
   },
   {
@@ -195,22 +199,17 @@ export const timingRules = [
     events: ['Pass', 'Pass Received'],
     detail: 'Pass and Pass Received are always on different frames.',
   },
-  {
-    rule: 'Highlight pair',
-    events: ['Highlight Start', 'Highlight End'],
-    detail: 'Wrap important sequences. Start at build-up, end when resolved.',
-  },
 ];
 
 export const eventCategories = [
   {
     name: 'Possession',
-    events: ['Pass', 'Pass Received', 'Recovery', 'Interception', 'Take on'],
+    events: ['Pass', 'Pass Received', 'Recovery', 'Tackle', 'Interception', 'Take on'],
     color: '#22c55e',
   },
   {
     name: 'Defensive',
-    events: ['Clearance', 'Block', 'Interception', 'Save'],
+    events: ['Clearance', 'Block', 'Tackle', 'Interception', 'Save'],
     color: '#3b82f6',
   },
   {
@@ -222,10 +221,5 @@ export const eventCategories = [
     name: 'Set Play',
     events: ['Aerial Duel', 'Ball Out of Play', 'Substitution', 'Foul'],
     color: '#a78bfa',
-  },
-  {
-    name: 'Narrative',
-    events: ['Highlight Start', 'Highlight End'],
-    color: '#ec4899',
   },
 ];

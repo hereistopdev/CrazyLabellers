@@ -37,6 +37,31 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function uploadRequest(path, formData) {
+  const headers = {};
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+  } catch {
+    throw new Error('Cannot reach the API server. Is the backend running?');
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || `Request failed (${response.status})`);
+  }
+  return data;
+}
+
 export const api = {
   health: () => request('/health'),
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
@@ -72,6 +97,10 @@ export const api = {
       body: JSON.stringify({ assignmentId }),
     }),
   getAdminAssignments: () => request('/admin/assignments'),
+  uploadVideo: (formData) => uploadRequest('/admin/videos', formData),
+  deleteVideo: (id, deleteFile = true) =>
+    request(`/admin/videos/${id}?deleteFile=${deleteFile}`, { method: 'DELETE' }),
+  importClips: () => request('/admin/import-clips', { method: 'POST' }),
   getSubmissions: () => request('/admin/submissions'),
   reviewSubmission: (id, body) =>
     request(`/admin/submissions/${id}/review`, {

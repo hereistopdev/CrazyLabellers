@@ -2,6 +2,7 @@ const EVENT_TYPES = [
   'Pass',
   'Pass Received',
   'Recovery',
+  'Tackle',
   'Interception',
   'Ball Out of Play',
   'Clearance',
@@ -13,8 +14,6 @@ const EVENT_TYPES = [
   'Save',
   'Foul',
   'Goal',
-  'Highlight Start',
-  'Highlight End',
 ];
 
 module.exports = { EVENT_TYPES };

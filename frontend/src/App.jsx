@@ -11,6 +11,7 @@ import Assignments from './pages/Assignments';
 import Labeling from './pages/Labeling';
 import Admin from './pages/Admin';
 import ManageLabellers from './pages/ManageLabellers';
+import ManageVideos from './pages/ManageVideos';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Earnings from './pages/Earnings';
 
@@ -123,6 +124,14 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/videos"
+          element={
+            <ProtectedRoute adminOnly>
+              <ManageVideos />
             </ProtectedRoute>
           }
         />

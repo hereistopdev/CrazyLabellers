@@ -23,12 +23,15 @@ app.use(
   cors({
     origin(origin, callback) {
       if (isAllowedOrigin(origin)) {
-        callback(null, true);
+        callback(null, origin || true);
       } else {
-        callback(new Error(`CORS blocked origin: ${origin}`));
+        console.warn(`CORS blocked origin: ${origin || '(none)'}`);
+        callback(null, false);
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 app.use(express.json());
@@ -79,9 +82,8 @@ async function start() {
   await connectDB();
 
   const seedResult = await runSeed();
-  if (!seedResult.skipped) {
-    console.log('Auto-seeded database on first run');
-    console.log('Admin login: admin@labeling.local / admin123');
+  if (seedResult.terminology) {
+    console.log(`Synced ${seedResult.terminology} terminology definitions`);
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {

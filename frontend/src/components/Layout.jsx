@@ -28,6 +28,12 @@ export default function Layout() {
           {admin ? (
             <>
               <NavLink
+                to="/admin/videos"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Videos
+              </NavLink>
+              <NavLink
                 to="/admin/labellers"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >

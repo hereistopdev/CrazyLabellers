@@ -25,8 +25,9 @@ export default function Terminology() {
       <div className="page-header">
         <h1>Event Terminology Guide</h1>
         <p>
-          Study definitions and event flow diagrams. Mark events using frame offsets: default
-          <strong> −2 frames</strong>, Pass/Shot <strong>−3</strong>, Goal/Ball Out of Play <strong>+1</strong>.
+          Official event definitions for labeling. Study these carefully before the knowledge test
+          and while labeling clips. Frame offsets: default <strong>−2</strong>, Pass/Shot{' '}
+          <strong>−3</strong>, Goal/Ball Out of Play <strong>+1</strong>.
         </p>
       </div>
 
