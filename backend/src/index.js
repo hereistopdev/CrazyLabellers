@@ -10,6 +10,8 @@ const terminologyRoutes = require('./routes/terminology');
 const testRoutes = require('./routes/tests');
 const assignmentRoutes = require('./routes/assignments');
 const adminRoutes = require('./routes/admin');
+const financeRoutes = require('./routes/finance');
+const earningsRoutes = require('./routes/earnings');
 const { EVENT_TYPES } = require('./config/events');
 
 const app = express();
@@ -52,6 +54,8 @@ app.use('/api/terminology', terminologyRoutes);
 app.use('/api/tests', testRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/finance', financeRoutes);
+app.use('/api/earnings', earningsRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

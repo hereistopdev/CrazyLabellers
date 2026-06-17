@@ -1,0 +1,193 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../api';
+import { formatMoney } from '../utils/money';
+
+export default function FinanceDashboard() {
+  const [data, setData] = useState(null);
+  const [selectedLabeller, setSelectedLabeller] = useState(null);
+  const [ratePerPoint, setRatePerPoint] = useState(0.1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = () => {
+    api
+      .getFinanceDashboard()
+      .then((d) => {
+        setData(d);
+        setRatePerPoint(d.settings?.ratePerPoint ?? 0.1);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+
+  const saveRate = async () => {
+    try {
+      await api.updateFinanceSettings({ ratePerPoint: parseFloat(ratePerPoint) });
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const openLabeller = async (id) => {
+    try {
+      const detail = await api.getFinanceLabeller(id);
+      setSelectedLabeller(detail);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  if (loading) return <div className="loading">Loading finance dashboard...</div>;
+
+  const currency = data?.settings?.currency || 'USD';
+
+  return (
+    <div>
+      <div className="page-header">
+        <h1>Finance Dashboard</h1>
+        <p>Track labeller earnings, review points, and payment rates per task.</p>
+        <Link to="/admin/labellers" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
+          ← Manage labellers
+        </Link>
+      </div>
+
+      {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="value">{formatMoney(data?.totalPaid, currency)}</div>
+          <div className="label">Total paid out</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{data?.totalPointsAwarded || 0}</div>
+          <div className="label">Total review points</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{data?.tasksReviewed || 0}</div>
+          <div className="label">Tasks reviewed</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{data?.pendingReviews || 0}</div>
+          <div className="label">Awaiting review</div>
+        </div>
+      </div>
+
+      <div className="card finance-settings" style={{ marginBottom: '1.5rem' }}>
+        <h3>Payment rate</h3>
+        <p className="form-hint">Earnings per task = review points × rate per point</p>
+        <div className="rate-row">
+          <label>
+            Rate per point ({currency})
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={ratePerPoint}
+              onChange={(e) => setRatePerPoint(e.target.value)}
+            />
+          </label>
+          <button type="button" className="btn btn-primary btn-sm" onClick={saveRate}>
+            Save rate
+          </button>
+        </div>
+        <p className="form-hint">
+          Example: 85 points × {formatMoney(ratePerPoint, currency)} ={' '}
+          {formatMoney(85 * parseFloat(ratePerPoint || 0), currency)}
+        </p>
+      </div>
+
+      <div className="finance-layout">
+        <div className="card table-wrap">
+          <h3 style={{ padding: '1rem 1rem 0' }}>Labeller earnings</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Labeller</th>
+                <th>Status</th>
+                <th>Tasks</th>
+                <th>Avg points</th>
+                <th>Total points</th>
+                <th>Earnings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.earningsByLabeller || []).length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
+                    No reviewed tasks yet
+                  </td>
+                </tr>
+              ) : (
+                data.earningsByLabeller.map((l) => (
+                  <tr key={l.labellerId} onClick={() => openLabeller(l.labellerId)} className="clickable-row">
+                    <td>
+                      <strong>{l.name}</strong>
+                      <br />
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{l.email}</span>
+                    </td>
+                    <td>
+                      <span className={`status-badge status-${l.status}`}>
+                        {l.status?.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td>{l.tasksCompleted}</td>
+                    <td>{l.avgPoints}</td>
+                    <td>{l.totalPoints}</td>
+                    <td className="earnings-cell">{formatMoney(l.totalEarnings, currency)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card labeller-finance-detail">
+          {!selectedLabeller ? (
+            <p className="empty-detail">Select a labeller to see per-task earnings</p>
+          ) : (
+            <>
+              <h3>{selectedLabeller.labeller.name}</h3>
+              <p className="detail-email">{selectedLabeller.labeller.email}</p>
+              <div className="detail-stats">
+                <div>
+                  <strong>{formatMoney(selectedLabeller.summary.totalEarnings, currency)}</strong>
+                  <span>Total earned</span>
+                </div>
+                <div>
+                  <strong>{selectedLabeller.summary.totalPoints}</strong>
+                  <span>Total points</span>
+                </div>
+                <div>
+                  <strong>{selectedLabeller.summary.avgPoints}</strong>
+                  <span>Avg points</span>
+                </div>
+              </div>
+              <h4>Per-task breakdown</h4>
+              <ul className="finance-task-list">
+                {selectedLabeller.tasks.map((t) => (
+                  <li key={t.id} className={`finance-task finance-task-${t.status}`}>
+                    <div className="finance-task-title">{t.title || 'Task'}</div>
+                    <div className="finance-task-meta">
+                      <span className={`status-badge status-${t.status === 'submitted' ? 'passed_test' : t.status}`}>
+                        {t.status}
+                      </span>
+                      {t.reviewPoints != null && <span>{t.reviewPoints} pts</span>}
+                      {t.earnings > 0 && <span className="earnings-cell">{formatMoney(t.earnings, currency)}</span>}
+                    </div>
+                    {t.reviewerNotes && (
+                      <p className="finance-task-notes">{t.reviewerNotes}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

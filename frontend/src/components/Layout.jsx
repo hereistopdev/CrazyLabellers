@@ -34,10 +34,16 @@ export default function Layout() {
                 Labellers
               </NavLink>
               <NavLink
+                to="/admin/finance"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Finance
+              </NavLink>
+              <NavLink
                 to="/admin"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
-                Admin
+                Reviews
               </NavLink>
             </>
           ) : (
@@ -56,6 +62,12 @@ export default function Layout() {
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
                 Labeling
+              </NavLink>
+              <NavLink
+                to="/earnings"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Earnings
               </NavLink>
             </>
           )}

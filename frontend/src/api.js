@@ -80,4 +80,11 @@ export const api = {
     }),
   createAssignment: (body) =>
     request('/assignments', { method: 'POST', body: JSON.stringify(body) }),
+  getFinanceDashboard: () => request('/admin/finance/dashboard'),
+  getFinanceSettings: () => request('/admin/finance/settings'),
+  updateFinanceSettings: (body) =>
+    request('/admin/finance/settings', { method: 'PATCH', body: JSON.stringify(body) }),
+  getFinanceLabeller: (id) => request(`/admin/finance/labellers/${id}`),
+  getFinanceLabellers: () => request('/admin/finance/labellers'),
+  getMyEarnings: () => request('/earnings/me'),
 };

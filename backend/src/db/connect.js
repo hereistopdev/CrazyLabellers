@@ -27,8 +27,15 @@ async function connectDB() {
   } catch (err) {
     if (err.message?.includes('bad auth') || err.code === 8000) {
       throw new Error(
-        'MongoDB authentication failed. Check MONGODB_URI username/password on Render. ' +
+        'MongoDB authentication failed. Check MONGODB_URI username/password. ' +
           'URL-encode special characters in the password (@ → %40, # → %23, etc.).'
+      );
+    }
+    if (err.message?.includes('querySrv ECONNREFUSED') || err.code === 'ECONNREFUSED') {
+      throw new Error(
+        'Cannot reach MongoDB Atlas (DNS/network). For local dev set USE_MEMORY_DB=true in .env. ' +
+          'For Atlas: verify cluster hostname in Atlas → Connect, check Network Access (0.0.0.0/0), ' +
+          'or use the standard (non-SRV) connection string.'
       );
     }
     throw err;

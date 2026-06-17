@@ -234,13 +234,14 @@ export default function ManageLabellers() {
                     </td>
                     <td>{l.bestTestScore}%</td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      {l.status === 'passed_test' && (
+                      {(l.status === 'pending' || l.status === 'passed_test') && (
                         <button
                           type="button"
                           className="btn btn-primary btn-sm"
                           onClick={() => updateStatus(l._id, 'approved')}
+                          title="Manually approve labeller"
                         >
-                          Approve
+                          {l.status === 'pending' ? 'Approve manually' : 'Approve'}
                         </button>
                       )}
                       {l.status === 'rejected' && (
@@ -325,17 +326,19 @@ export default function ManageLabellers() {
               </div>
 
               <div className="detail-actions">
-                {detail.labeller.status === 'passed_test' && (
+                {(detail.labeller.status === 'passed_test' || detail.labeller.status === 'pending') && (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={() => updateStatus(detail.labeller._id, 'approved')}
                   >
-                    Approve labeller
+                    {detail.labeller.status === 'pending' ? 'Approve manually' : 'Approve labeller'}
                   </button>
                 )}
                 {detail.labeller.status === 'pending' && (
-                  <span className="detail-hint">Waiting for knowledge test</span>
+                  <span className="detail-hint" style={{ marginLeft: 8 }}>
+                    Can approve without test
+                  </span>
                 )}
               </div>
 

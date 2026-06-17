@@ -28,6 +28,10 @@ const labelSubmissionSchema = new mongoose.Schema(
       enum: ['draft', 'submitted', 'approved', 'rejected'],
       default: 'draft',
     },
+    reviewPoints: { type: Number, min: 0, max: 100 },
+    earnings: { type: Number, default: 0 },
+    reviewedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reviewerNotes: { type: String, default: '' },
   },
   { timestamps: true }

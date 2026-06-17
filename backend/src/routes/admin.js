@@ -5,6 +5,8 @@ const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
 const { auth, requireRole } = require('../middleware/auth');
 const { LABELLER_ROLES } = require('../config/roles');
+const PaymentSettings = require('../models/PaymentSettings');
+const { calculateEarnings, DEFAULT_RATE_PER_POINT } = require('../config/payments');
 
 const router = express.Router();
 
@@ -220,19 +222,44 @@ router.get('/submissions', auth, requireRole('admin'), async (_req, res) => {
 
 router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { status, reviewerNotes } = req.body;
+    const { status, reviewerNotes, reviewPoints } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Status must be approved or rejected' });
+    }
+
+    let settings = await PaymentSettings.findOne();
+    if (!settings) {
+      settings = await PaymentSettings.create({ ratePerPoint: DEFAULT_RATE_PER_POINT });
+    }
+
+    const points =
+      status === 'approved'
+        ? Math.max(0, Math.min(100, parseInt(reviewPoints, 10) || 0))
+        : 0;
+    const earnings = status === 'approved' ? calculateEarnings(points, settings.ratePerPoint) : 0;
+
     const submission = await LabelSubmission.findByIdAndUpdate(
       req.params.id,
-      { status, reviewerNotes },
+      {
+        status,
+        reviewerNotes: reviewerNotes || '',
+        reviewPoints: status === 'approved' ? points : 0,
+        earnings,
+        reviewedAt: new Date(),
+        reviewedBy: req.user._id,
+      },
       { new: true }
-    );
+    )
+      .populate('userId', 'name email')
+      .populate('assignmentId', 'title');
 
     if (!submission) {
       return res.status(404).json({ message: 'Submission not found' });
     }
 
     if (submission.assignmentId) {
-      await VideoAssignment.findByIdAndUpdate(submission.assignmentId, {
+      await VideoAssignment.findByIdAndUpdate(submission.assignmentId._id || submission.assignmentId, {
         status: status === 'approved' ? 'approved' : 'rejected',
       });
     }

@@ -8,14 +8,14 @@ export default function AdminDashboard() {
     <div>
       <div className="page-header">
         <h1>Admin — {user?.name}</h1>
-        <p>Manage labellers, review submissions, and create video assignments.</p>
+        <p>Manage labellers, review work, score tasks, and track payments.</p>
       </div>
 
       <div className="step-cards">
         <div className="step-card">
           <div className="step-number">1</div>
           <h3>Manage Labellers</h3>
-          <p>Approve or reject labellers, view test scores, and assign videos to approved workers.</p>
+          <p>Add, remove, or manually approve labellers without requiring the knowledge test.</p>
           <div className="actions-row">
             <Link to="/admin/labellers" className="btn btn-primary btn-sm">
               Open labellers
@@ -25,22 +25,22 @@ export default function AdminDashboard() {
 
         <div className="step-card">
           <div className="step-number">2</div>
-          <h3>Review Submissions</h3>
-          <p>Check labeled videos submitted by labellers and approve or reject their work.</p>
+          <h3>Review & Score Tasks</h3>
+          <p>Review labeled videos, assign review points (0–100), and calculate labeller earnings.</p>
           <div className="actions-row">
-            <Link to="/admin" className="btn btn-secondary btn-sm">
-              Submissions
+            <Link to="/admin" className="btn btn-primary btn-sm">
+              Review submissions
             </Link>
           </div>
         </div>
 
         <div className="step-card">
           <div className="step-number">3</div>
-          <h3>Terminology</h3>
-          <p>Review event definitions and flow diagrams used to train labellers.</p>
+          <h3>Finance Dashboard</h3>
+          <p>See total payouts, per-labeller earnings, review points, and set the rate per point.</p>
           <div className="actions-row">
-            <Link to="/terminology" className="btn btn-secondary btn-sm">
-              View guide
+            <Link to="/admin/finance" className="btn btn-secondary btn-sm">
+              Finance dashboard
             </Link>
           </div>
         </div>

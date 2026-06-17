@@ -86,6 +86,17 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        <div className="step-card">
+          <div className="step-number">4</div>
+          <h3>My Earnings</h3>
+          <p>Track review points and payment earned for each approved labeling task.</p>
+          <div className="actions-row">
+            <Link to="/earnings" className="btn btn-secondary btn-sm">
+              View earnings
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

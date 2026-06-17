@@ -1502,3 +1502,150 @@ tbody tr {
 tbody tr:hover {
   background: var(--bg-elevated);
 }
+
+/* Finance & review modal */
+.finance-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.finance-settings .rate-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.finance-settings .rate-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.finance-settings .rate-row input {
+  width: 120px;
+  padding: 0.45rem 0.65rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.earnings-cell {
+  color: var(--accent);
+  font-weight: 600;
+  font-family: var(--mono);
+}
+
+.stat-card.highlight-earnings .value {
+  color: var(--accent);
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.finance-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.finance-task {
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.finance-task-approved {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.finance-task-rejected {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.finance-task-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+
+.finance-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.finance-task-notes {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.labeller-finance-detail {
+  min-height: 200px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 440px;
+}
+
+.modal-card h3 {
+  margin-bottom: 0.5rem;
+}
+
+.modal-sub {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.points-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  margin: 0.5rem 0;
+}
+
+.points-display {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.points-display strong {
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+@media (max-width: 900px) {
+  .finance-layout {
+    grid-template-columns: 1fr;
+  }
+}

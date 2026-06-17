@@ -11,6 +11,8 @@ import Assignments from './pages/Assignments';
 import Labeling from './pages/Labeling';
 import Admin from './pages/Admin';
 import ManageLabellers from './pages/ManageLabellers';
+import FinanceDashboard from './pages/FinanceDashboard';
+import Earnings from './pages/Earnings';
 
 function ProtectedRoute({ children, adminOnly = false, labellerOnly = false }) {
   const { user, loading } = useAuth();
@@ -129,6 +131,22 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <ManageLabellers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/finance"
+          element={
+            <ProtectedRoute adminOnly>
+              <FinanceDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="earnings"
+          element={
+            <ProtectedRoute labellerOnly>
+              <Earnings />
             </ProtectedRoute>
           }
         />
