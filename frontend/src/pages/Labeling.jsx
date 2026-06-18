@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { isAdmin, isLabeller } from '../utils/roles';
 import {
   applyFrameOffset,
   formatOffset,
@@ -13,6 +14,7 @@ import FrameMagnifier from '../components/FrameMagnifier';
 import EventPickerModal from '../components/EventPickerModal';
 import LabelingScoreModal from '../components/LabelingScoreModal';
 import TutorialPanel from '../components/TutorialPanel';
+import TutorialEditorPanel from '../components/TutorialEditorPanel';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
 
@@ -26,7 +28,9 @@ function formatTime(seconds) {
 
 export default function Labeling() {
   const { id } = useParams();
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const adminMode = isAdmin(user);
+  const labellerMode = isLabeller(user);
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const [assignment, setAssignment] = useState(null);
@@ -338,17 +342,43 @@ export default function Labeling() {
     pauseAll();
   };
 
+  const isTutorial = assignment?.kind === 'tutorial';
+  const showTutorialEditor = adminMode && isTutorial;
+  const showTutorialGuide = !adminMode && isTutorial;
+
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) return <div className="alert alert-error">{error}</div>;
+
+  const backTo = adminMode
+    ? '/admin/videos'
+    : isTutorial
+      ? '/tutorials'
+      : assignment?.kind === 'pretest'
+        ? '/labeling-test'
+        : '/assignments';
+
+  const backLabel = adminMode
+    ? 'videos'
+    : isTutorial
+      ? 'tutorials'
+      : assignment?.kind === 'pretest'
+        ? 'labeling test'
+        : 'assignments';
 
   return (
     <div className="labeling-page">
       <div className="page-header">
         <h1>{assignment?.title}</h1>
         <p>{assignment?.description}</p>
+        {adminMode && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--accent)' }}>
+            Admin preview
+            {isTutorial ? ' — edit tutorial explanations in the panel beside the video.' : ''}
+          </p>
+        )}
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           Clip frame rate: <strong>{fps} fps</strong> — step ±1 or ±5 frames; frame play holds each frame for 0.5s.
-          {assignment?.kind === 'tutorial' && (
+          {showTutorialGuide && (
             <> · <strong>Tutorial</strong> — follow frame explanations, then submit when done.</>
           )}
           {assignment?.kind === 'pretest' && (
@@ -358,22 +388,8 @@ export default function Labeling() {
             </>
           )}
         </p>
-        <Link
-          to={
-            assignment?.kind === 'tutorial'
-              ? '/tutorials'
-              : assignment?.kind === 'pretest'
-                ? '/labeling-test'
-                : '/assignments'
-          }
-          style={{ fontSize: '0.88rem' }}
-        >
-          ← Back to{' '}
-          {assignment?.kind === 'tutorial'
-            ? 'tutorials'
-            : assignment?.kind === 'pretest'
-              ? 'labeling test'
-              : 'assignments'}
+        <Link to={backTo} style={{ fontSize: '0.88rem' }}>
+          ← Back to {backLabel}
         </Link>
       </div>
 
@@ -393,7 +409,7 @@ export default function Labeling() {
           </div>
         </aside>
 
-        <div className={`labeling-layout${assignment?.kind === 'tutorial' ? ' labeling-layout--tutorial' : ''}`}>
+        <div className={`labeling-layout${isTutorial ? ' labeling-layout--tutorial' : ''}`}>
         <div className="video-panel">
           <FrameMagnifier
             videoRef={videoRef}
@@ -465,7 +481,18 @@ export default function Labeling() {
           </div>
         </div>
 
-        {assignment?.kind === 'tutorial' && (
+        {showTutorialEditor && (
+          <TutorialEditorPanel
+            assignment={assignment}
+            currentTime={currentTime}
+            fps={fps}
+            eventTypes={eventTypes}
+            onJumpToStep={handleScrub}
+            onSaved={(updated) => setAssignment(updated)}
+          />
+        )}
+
+        {showTutorialGuide && (
           <TutorialPanel
             assignment={assignment}
             currentTime={currentTime}
@@ -547,9 +574,16 @@ export default function Labeling() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving}>
               Save draft
             </button>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => save('submitted')} disabled={saving || events.length === 0}>
-              Submit
-            </button>
+            {labellerMode && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => save('submitted')}
+                disabled={saving || events.length === 0}
+              >
+                Submit
+              </button>
+            )}
           </div>
         </div>
         </div>

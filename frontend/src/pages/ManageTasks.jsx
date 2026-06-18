@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { formatMoney } from '../utils/money';
+import VideoLabelLink from '../components/VideoLabelLink';
+import { openLabelerRow } from '../utils/labelerAccess';
 
 const KIND_TABS = [
   { id: 'groups', label: 'Groups' },
   { id: 'tutorial', label: 'Tutorial' },
   { id: 'pretest', label: 'Pre-test' },
-  { id: 'production', label: 'Production' },
+  { id: 'production', label: 'Real tasks' },
 ];
 
 const EMPTY_STEP = { frameTime: 0, eventType: '', title: '', explanation: '' };
@@ -81,7 +83,7 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
           <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
             <option value="tutorial">Tutorial</option>
             <option value="pretest">Pre-test</option>
-            <option value="production">Production</option>
+            <option value="production">Real task</option>
           </select>
         </label>
         <label>
@@ -209,6 +211,7 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
 }
 
 export default function ManageTasks() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('tutorial');
   const [groups, setGroups] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -474,9 +477,15 @@ export default function ManageTasks() {
                   </tr>
                 ) : (
                   tasks.map((t) => (
-                    <tr key={t._id}>
+                    <tr
+                      key={t._id}
+                      className="table-row-link"
+                      onClick={(e) => openLabelerRow(navigate, t._id, e)}
+                    >
                       <td>
-                        <strong>{t.title}</strong>
+                        <VideoLabelLink assignmentId={t._id}>
+                          <strong>{t.title}</strong>
+                        </VideoLabelLink>
                         {t.description && <p className="table-muted">{t.description}</p>}
                       </td>
                       <td>{t.clipId || '—'}</td>
@@ -495,8 +504,11 @@ export default function ManageTasks() {
                           className="btn btn-secondary btn-sm"
                           onClick={() => setEditingId(t._id)}
                         >
-                          Edit
-                        </button>
+                          Edit metadata
+                        </button>{' '}
+                        <VideoLabelLink assignmentId={t._id} className="btn btn-primary btn-sm">
+                          Open labeler
+                        </VideoLabelLink>
                       </td>
                     </tr>
                   ))

@@ -2,7 +2,7 @@ const express = require('express');
 const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
-const { isLabeller } = require('../config/roles');
+const { isLabeller, isAdmin } = require('../config/roles');
 const {
   gradeSubmissionAgainstReference,
   recordLabelingTestAttempt,
@@ -165,12 +165,11 @@ router.get('/:id/export', auth, async (req, res) => {
 
     if (
       isLabeller(req.user) &&
+      !isAdmin(req.user) &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
     }
-
-    if (!assignment.clipId) {
       return res.status(400).json({ message: 'Assignment has no clipId for export' });
     }
 
@@ -228,9 +227,14 @@ router.put('/:id/labels', auth, async (req, res) => {
 
     if (
       isLabeller(req.user) &&
+      !isAdmin(req.user) &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
+    }
+
+    if (status === 'submitted' && isAdmin(req.user)) {
+      return res.status(400).json({ message: 'Admins cannot submit assignments as labellers' });
     }
 
     const submission = await LabelSubmission.findOneAndUpdate(

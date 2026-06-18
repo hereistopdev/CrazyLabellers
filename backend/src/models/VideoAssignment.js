@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 const tutorialStepSchema = new mongoose.Schema(
   {
     frameTime: { type: Number, required: true },
-    eventType: { type: String, required: true },
+    eventType: { type: String, default: '' },
     title: { type: String, default: '' },
-    explanation: { type: String, required: true },
+    explanation: { type: String, default: '' },
   },
   { _id: true }
 );

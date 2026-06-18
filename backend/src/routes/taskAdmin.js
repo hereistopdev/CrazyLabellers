@@ -132,7 +132,14 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
     if (gameTime !== undefined) update.gameTime = String(gameTime);
     if (durationSeconds !== undefined) update.durationSeconds = parseInt(durationSeconds, 10) || 30;
     if (tutorialIntro !== undefined) update.tutorialIntro = String(tutorialIntro);
-    if (tutorialSteps !== undefined) update.tutorialSteps = tutorialSteps;
+    if (tutorialSteps !== undefined) {
+      update.tutorialSteps = tutorialSteps.map((step) => ({
+        frameTime: Number(step.frameTime) || 0,
+        eventType: String(step.eventType ?? '').trim(),
+        title: String(step.title ?? '').trim(),
+        explanation: String(step.explanation ?? '').trim(),
+      }));
+    }
     if (status !== undefined) update.status = status;
 
     const task = await VideoAssignment.findByIdAndUpdate(req.params.id, update, { new: true })

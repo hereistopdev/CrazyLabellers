@@ -480,6 +480,8 @@ router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, asy
       durationSeconds,
       taskPrice,
       challengeNote: req.body.challengeNote?.trim() || '',
+      kind: req.body.kind,
+      sortOrder: req.body.sortOrder,
     });
 
     let referenceSaved = false;

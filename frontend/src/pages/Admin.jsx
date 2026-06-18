@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
+import VideoLabelLink from '../components/VideoLabelLink';
+import { openLabelerRow } from '../utils/labelerAccess';
 
 function ReviewModal({ submission, ratePerPoint, currency, onClose, onSubmit }) {
   const [reviewPoints, setReviewPoints] = useState(80);
@@ -81,6 +83,7 @@ function ReviewModal({ submission, ratePerPoint, currency, onClose, onSubmit }) 
 }
 
 export default function Admin() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [ratePerPoint, setRatePerPoint] = useState(0.1);
@@ -179,8 +182,16 @@ export default function Admin() {
             </thead>
             <tbody>
               {submissions.map((s) => (
-                <tr key={s._id}>
-                  <td>{s.assignmentId?.title || '—'}</td>
+                <tr
+                  key={s._id}
+                  className="table-row-link"
+                  onClick={(e) => openLabelerRow(navigate, s.assignmentId?._id, e)}
+                >
+                  <td>
+                    <VideoLabelLink assignmentId={s.assignmentId?._id}>
+                      {s.assignmentId?.title || '—'}
+                    </VideoLabelLink>
+                  </td>
                   <td>{s.userId?.name}</td>
                   <td>{s.events?.length || 0}</td>
                   <td>

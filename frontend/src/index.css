@@ -129,14 +129,9 @@ textarea {
 
 .main-content {
   flex: 1;
-  padding: 2rem 1.5rem;
-  max-width: 1200px;
+  padding: 2rem 2rem;
   width: 100%;
-  margin: 0 auto;
-}
-
-.main-content:has(.labeling-page) {
-  max-width: min(96vw, 1680px);
+  max-width: none;
 }
 
 .page-header {
@@ -151,7 +146,6 @@ textarea {
 
 .page-header p {
   color: var(--text-muted);
-  max-width: 640px;
 }
 
 .page-sub-link {
@@ -3015,4 +3009,110 @@ tbody tr:hover {
 .group-form {
   padding: 1.25rem;
   margin-bottom: 1rem;
+}
+
+.kind-select {
+  min-width: 120px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.kind-select:disabled {
+  opacity: 0.6;
+}
+
+.video-label-link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.video-label-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+a.video-label-link.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+a.video-label-link.btn:hover {
+  text-decoration: none;
+}
+
+.table-row-link {
+  cursor: pointer;
+}
+
+.table-row-link:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tutorial-editor-panel {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.tutorial-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.tutorial-editor-badge {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.tutorial-editor-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.tutorial-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.tutorial-editor-field textarea,
+.tutorial-editor-field input {
+  font-size: 0.88rem;
+}
+
+.tutorial-editor-actions {
+  margin-bottom: 0.75rem;
+}
+
+.tutorial-steps-editor-list .tutorial-step-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.tutorial-editor-field-full {
+  grid-column: 1 / -1;
+}
+
+.tutorial-step-editor-buttons {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
 }

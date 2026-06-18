@@ -35,11 +35,16 @@ async function createVideoAssignment({
   videoUrl,
   taskPrice,
   challengeNote,
+  kind,
+  sortOrder,
 }) {
   const existing = await VideoAssignment.findOne({ clipId });
   if (existing) {
     throw new Error('A video with this clip ID already exists');
   }
+
+  const validKinds = ['tutorial', 'pretest', 'production'];
+  const taskKind = validKinds.includes(kind) ? kind : 'production';
 
   return VideoAssignment.create({
     clipId,
@@ -49,6 +54,8 @@ async function createVideoAssignment({
     gameTime: gameTime || '1 - 00:00',
     durationSeconds: durationSeconds || 30,
     fps: 25,
+    kind: taskKind,
+    sortOrder: parseInt(sortOrder, 10) || 0,
     taskPrice: taskPrice != null ? validateTaskPrice(taskPrice) : 1,
     challengeNote: challengeNote || '',
     status: 'available',

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { isAdmin, isLabeller, isReviewer } from './utils/roles';
+import { canUseLabeler } from './utils/labelerAccess';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -21,7 +22,13 @@ import ReviewQueue from './pages/ReviewQueue';
 import ReviewSubmission from './pages/ReviewSubmission';
 import LabellerProfile from './pages/LabellerProfile';
 
-function ProtectedRoute({ children, adminOnly = false, labellerOnly = false, reviewerOnly = false }) {
+function ProtectedRoute({
+  children,
+  adminOnly = false,
+  labellerOnly = false,
+  reviewerOnly = false,
+  labelerAccess = false,
+}) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -37,6 +44,10 @@ function ProtectedRoute({ children, adminOnly = false, labellerOnly = false, rev
   }
 
   if (reviewerOnly && !isReviewer(user)) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (labelerAccess && !canUseLabeler(user)) {
     return <Navigate to="/" replace />;
   }
 
@@ -140,7 +151,7 @@ export default function App() {
         <Route
           path="label/:id"
           element={
-            <ProtectedRoute labellerOnly>
+            <ProtectedRoute labelerAccess>
               <Labeling />
             </ProtectedRoute>
           }

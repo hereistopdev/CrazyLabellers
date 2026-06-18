@@ -84,7 +84,7 @@ export default function KnowledgeTest() {
           </p>
         </div>
 
-        <div className="card" style={{ maxWidth: 560 }}>
+        <div className="card">
           <h3 style={{ marginBottom: '0.5rem' }}>Before you start</h3>
           <ul style={{ paddingLeft: '1.2rem', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
             <li>10 random questions from a pool of scenario-based test cases</li>

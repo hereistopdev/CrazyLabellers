@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
 import { readVideoDurationFromFile } from '../utils/videoDuration';
 import { formatTimestamp } from '../utils/formatTimestamp';
+import VideoLabelLink from '../components/VideoLabelLink';
+import { openLabelerRow } from '../utils/labelerAccess';
 
 const MIN_PRICE = 0.3;
 const MAX_PRICE = 2;
+
+const TASK_KINDS = [
+  { value: 'tutorial', label: 'Tutorial' },
+  { value: 'pretest', label: 'Pre-test' },
+  { value: 'production', label: 'Real task' },
+];
+
+const TASK_KIND_LABELS = Object.fromEntries(TASK_KINDS.map((k) => [k.value, k.label]));
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -18,6 +28,7 @@ const STATUS_LABELS = {
 };
 
 export default function ManageVideos() {
+  const navigate = useNavigate();
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -33,11 +44,14 @@ export default function ManageVideos() {
     durationSeconds: 30,
     taskPrice: 1,
     challengeNote: '',
+    kind: 'production',
   });
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkPrice, setBulkPrice] = useState(1);
   const [bulkChallenge, setBulkChallenge] = useState('');
+  const [bulkKind, setBulkKind] = useState('production');
   const [savingPrice, setSavingPrice] = useState(null);
+  const [savingKind, setSavingKind] = useState(null);
   const [storage, setStorage] = useState(null);
 
   const load = () => {
@@ -80,6 +94,7 @@ export default function ManageVideos() {
       formData.append('gameTime', meta.gameTime);
       formData.append('durationSeconds', String(durationSeconds));
       formData.append('taskPrice', String(meta.taskPrice));
+      formData.append('kind', meta.kind);
       if (meta.challengeNote) formData.append('challengeNote', meta.challengeNote);
       if (referenceFile) formData.append('reference', referenceFile);
 
@@ -93,6 +108,7 @@ export default function ManageVideos() {
         durationSeconds: 30,
         taskPrice: 1,
         challengeNote: '',
+        kind: 'production',
       });
       setMessage(
         result.storage === 'vps'
@@ -140,6 +156,46 @@ export default function ManageVideos() {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const saveKind = async (videoId, kind) => {
+    setSavingKind(videoId);
+    setError('');
+    try {
+      await api.updateAdminTask(videoId, { kind });
+      setVideos((prev) =>
+        prev.map((v) => (v._id === videoId ? { ...v, kind } : v))
+      );
+      setMessage(`Marked as ${TASK_KIND_LABELS[kind] || kind}`);
+      setTimeout(() => setMessage(''), 2500);
+    } catch (err) {
+      setError(err.message);
+      load();
+    } finally {
+      setSavingKind(null);
+    }
+  };
+
+  const applyBulkKind = async () => {
+    if (selectedIds.length === 0) {
+      setError('Select at least one video');
+      return;
+    }
+    setSavingKind('bulk');
+    setError('');
+    try {
+      await Promise.all(
+        selectedIds.map((id) => api.updateAdminTask(id, { kind: bulkKind }))
+      );
+      setMessage(`Set ${selectedIds.length} video(s) to ${TASK_KIND_LABELS[bulkKind]}`);
+      setSelectedIds([]);
+      load();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingKind(null);
     }
   };
 
@@ -210,7 +266,11 @@ export default function ManageVideos() {
     <div>
       <div className="page-header">
         <h1>Manage Videos</h1>
-        <p>Upload, import, or remove football clips for labeling.</p>
+        <p>
+          Upload, import, or remove football clips. Mark each as <strong>Tutorial</strong>,{' '}
+          <strong>Pre-test</strong>, or <strong>Real task</strong>. Tutorial frame explanations
+          are configured on <Link to="/admin/tasks">Manage tasks</Link>.
+        </p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
           <Link to="/admin" className="btn btn-secondary btn-sm">
             Back to reviews
@@ -297,6 +357,23 @@ export default function ManageVideos() {
             />
           </div>
           <div className="form-group">
+            <label>Task type</label>
+            <select
+              value={meta.kind}
+              onChange={(e) => setMeta({ ...meta, kind: e.target.value })}
+            >
+              {TASK_KINDS.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+              Tutorial = guided examples · Pre-test = scored practice (3 clips) · Real task =
+              paid production work
+            </p>
+          </div>
+          <div className="form-group">
             <label>Task price (USD)</label>
             <input
               type="number"
@@ -338,8 +415,29 @@ export default function ManageVideos() {
 
       {videos.length > 0 && (
         <div className="card bulk-price-bar" style={{ marginBottom: '1rem', padding: '1rem' }}>
-          <strong>Bulk set price</strong>
+          <strong>Bulk actions</strong>
           <div className="actions-row" style={{ marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <select
+              value={bulkKind}
+              onChange={(e) => setBulkKind(e.target.value)}
+              className="kind-select"
+            >
+              {TASK_KINDS.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={applyBulkKind}
+              disabled={savingKind === 'bulk' || selectedIds.length === 0}
+            >
+              {savingKind === 'bulk' ? 'Saving...' : `Set type for ${selectedIds.length} selected`}
+            </button>
+          </div>
+          <div className="actions-row" style={{ marginTop: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <input
               type="number"
               min={MIN_PRICE}
@@ -381,7 +479,7 @@ export default function ManageVideos() {
                 <th>Title</th>
                 <th>Price</th>
                 <th>Challenge</th>
-                <th>Kind</th>
+                <th>Task type</th>
                 <th>Status</th>
                 <th>Ref</th>
                 <th>Assigned to</th>
@@ -392,7 +490,11 @@ export default function ManageVideos() {
             </thead>
             <tbody>
               {videos.map((video) => (
-                <tr key={video._id}>
+                <tr
+                  key={video._id}
+                  className="table-row-link"
+                  onClick={(e) => openLabelerRow(navigate, video._id, e)}
+                >
                   <td>
                     <input
                       type="checkbox"
@@ -400,8 +502,12 @@ export default function ManageVideos() {
                       onChange={() => toggleSelect(video._id)}
                     />
                   </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{video.clipId || '—'}</td>
-                  <td>{video.title}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                    <VideoLabelLink assignmentId={video._id}>{video.clipId || '—'}</VideoLabelLink>
+                  </td>
+                  <td>
+                    <VideoLabelLink assignmentId={video._id}>{video.title}</VideoLabelLink>
+                  </td>
                   <td>
                     <input
                       type="number"
@@ -432,7 +538,21 @@ export default function ManageVideos() {
                       disabled={savingPrice === video._id}
                     />
                   </td>
-                  <td>{video.kind || 'production'}</td>
+                  <td>
+                    <select
+                      value={video.kind || 'production'}
+                      onChange={(e) => saveKind(video._id, e.target.value)}
+                      disabled={savingKind === video._id}
+                      className="kind-select"
+                      title="Task type"
+                    >
+                      {TASK_KINDS.map((k) => (
+                        <option key={k.value} value={k.value}>
+                          {k.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td>
                     <span className={`status-badge status-${video.status}`}>
                       {STATUS_LABELS[video.status] || video.status}
@@ -444,12 +564,9 @@ export default function ManageVideos() {
                   <td>{formatTimestamp(video.updatedAt)}</td>
                   <td>
                     <div className="actions-row" style={{ flexWrap: 'wrap', gap: '0.35rem' }}>
-                      <Link
-                        to={`/review/assignment/${video._id}`}
-                        className="btn btn-primary btn-sm"
-                      >
-                        Preview
-                      </Link>
+                      <VideoLabelLink assignmentId={video._id} className="btn btn-primary btn-sm">
+                        Open labeler
+                      </VideoLabelLink>
                       <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
                         {video.hasReference ? 'Replace JSON' : 'Add JSON'}
                         <input

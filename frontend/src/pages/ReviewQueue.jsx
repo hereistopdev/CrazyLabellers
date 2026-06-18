@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { isAdmin } from '../utils/roles';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
+import VideoLabelLink from '../components/VideoLabelLink';
+import { openLabelerRow } from '../utils/labelerAccess';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -15,6 +17,7 @@ const STATUS_LABELS = {
 };
 
 export default function ReviewQueue() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const admin = isAdmin(user);
   const [tab, setTab] = useState('videos');
@@ -114,8 +117,14 @@ export default function ReviewQueue() {
               </thead>
               <tbody>
                 {assignments.map((assignment) => (
-                  <tr key={assignment._id}>
-                    <td>{assignment.title}</td>
+                  <tr
+                    key={assignment._id}
+                    className="table-row-link"
+                    onClick={(e) => openLabelerRow(navigate, assignment._id, e)}
+                  >
+                    <td>
+                      <VideoLabelLink assignmentId={assignment._id}>{assignment.title}</VideoLabelLink>
+                    </td>
                     <td>
                       <span className={`status-pill status-${assignment.status}`}>
                         {STATUS_LABELS[assignment.status] || assignment.status}
@@ -126,12 +135,9 @@ export default function ReviewQueue() {
                     <td>{formatTimestamp(assignment.createdAt)}</td>
                     <td>{formatTimestamp(assignment.updatedAt)}</td>
                     <td>
-                      <Link
-                        to={`/review/assignment/${assignment._id}`}
-                        className="btn btn-primary btn-sm"
-                      >
-                        Preview video
-                      </Link>
+                      <VideoLabelLink assignmentId={assignment._id} className="btn btn-primary btn-sm">
+                        Open labeler
+                      </VideoLabelLink>
                     </td>
                   </tr>
                 ))}
@@ -160,8 +166,18 @@ export default function ReviewQueue() {
               </thead>
               <tbody>
                 {submissions.map((submission) => (
-                  <tr key={submission._id}>
-                    <td>{submission.assignmentId?.title || '—'}</td>
+                  <tr
+                    key={submission._id}
+                    className="table-row-link"
+                    onClick={(e) =>
+                      openLabelerRow(navigate, submission.assignmentId?._id, e)
+                    }
+                  >
+                    <td>
+                      <VideoLabelLink assignmentId={submission.assignmentId?._id}>
+                        {submission.assignmentId?.title || '—'}
+                      </VideoLabelLink>
+                    </td>
                     <td>{submission.userId?.name}</td>
                     <td>{submission.events?.length || 0}</td>
                     <td>
