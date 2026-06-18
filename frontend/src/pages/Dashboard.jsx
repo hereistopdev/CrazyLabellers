@@ -1,10 +1,21 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from './AdminDashboard';
 import { isValidator, canAccessReview } from '../utils/roles';
-import { Link } from 'react-router-dom';
+import { api } from '../api';
+import LabellerBadges from '../components/LabellerBadges';
+import { formatMoney } from '../utils/money';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [badgeData, setBadgeData] = useState(null);
+
+  useEffect(() => {
+    if (user?.role === 'labeller' || user?.role === 'freelancer') {
+      api.getMyBadges().then(setBadgeData).catch(() => {});
+    }
+  }, [user?.role]);
 
   if (user?.role === 'admin') {
     return <AdminDashboard />;
@@ -109,6 +120,35 @@ export default function Dashboard() {
         <div className="alert alert-success">
           You are qualified for production labeling tasks.
         </div>
+      )}
+
+      {badgeData && (
+        <section className="card labeller-badges-panel">
+          <h3>Work badges</h3>
+          <p className="labeller-badges-panel-intro">
+            Earn badges from approved production tasks. Each badge pays a one-time bonus of{' '}
+            <strong>$0.02 × clip milestone</strong>
+            {badgeData.totalBadgeEarnings > 0 && (
+              <>
+                {' '}
+                — total badge bonuses: <strong>{formatMoney(badgeData.totalBadgeEarnings)}</strong>
+              </>
+            )}
+            .
+          </p>
+          <LabellerBadges
+            badges={badgeData.badges}
+            jobsCompleted={badgeData.jobsCompleted}
+            compact
+            showLocked
+          />
+          {badgeData.nextBadge && (
+            <p className="labeller-badges-footnote" style={{ marginTop: '0.85rem' }}>
+              Next up: {badgeData.nextBadge.icon} <strong>{badgeData.nextBadge.title}</strong> at{' '}
+              {badgeData.nextBadge.clipThreshold} clips ({badgeData.nextBadge.remaining} to go).
+            </p>
+          )}
+        </section>
       )}
 
       <div className="step-cards">

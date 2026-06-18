@@ -6,6 +6,7 @@ const { auth } = require('../middleware/auth');
 const { isReviewer, canAccessReview } = require('../config/roles');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
 const { upsertLabellerReview } = require('../services/labellerProfile');
+const { processApprovalBadges } = require('../services/labellerBadges');
 const { loadReferenceForClip } = require('../services/referenceStorage');
 const { compareAnnotations } = require('../utils/compareAnnotations');
 const { buildScoreReviewPayload } = require('../services/scoreReview');
@@ -265,7 +266,16 @@ router.patch('/submissions/:id/review', auth, requireReviewerRole, async (req, r
       }
     }
 
-    return res.json(await buildReviewPayload(submission, assignment));
+    let newBadges = [];
+    if (status === 'approved') {
+      newBadges = await processApprovalBadges(
+        submission.userId._id || submission.userId,
+        assignment?.kind
+      );
+    }
+
+    const payload = await buildReviewPayload(submission, assignment);
+    return res.json({ ...payload, newBadges });
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }

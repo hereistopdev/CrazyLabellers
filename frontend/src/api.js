@@ -224,6 +224,7 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  getMyBadges: () => request('/labellers/me/badges'),
   getMyProfile: () => request('/labellers/me/profile'),
   getLabellerProfile: (id) => request(`/labellers/${id}/profile`),
   updateAssignmentPrice: (id, body) =>

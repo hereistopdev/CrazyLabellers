@@ -2,11 +2,12 @@ const User = require('../models/User');
 const LabelSubmission = require('../models/LabelSubmission');
 const LabellerReview = require('../models/LabellerReview');
 const { summarizePaymentAddresses } = require('../utils/paymentAddresses');
+const { getLabellerBadgeSummary } = require('./labellerBadges');
 
 async function getLabellerStats(labellerId) {
-  const [reviews, approvedCount] = await Promise.all([
+  const [reviews, badgeSummary] = await Promise.all([
     LabellerReview.find({ labellerId }),
-    LabelSubmission.countDocuments({ userId: labellerId, status: 'approved' }),
+    getLabellerBadgeSummary(labellerId),
   ]);
 
   const reviewCount = reviews.length;
@@ -28,7 +29,11 @@ async function getLabellerStats(labellerId) {
   return {
     avgRating,
     reviewCount,
-    jobsCompleted: approvedCount,
+    jobsCompleted: badgeSummary.jobsCompleted,
+    totalBadgeEarnings: badgeSummary.totalBadgeEarnings,
+    earnedBadgeCount: badgeSummary.earnedCount,
+    badges: badgeSummary.badges,
+    nextBadge: badgeSummary.nextBadge,
     aspectAverages:
       aspectCount > 0
         ? {
@@ -71,7 +76,7 @@ async function upsertLabellerReview({
 
 async function buildLabellerProfile(labellerId, { viewer } = {}) {
   const labeller = await User.findById(labellerId).select(
-    'name email role status createdAt bestTestScore bestLabelingTestScore labelingTestPassed paymentAddresses paymentAddressesUpdatedAt'
+    'name email role status createdAt bestTestScore bestLabelingTestScore labelingTestPassed paymentAddresses paymentAddressesUpdatedAt totalBadgeEarnings'
   );
   if (!labeller || !['labeller', 'freelancer'].includes(labeller.role)) {
     return null;
@@ -117,6 +122,13 @@ async function buildLabellerProfile(labellerId, { viewer } = {}) {
           }
         : {}),
       ...stats,
+    },
+    badges: stats.badges,
+    badgeSummary: {
+      earnedCount: stats.earnedBadgeCount,
+      totalBadges: stats.badges.length,
+      totalBadgeEarnings: stats.totalBadgeEarnings,
+      nextBadge: stats.nextBadge,
     },
     reviews: reviews.map((r) => ({
       _id: r._id,

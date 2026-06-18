@@ -4611,3 +4611,219 @@ a.video-label-link.btn:hover {
     flex: 1 1 100%;
   }
 }
+
+/* ── Labeller work badges ── */
+.labeller-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.labeller-badges--compact {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.65rem;
+}
+
+.labeller-badges-empty,
+.labeller-badges-footnote {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.labeller-badges-footnote {
+  grid-column: 1 / -1;
+  margin-top: 0.25rem;
+}
+
+.labeller-badge {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.labeller-badge.earned:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.labeller-badge.locked {
+  opacity: 0.72;
+  filter: grayscale(0.35);
+}
+
+.labeller-badge-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.labeller-badge--bronze.earned {
+  border-color: rgba(205, 127, 50, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(205, 127, 50, 0.12);
+}
+
+.labeller-badge--bronze.earned .labeller-badge-icon {
+  background: rgba(205, 127, 50, 0.18);
+  border-color: rgba(205, 127, 50, 0.35);
+}
+
+.labeller-badge--silver.earned {
+  border-color: rgba(156, 163, 175, 0.45);
+}
+
+.labeller-badge--silver.earned .labeller-badge-icon {
+  background: rgba(156, 163, 175, 0.16);
+  border-color: rgba(156, 163, 175, 0.35);
+}
+
+.labeller-badge--gold.earned {
+  border-color: rgba(234, 179, 8, 0.45);
+}
+
+.labeller-badge--gold.earned .labeller-badge-icon {
+  background: rgba(234, 179, 8, 0.16);
+  border-color: rgba(234, 179, 8, 0.35);
+}
+
+.labeller-badge--emerald.earned {
+  border-color: rgba(34, 197, 94, 0.5);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12);
+}
+
+.labeller-badge--emerald.earned .labeller-badge-icon {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.labeller-badge-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.labeller-badge-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 0.2rem;
+}
+
+.labeller-badge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.labeller-badge-tier {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.labeller-badge-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-bottom: 0.35rem;
+}
+
+.labeller-badge-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+}
+
+.labeller-badge-bonus {
+  font-size: 0.78rem;
+  color: #86efac;
+  font-weight: 600;
+}
+
+.labeller-badge.locked .labeller-badge-bonus {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.labeller-badges-panel {
+  margin-bottom: 1.5rem;
+  padding: 1.15rem 1.25rem;
+}
+
+.labeller-badges-panel h3 {
+  margin-bottom: 0.35rem;
+}
+
+.labeller-badges-panel-intro {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.badge-grants-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.badge-grant-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.badge-grant-item:last-child {
+  border-bottom: none;
+}
+
+.badge-grant-main {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.badge-grant-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.badge-grant-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.badge-grant-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.badge-grant-bonus {
+  color: #86efac;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .labeller-badges {
+    grid-template-columns: 1fr;
+  }
+}

@@ -34,6 +34,7 @@ const userSchema = new mongoose.Schema(
       bep20: { type: String, trim: true, default: '' },
     },
     paymentAddressesUpdatedAt: { type: Date, default: null },
+    totalBadgeEarnings: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const { isLabeller } = require('../config/roles');
 const { buildLabellerProfile } = require('../services/labellerProfile');
+const { getLabellerBadgeSummary } = require('../services/labellerBadges');
 const {
   validatePaymentAddresses,
   summarizePaymentAddresses,
@@ -57,6 +58,18 @@ router.patch('/me/payment-addresses', auth, async (req, res) => {
     });
   } catch (error) {
     return res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/me/badges', auth, async (req, res) => {
+  try {
+    if (!isLabeller(req.user)) {
+      return res.status(403).json({ message: 'Only labellers have work badges' });
+    }
+    const summary = await getLabellerBadgeSummary(req.user._id);
+    return res.json(summary);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
   }
 });
 

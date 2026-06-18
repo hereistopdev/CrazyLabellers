@@ -11,6 +11,7 @@ const { LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { upsertLabellerReview, getLabellerStats } = require('../services/labellerProfile');
+const { processApprovalBadges } = require('../services/labellerBadges');
 const {
   getOnboardingStatus,
   applyOnboardingGrants,
@@ -510,7 +511,15 @@ router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, 
       }
     }
 
-    return res.json(submission);
+    let newBadges = [];
+    if (status === 'approved') {
+      newBadges = await processApprovalBadges(
+        submission.userId._id || submission.userId,
+        assignment?.kind
+      );
+    }
+
+    return res.json({ ...submission.toObject(), newBadges });
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }

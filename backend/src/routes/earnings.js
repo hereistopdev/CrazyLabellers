@@ -1,7 +1,9 @@
 const express = require('express');
 const LabelSubmission = require('../models/LabelSubmission');
 const LabellerReview = require('../models/LabellerReview');
+const LabellerBadgeGrant = require('../models/LabellerBadgeGrant');
 const PaymentSettings = require('../models/PaymentSettings');
+const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const { isLabeller } = require('../config/roles');
 const { DEFAULT_RATE_PER_POINT } = require('../config/payments');
@@ -31,25 +33,45 @@ router.get('/me', auth, async (req, res) => {
     );
 
     const approved = paidSubmissions.filter((s) => s.status === 'approved');
-    const totalEarnings = approved.reduce((sum, s) => sum + (s.earnings || 0), 0);
+    const taskEarnings = approved.reduce((sum, s) => sum + (s.earnings || 0), 0);
     const totalPoints = approved.reduce((sum, s) => sum + (s.reviewPoints || 0), 0);
 
-    const reviews = await LabellerReview.find({
-      submissionId: { $in: submissions.map((s) => s._id) },
-    });
+    const [reviews, badgeGrants, user] = await Promise.all([
+      LabellerReview.find({
+        submissionId: { $in: submissions.map((s) => s._id) },
+      }),
+      LabellerBadgeGrant.find({ userId: req.user._id }).sort({ createdAt: -1 }),
+      User.findById(req.user._id).select('totalBadgeEarnings').lean(),
+    ]);
+
+    const badgeEarnings = user?.totalBadgeEarnings ?? badgeGrants.reduce((sum, g) => sum + g.bonusAmount, 0);
+    const totalEarnings = Math.round((taskEarnings + badgeEarnings) * 100) / 100;
     const ratingBySubmission = new Map(reviews.map((r) => [String(r.submissionId), r]));
 
     return res.json({
       settings: { ratePerPoint: settings.ratePerPoint, currency: settings.currency },
       summary: {
-        totalEarnings: Math.round(totalEarnings * 100) / 100,
+        totalEarnings,
+        taskEarnings: Math.round(taskEarnings * 100) / 100,
+        badgeEarnings: Math.round(badgeEarnings * 100) / 100,
         totalPoints,
         tasksCompleted: approved.length,
         avgPoints: approved.length
           ? Math.round((totalPoints / approved.length) * 10) / 10
           : 0,
         pendingReview: paidSubmissions.filter((s) => s.status === 'submitted').length,
+        badgesEarned: badgeGrants.length,
       },
+      badgeGrants: badgeGrants.map((grant) => ({
+        id: grant._id,
+        badgeId: grant.badgeId,
+        title: grant.title,
+        icon: grant.icon,
+        clipThreshold: grant.clipThreshold,
+        tier: grant.tier,
+        bonusAmount: grant.bonusAmount,
+        earnedAt: grant.createdAt,
+      })),
       tasks: paidSubmissions.map((s) => {
         const review = ratingBySubmission.get(String(s._id));
         return {

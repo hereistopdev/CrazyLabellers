@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
+import LabellerBadges from '../components/LabellerBadges';
 import { formatMoney } from '../utils/money';
 import PaymentAddressesForm, { PaymentAddressesDisplay } from '../components/PaymentAddressesSection';
 import { isAdmin } from '../utils/roles';
@@ -36,7 +37,7 @@ export default function LabellerProfile() {
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!profile) return null;
 
-  const { labeller, reviews, workHistory } = profile;
+  const { labeller, reviews, workHistory, badges = [], badgeSummary } = profile;
   const isOwnProfile = !id || id === user?.id;
 
   return (
@@ -79,6 +80,14 @@ export default function LabellerProfile() {
             <strong>{labeller.bestTestScore || 0}%</strong>
             <span>Knowledge test</span>
           </div>
+          <div className="profile-stat">
+            <strong>{labeller.earnedBadgeCount ?? badgeSummary?.earnedCount ?? 0}</strong>
+            <span>Badges earned</span>
+          </div>
+          <div className="profile-stat">
+            <strong>{formatMoney(labeller.totalBadgeEarnings ?? badgeSummary?.totalBadgeEarnings ?? 0)}</strong>
+            <span>Badge bonuses</span>
+          </div>
         </div>
 
         {labeller.aspectAverages && (
@@ -89,6 +98,14 @@ export default function LabellerProfile() {
           </div>
         )}
       </div>
+
+      <section className="card labeller-badges-panel">
+        <h3>Work badges</h3>
+        <p className="labeller-badges-panel-intro">
+          Milestone badges for approved production tasks. Bonus = $0.02 × clip count at each tier.
+        </p>
+        <LabellerBadges badges={badges} jobsCompleted={labeller.jobsCompleted} showLocked />
+      </section>
 
       {isOwnProfile ? (
         <div style={{ marginBottom: '1.5rem' }}>

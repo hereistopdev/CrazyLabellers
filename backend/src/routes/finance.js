@@ -84,12 +84,14 @@ router.get('/dashboard', auth, requireRole('admin'), async (_req, res) => {
 
     const labellerIds = labellerStats.map((s) => s._id);
     const labellers = await User.find({ _id: { $in: labellerIds } }).select(
-      'name email status paymentAddresses paymentAddressesUpdatedAt'
+      'name email status paymentAddresses paymentAddressesUpdatedAt totalBadgeEarnings'
     );
 
     const earningsByLabeller = labellerStats
       .map((stat) => {
         const labeller = labellers.find((l) => l._id.toString() === stat._id.toString());
+        const badgeEarnings = labeller?.totalBadgeEarnings || 0;
+        const taskEarnings = stat.totalEarnings || 0;
         return {
           labellerId: stat._id,
           name: labeller?.name || 'Unknown',
@@ -97,7 +99,9 @@ router.get('/dashboard', auth, requireRole('admin'), async (_req, res) => {
           status: labeller?.status,
           paymentAddresses: summarizePaymentAddresses(labeller?.paymentAddresses),
           paymentAddressesUpdatedAt: labeller?.paymentAddressesUpdatedAt || null,
-          totalEarnings: Math.round(stat.totalEarnings * 100) / 100,
+          totalEarnings: Math.round((taskEarnings + badgeEarnings) * 100) / 100,
+          taskEarnings: Math.round(taskEarnings * 100) / 100,
+          badgeEarnings: Math.round(badgeEarnings * 100) / 100,
           totalPoints: stat.totalPoints,
           tasksCompleted: stat.tasksCompleted,
           avgPoints: Math.round(stat.avgPoints * 10) / 10,
