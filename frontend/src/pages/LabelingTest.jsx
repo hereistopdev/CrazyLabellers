@@ -4,21 +4,20 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
+import { labelerPath } from '../utils/labelerAccess';
 
-const STATUS_LABELS = {
-  available: 'Available',
-  assigned: 'Assigned',
+const PROGRESS_LABELS = {
+  open: 'Not started',
   in_progress: 'In progress',
   submitted: 'Submitted',
 };
 
 export default function LabelingTest() {
-  const { user, refreshUser } = useAuth();
+  const { refreshUser } = useAuth();
   const [status, setStatus] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [claiming, setClaiming] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -36,18 +35,6 @@ export default function LabelingTest() {
     refreshUser().catch(() => {});
   }, []);
 
-  const handleClaim = async (id) => {
-    setClaiming(id);
-    try {
-      await api.claimAssignment(id);
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setClaiming(null);
-    }
-  };
-
   if (loading) return <div className="loading">Loading labeling test...</div>;
 
   const passed = status?.passed;
@@ -60,8 +47,8 @@ export default function LabelingTest() {
       <div className="page-header">
         <h1>Labeling pre-test</h1>
         <p>
-          You receive <strong>3 random clips</strong> from the admin pre-test pool (typically ~50
-          clips). Each submission is scored automatically against reference annotations. Score{' '}
+          You receive <strong>3 random clips</strong> from the admin pre-test pool. Open any of your
+          clips directly — no claim needed. Each submission is scored automatically. Score{' '}
           <strong>80/100 or higher</strong> to unlock real labeling tasks.
         </p>
       </div>
@@ -144,11 +131,14 @@ export default function LabelingTest() {
       ) : (
         <div className="task-list">
           {assignments.map((a, index) => {
-            const isMine =
-              a.assignedTo?._id === user?.id || a.assignedTo === user?.id;
-            const canOpen = isMine && ['assigned', 'in_progress'].includes(a.status);
-            const canClaim = a.status === 'available';
+            const progress = a.userProgress || 'open';
             const subtitle = assignmentSubtitle(a);
+            const actionLabel =
+              progress === 'submitted'
+                ? 'Review clip'
+                : progress === 'in_progress'
+                  ? 'Continue labeling'
+                  : 'Start clip';
 
             return (
               <div key={a._id} className="task-list-item card">
@@ -159,7 +149,7 @@ export default function LabelingTest() {
                     Duration: {a.durationSeconds || 30}s ·{' '}
                     <span className="status-badge status-passed_test">Pre-test · Free</span>
                     {' · '}
-                    {STATUS_LABELS[a.status] || a.status}
+                    {PROGRESS_LABELS[progress] || progress}
                     {a.lastScore != null && (
                       <>
                         {' · '}
@@ -171,21 +161,9 @@ export default function LabelingTest() {
                   </p>
                 </div>
                 <div className="task-list-actions">
-                  {canClaim && (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => handleClaim(a._id)}
-                      disabled={claiming === a._id}
-                    >
-                      {claiming === a._id ? 'Claiming...' : 'Start test clip'}
-                    </button>
-                  )}
-                  {canOpen && (
-                    <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
-                      Continue labeling
-                    </Link>
-                  )}
+                  <Link to={labelerPath(String(a._id))} className="btn btn-primary btn-sm">
+                    {actionLabel}
+                  </Link>
                 </div>
               </div>
             );

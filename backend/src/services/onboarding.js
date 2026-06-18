@@ -88,6 +88,45 @@ async function ensureTutorialAssignmentsOpen() {
   );
 }
 
+async function ensurePretestAssignmentsOpen() {
+  await VideoAssignment.updateMany(
+    { kind: 'pretest' },
+    { $set: { status: 'available', assignedTo: null, taskPrice: 0 } }
+  );
+}
+
+async function getPretestClipsWithProgress(userId) {
+  const assignments = await ensurePretestClipsForUser(userId);
+
+  const submissions = await LabelSubmission.find({
+    userId,
+    assignmentId: { $in: assignments.map((a) => a._id) },
+  }).select('assignmentId autoScore status updatedAt events');
+
+  const submissionByAssignment = new Map(
+    submissions.map((s) => [String(s.assignmentId), s])
+  );
+
+  return assignments.map((a) => {
+    const submission = submissionByAssignment.get(String(a._id));
+    const hasSubmitted = submission?.status === 'submitted';
+    let userProgress = 'open';
+    if (hasSubmitted) {
+      userProgress = 'submitted';
+    } else if (submission) {
+      userProgress = 'in_progress';
+    }
+
+    return {
+      ...a.toObject(),
+      taskPrice: 0,
+      userProgress,
+      lastScore: submission?.autoScore ?? null,
+      lastSubmittedAt: hasSubmitted ? submission.updatedAt : null,
+    };
+  });
+}
+
 function shuffleArray(items) {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -266,7 +305,9 @@ module.exports = {
   getTutorialProgress,
   refreshTutorialCompletion,
   ensureTutorialAssignmentsOpen,
+  ensurePretestAssignmentsOpen,
   ensurePretestClipsForUser,
+  getPretestClipsWithProgress,
   isPretestClipForUser,
   getPretestPoolStats,
   getCurrentOnboardingStep,

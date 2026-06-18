@@ -37,7 +37,7 @@ router.post('/register', async (req, res) => {
     }
 
     const role = PUBLIC_REGISTER_ROLES.includes(requestedRole) ? requestedRole : 'labeller';
-    const status = role === 'validator' ? 'approved' : 'pending';
+    const status = 'pending';
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {

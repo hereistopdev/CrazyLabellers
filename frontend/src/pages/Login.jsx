@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-import { isValidator } from '../utils/roles';
+import { isValidator, canAccessReview } from '../utils/roles';
 
 export default function Login() {
   const { login } = useAuth();
@@ -21,7 +21,7 @@ export default function Login() {
       if (user.role === 'admin') {
         navigate('/admin');
       } else if (isValidator(user)) {
-        navigate('/review');
+        navigate(canAccessReview(user) ? '/review' : '/');
       } else {
         navigate('/');
       }

@@ -28,9 +28,20 @@ export default function ManageValidators() {
   useEffect(loadValidators, []);
 
   const validatorTable = useTableData(validators, {
-    searchKeys: ['name', 'email', 'role'],
+    searchKeys: ['name', 'email', 'role', 'status'],
     pageSize: 25,
   });
+
+  const updateStatus = async (id, status) => {
+    try {
+      await api.updateValidatorStatus(id, status);
+      setMessage(status === 'approved' ? 'Validator approved' : 'Validator status updated');
+      loadValidators();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const addValidator = async (e) => {
     e.preventDefault();
@@ -73,7 +84,8 @@ export default function ManageValidators() {
         <h1>Manage Validators</h1>
         <p>
           Validators review submitted production tasks, compare labeller work to reference
-          annotations, and assign scores (0–100).
+          annotations, and assign scores (0–100). Self-registered validators start as{' '}
+          <strong>pending</strong> until you approve them.
         </p>
         <p className="page-sub-link">
           Sign-up: <Link to="/register?role=validator">Validator register</Link> · Login:{' '}
@@ -107,8 +119,8 @@ export default function ManageValidators() {
         <div className="card add-labeller-form" style={{ marginBottom: '1.5rem' }}>
           <h3>Add validator</h3>
           <p className="form-hint">
-            Create an account for a validator. They sign in at the login page and open the review
-            queue to score submitted tasks.
+            Admin-created validators are approved immediately. They sign in at the login page and
+            open the review queue to score submitted tasks.
           </p>
           <form onSubmit={addValidator}>
             <div className="form-row">
@@ -163,6 +175,7 @@ export default function ManageValidators() {
               <th>Name</th>
               <th>Email</th>
               <th>Role</th>
+              <th>Status</th>
               <th>Added</th>
               <th>Actions</th>
             </tr>
@@ -170,13 +183,13 @@ export default function ManageValidators() {
           <tbody>
             {validators.length === 0 ? (
               <tr>
-                <td colSpan={5} style={{ color: 'var(--text-muted)' }}>
+                <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
                   No validators yet. Add one to review submitted tasks.
                 </td>
               </tr>
             ) : validatorTable.totalCount === 0 ? (
               <tr>
-                <td colSpan={5} style={{ color: 'var(--text-muted)' }}>
+                <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
                   No validators match your search
                 </td>
               </tr>
@@ -186,11 +199,46 @@ export default function ManageValidators() {
                   <td>{v.name}</td>
                   <td>{v.email}</td>
                   <td>{v.role === 'checker' ? 'Validator (legacy)' : 'Validator'}</td>
+                  <td>
+                    <span className={`status-badge status-${v.status || 'pending'}`}>
+                      {(v.status || 'pending').replace('_', ' ')}
+                    </span>
+                  </td>
                   <td>{new Date(v.createdAt).toLocaleDateString()}</td>
                   <td>
+                    {v.status !== 'approved' && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => updateStatus(v._id, 'approved')}
+                      >
+                        Approve
+                      </button>
+                    )}
+                    {v.status === 'pending' && (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        style={{ marginLeft: 4 }}
+                        onClick={() => updateStatus(v._id, 'rejected')}
+                      >
+                        Reject
+                      </button>
+                    )}
+                    {v.status === 'rejected' && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ marginLeft: 4 }}
+                        onClick={() => updateStatus(v._id, 'pending')}
+                      >
+                        Reset
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-danger btn-sm"
+                      style={{ marginLeft: 4 }}
                       onClick={() => removeValidator(v._id, v.name)}
                     >
                       Remove

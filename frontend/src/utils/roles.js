@@ -14,6 +14,13 @@ export function isReviewer(user) {
   return isAdmin(user) || isValidator(user);
 }
 
+export function canAccessReview(user) {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  if (isValidator(user)) return user.status === 'approved';
+  return false;
+}
+
 export function isLabeller(user) {
   return user?.role === 'labeller' || user?.role === 'freelancer';
 }
@@ -23,6 +30,13 @@ export function roleLabel(user) {
   if (isValidator(user)) return 'Validator';
   return 'Labeller';
 }
+
+export const VALIDATOR_STATUSES = [
+  { value: '', label: 'All' },
+  { value: 'pending', label: 'Pending approval' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+];
 
 export const LABELLER_STATUSES = [
   { value: '', label: 'All' },

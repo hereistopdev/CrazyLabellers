@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isValidator, canAccessReview } from '../utils/roles';
 
 export default function Register() {
   const { register } = useAuth();
@@ -23,13 +24,13 @@ export default function Register() {
         ? {
             title: 'Create validator account',
             subtitle:
-              'Sign up to review labeller submissions, compare work against reference annotations, and assign scores.',
+              'Sign up to review labeller submissions. An admin must approve your account before you can access the review queue.',
             button: 'Register as validator',
             steps: [
-              'Sign in after registering',
+              'Wait for admin approval',
+              'Sign in once approved',
               'Open the review queue',
-              'Review submitted production tasks',
-              'Assign scores and approve or reject',
+              'Score submitted production tasks',
             ],
           }
         : {
@@ -55,8 +56,8 @@ export default function Register() {
       const user = await register(name, email, password, role);
       if (user.role === 'admin') {
         navigate('/admin');
-      } else if (user.role === 'validator' || user.role === 'checker') {
-        navigate('/review');
+      } else if (isValidator(user)) {
+        navigate(canAccessReview(user) ? '/review' : '/');
       } else {
         navigate('/');
       }

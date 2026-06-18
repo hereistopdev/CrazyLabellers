@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from './AdminDashboard';
-import { isValidator } from '../utils/roles';
+import { isValidator, canAccessReview } from '../utils/roles';
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
@@ -11,15 +11,42 @@ export default function Dashboard() {
   }
 
   if (isValidator(user)) {
+    const approved = canAccessReview(user);
+
     return (
       <div>
         <div className="page-header">
           <h1>Hello, {user?.name}</h1>
-          <p>Review submitted labeller tasks, compare against reference annotations, and assign scores.</p>
+          {approved ? (
+            <p>
+              Review submitted labeller tasks, compare against reference annotations, and assign
+              scores.
+            </p>
+          ) : user?.status === 'rejected' ? (
+            <p>Your validator application was not approved. Contact an admin if you believe this is a mistake.</p>
+          ) : (
+            <p>
+              Your validator account is waiting for admin approval. You will be able to open the
+              review queue once an admin approves your account.
+            </p>
+          )}
         </div>
-        <Link to="/review" className="btn btn-primary">
-          Open review queue
-        </Link>
+
+        {!approved && user?.status !== 'rejected' && (
+          <div className="alert alert-info">
+            Pending approval — an admin must approve your account before you can review tasks.
+          </div>
+        )}
+
+        {user?.status === 'rejected' && (
+          <div className="alert alert-error">Access denied — validator account not approved.</div>
+        )}
+
+        {approved && (
+          <Link to="/review" className="btn btn-primary">
+            Open review queue
+          </Link>
+        )}
       </div>
     );
   }

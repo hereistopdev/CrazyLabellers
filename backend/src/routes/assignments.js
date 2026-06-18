@@ -13,6 +13,7 @@ const {
   canAccessProduction,
   hasPassedKnowledgeTest,
   isPretestClipForUser,
+  getPretestClipsWithProgress,
 } = require('../services/onboarding');
 
 const router = express.Router();
@@ -44,8 +45,7 @@ router.get('/', auth, async (req, res) => {
             message: 'Complete the knowledge test and tutorials before the video pre-test',
           });
         }
-        const { ensurePretestClipsForUser } = require('../services/onboarding');
-        const pretestClips = await ensurePretestClipsForUser(req.user._id);
+        const pretestClips = await getPretestClipsWithProgress(req.user._id);
         return res.json(pretestClips);
       } else {
         if (!canAccessProduction(req.user)) {
@@ -160,19 +160,12 @@ router.post('/:id/claim', auth, async (req, res) => {
       const User = require('../models/User');
       const user = await User.findById(req.user._id);
       if (!isPretestClipForUser(user, assignment._id)) {
-        return res.status(403).json({ message: 'This clip is not in your assigned pre-test set' });
+        return res.status(403).json({ message: 'This clip is not in your pre-test set' });
       }
-
-      await LabelSubmission.findOneAndUpdate(
-        { assignmentId: assignment._id, userId: req.user._id },
-        { assignmentId: assignment._id, userId: req.user._id, events: [], status: 'draft' },
-        { upsert: true, new: true }
-      );
 
       return res.json({
         ...assignment.toObject(),
-        assignedTo: req.user._id,
-        status: 'assigned',
+        message: 'Pre-test clips are open in your personal set — no claim required',
       });
     }
 
@@ -358,7 +351,11 @@ router.put('/:id/labels', auth, async (req, res) => {
       } catch (gradeError) {
         grading = { error: gradeError.message };
       }
-    } else if (assignment.kind !== 'tutorial' && assignment.status === 'assigned') {
+    } else if (
+      assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest' &&
+      assignment.status === 'assigned'
+    ) {
       await patchAssignment(assignment._id, { status: 'in_progress' });
     }
 

@@ -2,8 +2,8 @@ const express = require('express');
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
 const PaymentSettings = require('../models/PaymentSettings');
-const { auth, requireRole } = require('../middleware/auth');
-const { isReviewer } = require('../config/roles');
+const { auth } = require('../middleware/auth');
+const { isReviewer, canAccessReview } = require('../config/roles');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
 const { upsertLabellerReview } = require('../services/labellerProfile');
 const { loadReferenceForClip } = require('../services/referenceStorage');
@@ -15,6 +15,11 @@ const router = express.Router();
 function requireReviewerRole(req, res, next) {
   if (!isReviewer(req.user)) {
     return res.status(403).json({ message: 'Insufficient permissions' });
+  }
+  if (!canAccessReview(req.user)) {
+    return res.status(403).json({
+      message: 'Your validator account is pending admin approval before you can review tasks',
+    });
   }
   return next();
 }
@@ -226,7 +231,7 @@ router.patch('/submissions/:id/validate', auth, requireReviewerRole, async (req,
   }
 });
 
-router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker', 'validator'), async (req, res) => {
+router.patch('/submissions/:id/review', auth, requireReviewerRole, async (req, res) => {
   try {
     const { status, reviewerNotes, reviewPoints, rating, reviewComment, aspects } = req.body;
 

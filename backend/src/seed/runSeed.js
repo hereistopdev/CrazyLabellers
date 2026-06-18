@@ -3,7 +3,10 @@ const VideoAssignment = require('../models/VideoAssignment');
 const { terminologies, testQuestions } = require('./data');
 const { syncTerminology, syncTestQuestions } = require('./syncContent');
 const { setupPretestClips } = require('../services/pretestSetup');
-const { ensureTutorialAssignmentsOpen } = require('../services/tutorialProgress');
+const {
+  ensureTutorialAssignmentsOpen,
+  ensurePretestAssignmentsOpen,
+} = require('../services/tutorialProgress');
 
 async function runSeed({ force = false } = {}) {
   if (force) {
@@ -62,8 +65,9 @@ async function runSeed({ force = false } = {}) {
 
   try {
     await ensureTutorialAssignmentsOpen();
+    await ensurePretestAssignmentsOpen();
   } catch (error) {
-    console.warn('Tutorial reset skipped:', error.message);
+    console.warn('Tutorial/pre-test pool reset skipped:', error.message);
   }
 
   return {

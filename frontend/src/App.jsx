@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { isAdmin, isLabeller, isReviewer } from './utils/roles';
+import { isAdmin, isLabeller, isReviewer, canAccessReview } from './utils/roles';
 import { canUseLabeler } from './utils/labelerAccess';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -44,7 +44,7 @@ function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
-  if (reviewerOnly && !isReviewer(user)) {
+  if (reviewerOnly && !canAccessReview(user)) {
     return <Navigate to="/" replace />;
   }
 
@@ -53,7 +53,12 @@ function ProtectedRoute({
   }
 
   if (labellerOnly && !isLabeller(user)) {
-    return <Navigate to={isReviewer(user) ? '/review' : '/admin'} replace />;
+    return (
+      <Navigate
+        to={canAccessReview(user) ? '/review' : isAdmin(user) ? '/admin' : '/'}
+        replace
+      />
+    );
   }
 
   return children;

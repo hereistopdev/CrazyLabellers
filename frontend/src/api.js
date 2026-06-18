@@ -195,6 +195,11 @@ export const api = {
   createValidator: (body) =>
     request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),
   deleteValidator: (id) => request(`/admin/validators/${id}`, { method: 'DELETE' }),
+  updateValidatorStatus: (id, status) =>
+    request(`/admin/validators/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
   getCheckers: () => request('/admin/validators'),
   createChecker: (body) =>
     request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),

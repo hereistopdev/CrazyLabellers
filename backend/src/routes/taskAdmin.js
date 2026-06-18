@@ -146,10 +146,12 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
     if (tutorialSteps !== undefined) update.tutorialSteps = normalizeTutorialSteps(tutorialSteps);
     if (status !== undefined && effectiveKind !== 'tutorial') update.status = status;
 
-    if (effectiveKind === 'tutorial') {
+    if (effectiveKind === 'tutorial' || effectiveKind === 'pretest') {
       update.status = 'available';
       update.assignedTo = null;
       update.taskPrice = 0;
+    }
+    if (effectiveKind === 'tutorial') {
       update.groupId = null;
     }
 

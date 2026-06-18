@@ -6,7 +6,7 @@ const { isLabeller } = require('../config/roles');
 const {
   canAccessPretest,
   canAccessProduction,
-  ensurePretestClipsForUser,
+  getPretestClipsWithProgress,
   getOnboardingStatus,
   PRETEST_CLIPS_PER_LABELLER,
 } = require('../services/onboarding');
@@ -58,32 +58,8 @@ router.get('/assignments', auth, async (req, res) => {
       return res.status(403).json({ message: msg });
     }
 
-    const assignments = await ensurePretestClipsForUser(req.user._id);
-
-    const submissions = await LabelSubmission.find({
-      userId: req.user._id,
-      assignmentId: { $in: assignments.map((a) => a._id) },
-    }).select('assignmentId autoScore status updatedAt events');
-
-    const submissionByAssignment = new Map(
-      submissions.map((s) => [String(s.assignmentId), s])
-    );
-
-    return res.json(
-      assignments.map((a) => {
-        const submission = submissionByAssignment.get(String(a._id));
-        const hasDraft = submission && submission.status === 'draft';
-        const hasSubmitted = submission && submission.status === 'submitted';
-        return {
-          ...a.toObject(),
-          taskPrice: 0,
-          assignedTo: req.user._id,
-          status: hasSubmitted ? 'submitted' : hasDraft ? 'in_progress' : 'available',
-          lastScore: submission?.autoScore ?? null,
-          lastSubmittedAt: hasSubmitted ? submission.updatedAt : null,
-        };
-      })
-    );
+    const assignments = await getPretestClipsWithProgress(req.user._id);
+    return res.json(assignments);
   } catch (error) {
     return res.status(error.status || 500).json({ message: error.message });
   }

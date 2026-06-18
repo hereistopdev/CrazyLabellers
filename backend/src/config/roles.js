@@ -22,6 +22,13 @@ function isReviewer(user) {
   return user && REVIEWER_ROLES.includes(user.role);
 }
 
+function canAccessReview(user) {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  if (isValidator(user)) return user.status === 'approved';
+  return false;
+}
+
 module.exports = {
   LABELLER_ROLES,
   VALIDATOR_ROLES,
@@ -31,4 +38,5 @@ module.exports = {
   isChecker,
   isAdmin,
   isReviewer,
+  canAccessReview,
 };

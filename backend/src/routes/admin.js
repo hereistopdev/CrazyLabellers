@@ -135,6 +135,29 @@ router.delete('/validators/:id', auth, requireRole('admin'), async (req, res) =>
   }
 });
 
+router.patch('/validators/:id/status', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const allowed = ['pending', 'approved', 'rejected'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { _id: req.params.id, role: { $in: ['validator', 'checker'] } },
+      { status },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'Validator not found' });
+    }
+    return res.json(user);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
 router.post('/checkers', auth, requireRole('admin'), async (req, res) => {
   try {
     const validator = await createValidatorAccount(req.body);
@@ -364,7 +387,8 @@ router.post('/labellers/:id/assign', auth, requireRole('admin'), async (req, res
 
     if (assignment.kind === 'pretest') {
       return res.status(400).json({
-        message: 'Pre-test clips are claimed by labellers directly — use that flow instead',
+        message:
+          'Pre-test clips stay in the shared pool — each labeller gets 3 random picks automatically',
       });
     }
 
