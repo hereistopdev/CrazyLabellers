@@ -6,13 +6,24 @@ const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 const PASS_THRESHOLD = 80;
+const QUESTIONS_PER_ATTEMPT = 10;
 
 router.get('/questions', auth, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+    const poolSize = await TestQuestion.countDocuments({ active: true });
+    const limit = Math.min(
+      parseInt(req.query.limit, 10) || QUESTIONS_PER_ATTEMPT,
+      QUESTIONS_PER_ATTEMPT
+    );
+    const sampleSize = Math.min(limit, poolSize);
+
+    if (sampleSize === 0) {
+      return res.status(503).json({ message: 'No knowledge test questions available yet' });
+    }
+
     const questions = await TestQuestion.aggregate([
       { $match: { active: true } },
-      { $sample: { size: limit } },
+      { $sample: { size: sampleSize } },
     ]);
 
     const sanitized = questions.map((q) => ({
@@ -22,7 +33,12 @@ router.get('/questions', auth, async (req, res) => {
       difficulty: q.difficulty,
     }));
 
-    return res.json({ questions: sanitized, passThreshold: PASS_THRESHOLD });
+    return res.json({
+      questions: sanitized,
+      passThreshold: PASS_THRESHOLD,
+      questionsPerAttempt: QUESTIONS_PER_ATTEMPT,
+      poolSize,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

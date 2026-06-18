@@ -99,6 +99,9 @@ async function start() {
   if (seedResult.terminology) {
     console.log(`Synced ${seedResult.terminology} terminology definitions`);
   }
+  if (seedResult.questions) {
+    console.log(`Synced ${seedResult.questions} knowledge test questions`);
+  }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);

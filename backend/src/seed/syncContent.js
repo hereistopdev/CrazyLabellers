@@ -26,6 +26,9 @@ async function syncTestQuestions() {
     ],
   });
 
+  const scenarios = testQuestions.map((q) => q.scenario);
+  await TestQuestion.deleteMany({ scenario: { $nin: scenarios } });
+
   for (const question of testQuestions) {
     await TestQuestion.findOneAndUpdate({ scenario: question.scenario }, question, {
       upsert: true,

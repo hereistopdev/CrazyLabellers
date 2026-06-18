@@ -87,8 +87,9 @@ export default function KnowledgeTest() {
         <div className="card">
           <h3 style={{ marginBottom: '0.5rem' }}>Before you start</h3>
           <ul style={{ paddingLeft: '1.2rem', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-            <li>10 random questions from a pool of scenario-based test cases</li>
-            <li>Each question describes a football situation — pick the correct event type</li>
+            <li>10 random questions from a pool of 50 distinction-focused scenarios</li>
+            <li>Questions test tricky pairs: Clearance vs Recovery, Interception vs Tackle, Block vs Save, and more</li>
+            <li>Need {passThreshold}% (8/10) or higher to pass and unlock tutorials</li>
             <li>Review the <Link to="/terminology">terminology guide</Link> if unsure</li>
             <li>You can retake the test as many times as needed</li>
           </ul>
