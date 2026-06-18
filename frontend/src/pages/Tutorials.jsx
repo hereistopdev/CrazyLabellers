@@ -5,8 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
 
+function assigneeId(assignment) {
+  return assignment?.assignedTo?._id || assignment?.assignedTo || null;
+}
+
 export default function Tutorials() {
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [status, setStatus] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +46,22 @@ export default function Tutorials() {
   };
 
   if (loading) return <div className="loading">Loading tutorials...</div>;
+
+  if (status && !status.canAccess) {
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Labeling tutorials</h1>
+        </div>
+        <div className="alert alert-info">
+          Pass the knowledge test (80%+) first, then return here for guided tutorials.
+        </div>
+        <Link to="/test" className="btn btn-primary btn-sm">
+          Take knowledge test
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -80,13 +100,15 @@ export default function Tutorials() {
       )}
 
       {assignments.length === 0 ? (
-        <div className="empty-state">No tutorial clips configured yet.</div>
+        <div className="empty-state">No tutorial clips configured yet. Ask an admin to mark videos as Tutorial.</div>
       ) : (
         <div className="task-list">
           {assignments.map((a, index) => {
-            const canOpen = a.assignedTo && ['assigned', 'in_progress'].includes(a.status);
+            const mine = assigneeId(a) === user?.id;
+            const isAssigned = mine && ['assigned', 'in_progress'].includes(a.status);
             const canClaim = a.status === 'available' && !a.tutorialCompleted;
             const subtitle = assignmentSubtitle(a);
+            const stepCount = a.tutorialSteps?.length || 0;
 
             return (
               <div key={a._id} className="task-list-item card">
@@ -97,12 +119,12 @@ export default function Tutorials() {
                       <span className="status-badge status-approved">Completed</span>
                     )}
                   </div>
-                  {subtitle && (
-                    <p className="task-list-subtitle">{subtitle}</p>
-                  )}
+                  {subtitle && <p className="task-list-subtitle">{subtitle}</p>}
                   <p className="task-list-meta">
-                    {a.tutorialSteps?.length || 0} explained steps · Updated{' '}
-                    {formatTimestamp(a.updatedAt)}
+                    {stepCount} explained step{stepCount === 1 ? '' : 's'}
+                    {stepCount === 0 && ' (admin still adding explanations)'}
+                    {' · '}
+                    Updated {formatTimestamp(a.updatedAt)}
                   </p>
                 </div>
                 <div className="task-list-actions">
@@ -116,7 +138,7 @@ export default function Tutorials() {
                       {claiming === a._id ? 'Starting...' : 'Start tutorial'}
                     </button>
                   )}
-                  {canOpen && (
+                  {isAssigned && (
                     <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
                       Continue tutorial
                     </Link>
@@ -125,6 +147,11 @@ export default function Tutorials() {
                     <Link to={`/label/${a._id}`} className="btn btn-secondary btn-sm">
                       Review again
                     </Link>
+                  )}
+                  {!canClaim && !isAssigned && !a.tutorialCompleted && a.status !== 'available' && (
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      In use by another labeller
+                    </span>
                   )}
                 </div>
               </div>

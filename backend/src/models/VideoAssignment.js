@@ -1,19 +1,20 @@
 const mongoose = require('mongoose');
+const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
 
 const tutorialStepSchema = new mongoose.Schema(
   {
-    frameTime: { type: Number, required: true },
+    frameTime: { type: Number, required: true, default: 0 },
     eventType: { type: String, default: '' },
     title: { type: String, default: '' },
     explanation: { type: String, default: '' },
   },
-  { _id: true }
+  { _id: true, minimize: false }
 );
 
 tutorialStepSchema.pre('validate', function coerceOptionalFields() {
-  if (this.eventType == null) this.eventType = '';
-  if (this.title == null) this.title = '';
-  if (this.explanation == null) this.explanation = '';
+  if (this.eventType == null || this.eventType === undefined) this.eventType = '';
+  if (this.title == null || this.title === undefined) this.title = '';
+  if (this.explanation == null || this.explanation === undefined) this.explanation = '';
 });
 
 const videoAssignmentSchema = new mongoose.Schema(
@@ -46,5 +47,11 @@ const videoAssignmentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+videoAssignmentSchema.pre('validate', function normalizeStepsBeforeValidate() {
+  if (Array.isArray(this.tutorialSteps)) {
+    this.tutorialSteps = normalizeTutorialSteps(this.tutorialSteps);
+  }
+});
 
 module.exports = mongoose.model('VideoAssignment', videoAssignmentSchema);

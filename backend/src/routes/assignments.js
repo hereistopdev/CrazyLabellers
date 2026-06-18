@@ -16,6 +16,10 @@ const {
 
 const router = express.Router();
 
+async function patchAssignment(id, fields) {
+  await VideoAssignment.updateOne({ _id: id }, { $set: fields });
+}
+
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
@@ -142,7 +146,7 @@ router.post('/:id/claim', auth, async (req, res) => {
 
     assignment.assignedTo = req.user._id;
     assignment.status = 'assigned';
-    await assignment.save();
+    await assignment.save({ validateModifiedOnly: true });
 
     await LabelSubmission.findOneAndUpdate(
       { assignmentId: assignment._id, userId: req.user._id },
@@ -252,9 +256,7 @@ router.put('/:id/labels', auth, async (req, res) => {
       if (assignment.kind === 'tutorial') {
         submission.status = 'approved';
         await submission.save();
-        assignment.status = 'available';
-        assignment.assignedTo = null;
-        await assignment.save();
+        await patchAssignment(assignment._id, { status: 'available', assignedTo: null });
         const { user, progress } = await refreshTutorialCompletion(req.user._id);
         return res.json({
           submission,
@@ -263,7 +265,7 @@ router.put('/:id/labels', auth, async (req, res) => {
       }
 
       assignment.status = 'submitted';
-      await assignment.save();
+      await patchAssignment(assignment._id, { status: 'submitted' });
 
       try {
         const { scoreResult } = await gradeSubmissionAgainstReference(submission, assignment);
@@ -293,9 +295,7 @@ router.put('/:id/labels', auth, async (req, res) => {
           };
 
           if (!scoreResult.passed) {
-            assignment.status = 'available';
-            assignment.assignedTo = null;
-            await assignment.save();
+            await patchAssignment(assignment._id, { status: 'available', assignedTo: null });
           }
         } else if (scoreResult.passed && !submission.reviewPoints) {
           submission.reviewPoints = scoreResult.totalScore;
@@ -306,8 +306,7 @@ router.put('/:id/labels', auth, async (req, res) => {
         grading = { error: gradeError.message };
       }
     } else if (assignment.status === 'assigned') {
-      assignment.status = 'in_progress';
-      await assignment.save();
+      await patchAssignment(assignment._id, { status: 'in_progress' });
     }
 
     return res.json({ submission, grading });

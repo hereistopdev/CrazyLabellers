@@ -35,10 +35,13 @@ router.get('/assignments', auth, async (req, res) => {
       return res.status(403).json({ message: 'Pass the knowledge test first' });
     }
 
-    const assignments = await VideoAssignment.find({
-      kind: 'tutorial',
-      $or: [{ assignedTo: req.user._id }, { status: 'available' }],
-    })
+    // Tutorials should always be re-playable; unlock any stuck non-active states.
+    await VideoAssignment.updateMany(
+      { kind: 'tutorial', status: { $in: ['submitted', 'approved', 'rejected'] } },
+      { $set: { status: 'available', assignedTo: null } }
+    );
+
+    const assignments = await VideoAssignment.find({ kind: 'tutorial' })
       .populate('assignedTo', 'name email')
       .sort({ sortOrder: 1, createdAt: 1 });
 
