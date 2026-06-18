@@ -177,6 +177,8 @@ router.get('/:id/export', auth, async (req, res) => {
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
     }
+
+    if (!assignment.clipId) {
       return res.status(400).json({ message: 'Assignment has no clipId for export' });
     }
 
