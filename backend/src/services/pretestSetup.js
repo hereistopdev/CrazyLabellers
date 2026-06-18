@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const VideoAssignment = require('../models/VideoAssignment');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { isVideoFilename, isSafeClipId } = require('../utils/clipId');
 const { loadReferenceForClip } = require('./referenceStorage');
 const { getVideoDataDir, buildVideoUrl, listStoredClipIds } = require('./videoStorage');
 
@@ -12,9 +12,9 @@ async function listClipsWithReference(dataDir = getVideoDataDir()) {
   if (fs.existsSync(dataDir)) {
     clipIds = fs
       .readdirSync(dataDir)
-      .filter((name) => name.toLowerCase().endsWith('.mp4'))
-      .map((name) => name.replace(/\.mp4$/i, ''))
-      .filter((clipId) => CLIP_ID_PATTERN.test(clipId));
+      .filter((name) => isVideoFilename(name))
+      .map((name) => name.replace(/(\.[a-z0-9]+)$/i, ''))
+      .filter((clipId) => isSafeClipId(clipId));
   } else {
     clipIds = await listStoredClipIds();
   }

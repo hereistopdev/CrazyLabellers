@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { isSafeClipId, VIDEO_EXTENSIONS, getVideoExtension, isVideoFilename } = require('../utils/clipId');
 const {
   isVpsStorageEnabled,
   uploadVideoToVps,
@@ -24,18 +24,42 @@ function getVideoBaseUrl() {
   return `http://localhost:${port}`;
 }
 
-function buildVideoUrl(clipId) {
-  return `${getVideoBaseUrl()}/api/videos/${clipId}.mp4`;
+function buildVideoUrl(clipId, extension = '.mp4') {
+  const ext = extension.startsWith('.') ? extension : `.${extension}`;
+  return `${getVideoBaseUrl()}/api/videos/${encodeURIComponent(`${clipId}${ext}`)}`;
 }
 
 function isRemoteVideoStorage() {
   return isVpsStorageEnabled();
 }
 
+function findLocalVideoPath(clipIdOrFilename) {
+  const dataDir = getVideoDataDir();
+  const base = path.basename(String(clipIdOrFilename || ''));
+  const ext = path.extname(base).toLowerCase();
+
+  if (ext && isVideoFilename(base)) {
+    const stem = path.basename(base, ext);
+    if (!isSafeClipId(stem)) return null;
+    const directPath = path.join(dataDir, base);
+    return fs.existsSync(directPath) ? directPath : null;
+  }
+
+  if (!isSafeClipId(base)) return null;
+
+  for (const candidateExt of VIDEO_EXTENSIONS) {
+    const candidatePath = path.join(dataDir, `${base}${candidateExt}`);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return null;
+}
+
 async function listStoredClipIds() {
   if (isVpsStorageEnabled()) {
-    const clipIds = await listVpsClipIds();
-    return clipIds.filter((clipId) => CLIP_ID_PATTERN.test(clipId));
+    return listVpsClipIds();
   }
 
   const dataDir = getVideoDataDir();
@@ -43,46 +67,62 @@ async function listStoredClipIds() {
     return [];
   }
 
-  return fs
-    .readdirSync(dataDir)
-    .filter((name) => name.toLowerCase().endsWith('.mp4'))
-    .map((name) => name.replace(/\.mp4$/i, ''))
-    .filter((clipId) => CLIP_ID_PATTERN.test(clipId))
-    .sort();
+  const clipIds = new Set();
+  for (const name of fs.readdirSync(dataDir)) {
+    if (!isVideoFilename(name)) continue;
+    const stem = path.basename(name, path.extname(name));
+    if (isSafeClipId(stem)) clipIds.add(stem);
+  }
+
+  return [...clipIds].sort();
 }
 
-async function storeVideoFile(clipId, file) {
+async function storeVideoFile(clipId, file, extension = '.mp4') {
+  if (!isSafeClipId(clipId)) {
+    throw new Error('Invalid clip ID');
+  }
+
+  const ext = extension || getVideoExtension(file.originalname || file.name || '');
+  const filename = `${clipId}${ext}`;
+
   if (isVpsStorageEnabled()) {
     const data = file.buffer || fs.readFileSync(file.path);
-    await uploadVideoToVps(clipId, data);
+    await uploadVideoToVps(clipId, data, ext);
     if (file.path && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
-    return { storage: 'vps', clipId };
+    return { storage: 'vps', clipId, extension: ext, filename };
   }
+
+  const filePath = path.join(getVideoDataDir(), filename);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
   if (file.path) {
-    return { storage: 'local', clipId, path: file.path };
+    fs.copyFileSync(file.path, filePath);
+    return { storage: 'local', clipId, extension: ext, filename, path: filePath };
   }
 
-  const filePath = path.join(getVideoDataDir(), `${clipId}.mp4`);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, file.buffer);
-  return { storage: 'local', clipId, path: filePath };
+  return { storage: 'local', clipId, extension: ext, filename, path: filePath };
 }
 
 async function removeStoredVideoFile(clipId) {
+  if (!isSafeClipId(clipId)) return false;
+
   if (isVpsStorageEnabled()) {
     await deleteVideoFromVps(clipId);
     return true;
   }
 
-  const filePath = path.join(getVideoDataDir(), `${clipId}.mp4`);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-    return true;
+  let removed = false;
+  for (const ext of VIDEO_EXTENSIONS) {
+    const filePath = path.join(getVideoDataDir(), `${clipId}${ext}`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      removed = true;
+    }
   }
-  return false;
+  return removed;
 }
 
 async function getStorageStatus() {
@@ -107,6 +147,7 @@ module.exports = {
   getVideoBaseUrl,
   buildVideoUrl,
   isRemoteVideoStorage,
+  findLocalVideoPath,
   listStoredClipIds,
   storeVideoFile,
   removeStoredVideoFile,

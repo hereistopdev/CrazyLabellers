@@ -3,9 +3,9 @@ const path = require('path');
 const crypto = require('crypto');
 const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { clipIdFromFilename, isSafeClipId, getVideoExtension } = require('../utils/clipId');
 const { validateTaskPrice, isFreeTaskKind, DEFAULT_TASK_PRICE } = require('../config/payments');
-const { getVideoDataDir, buildVideoUrl } = require('./videoStorage');
+const { getVideoDataDir, buildVideoUrl, findLocalVideoPath } = require('./videoStorage');
 const { removeStoredVideoFile } = require('./videoStorage');
 
 function ensureVideoDataDir() {
@@ -14,16 +14,21 @@ function ensureVideoDataDir() {
   return dir;
 }
 
-function resolveClipId(filename) {
-  const base = path.basename(filename, path.extname(filename)).toLowerCase();
-  if (CLIP_ID_PATTERN.test(base)) {
-    return base;
+function resolveClipId(filename, explicitClipId) {
+  if (explicitClipId && isSafeClipId(explicitClipId)) {
+    return explicitClipId;
   }
+
+  const fromName = clipIdFromFilename(filename);
+  if (fromName && isSafeClipId(fromName)) {
+    return fromName;
+  }
+
   return crypto.randomBytes(15).toString('hex');
 }
 
 function getClipFilePath(clipId) {
-  return path.join(getVideoDataDir(), `${clipId}.mp4`);
+  return findLocalVideoPath(clipId) || path.join(getVideoDataDir(), `${clipId}.mp4`);
 }
 
 async function createVideoAssignment({
@@ -37,6 +42,7 @@ async function createVideoAssignment({
   challengeNote,
   kind,
   sortOrder,
+  videoExtension,
 }) {
   const existing = await VideoAssignment.findOne({ clipId });
   if (existing) {
@@ -51,11 +57,13 @@ async function createVideoAssignment({
       ? validateTaskPrice(taskPrice, { kind: taskKind })
       : DEFAULT_TASK_PRICE;
 
+  const ext = videoExtension || '.mp4';
+
   return VideoAssignment.create({
     clipId,
     title: title || clipId,
     description: description || 'Football clip for event labeling',
-    videoUrl: videoUrl || buildVideoUrl(clipId),
+    videoUrl: videoUrl || buildVideoUrl(clipId, ext),
     gameTime: gameTime || '1 - 00:00',
     durationSeconds: durationSeconds || 30,
     fps: 25,
@@ -79,13 +87,6 @@ async function removeVideoAssignment(assignmentId, { deleteFile = true } = {}) {
   let fileDeleted = false;
   if (deleteFile && assignment.clipId) {
     fileDeleted = await removeStoredVideoFile(assignment.clipId);
-    if (!fileDeleted) {
-      const filePath = getClipFilePath(assignment.clipId);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        fileDeleted = true;
-      }
-    }
     await require('./referenceStorage').deleteReferenceForClip(assignment.clipId);
   }
 
@@ -98,4 +99,5 @@ module.exports = {
   getClipFilePath,
   createVideoAssignment,
   removeVideoAssignment,
+  getVideoExtension,
 };

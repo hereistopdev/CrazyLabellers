@@ -6,6 +6,7 @@ import { readVideoDurationFromFile } from '../utils/videoDuration';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import VideoLabelLink from '../components/VideoLabelLink';
 import { parseBulkUploadFiles, summarizeBulkUpload } from '../utils/parseBulkUploadFiles';
+import { isVideoFilename } from '../utils/clipId';
 import { openLabelerRow } from '../utils/labelerAccess';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
@@ -66,6 +67,7 @@ export default function ManageVideos() {
   const [uploadSkipExisting, setUploadSkipExisting] = useState(true);
   const [uploadingBulk, setUploadingBulk] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [bulkUploadResult, setBulkUploadResult] = useState(null);
 
   const load = () => {
     setTableLoading(true);
@@ -102,7 +104,7 @@ export default function ManageVideos() {
   const uploadVideo = async (e) => {
     e.preventDefault();
     if (!file) {
-      setError('Choose an .mp4 file to upload');
+      setError('Choose a video file to upload');
       return;
     }
 
@@ -177,31 +179,54 @@ export default function ManageVideos() {
       return;
     }
 
-    const parsed = parseBulkUploadFiles(files);
+    const { clips, rejected } = parseBulkUploadFiles(files);
     const existingClipIds = new Set(videos.map((v) => v.clipId).filter(Boolean));
-    setUploadClips(parsed);
-    setUploadSummary(summarizeBulkUpload(parsed, existingClipIds));
+    const summary = summarizeBulkUpload(clips, existingClipIds, rejected);
+    setUploadClips(clips);
+    setUploadSummary(summary);
     setUploadProgress(null);
-    setError('');
+    setBulkUploadResult(null);
+
+    if (clips.length === 0) {
+      const videoCount = rejected.filter((item) => isVideoFilename(item.name)).length;
+      setError(
+        videoCount > 0
+          ? `Found ${videoCount} video file(s) but none could be prepared for upload. Check filenames are safe (letters, numbers, _ and -).`
+          : 'No video files found. Choose a folder with videos in data/ (and optional JSON in annotations/).'
+      );
+    } else {
+      setError('');
+      setMessage(
+        rejected.length > 0
+          ? `Selected ${clips.length} video(s). JSON is optional — matched ${summary.withPostRef} reference file(s). Ignored ${rejected.length} unrelated file(s).`
+          : `Selected ${clips.length} video(s)${summary.withoutJson ? ` (${summary.withoutJson} without JSON)` : ''}.`
+      );
+      setTimeout(() => setMessage(''), 6000);
+    }
+
     event.target.value = '';
   };
 
   const runBulkUpload = async () => {
     if (uploadClips.length === 0) {
-      setError('Choose a folder with data/*.mp4 and annotations/*.json first');
+      setError('Choose a folder with video files first');
       return;
     }
 
     setUploadingBulk(true);
     setError('');
+    setMessage('');
+    setBulkUploadResult(null);
 
     const totals = { created: 0, skipped: 0, updated: 0, errors: 0 };
+    const errorDetails = [];
     let completed = 0;
     let index = 0;
 
     const uploadOne = async (clip) => {
       const formData = new FormData();
       formData.append('video', clip.video, clip.video.name);
+      formData.append('clipId', clip.clipId);
       if (clip.postRef) {
         formData.append('referencePost', clip.postRef, clip.postRef.name);
       }
@@ -227,6 +252,7 @@ export default function ManageVideos() {
           await uploadOne(clip);
         } catch (err) {
           totals.errors += 1;
+          errorDetails.push({ clipId: clip.clipId, message: err.message });
         }
         completed += 1;
         setUploadProgress({
@@ -234,18 +260,40 @@ export default function ManageVideos() {
           total: uploadClips.length,
           ...totals,
           currentClipId: clip.clipId,
+          errorDetails: [...errorDetails],
         });
       }
     };
 
     try {
       await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()));
-      setMessage(
-        `Bulk upload done — ${totals.created} created, ${totals.updated} updated, ${totals.skipped} skipped, ${totals.errors} failed`
-      );
+
+      const summary = `${totals.created} created, ${totals.updated} updated, ${totals.skipped} skipped, ${totals.errors} failed`;
+      const resultPayload = {
+        ...totals,
+        summary,
+        errorDetails,
+        phase:
+          totals.errors === 0
+            ? 'success'
+            : totals.errors === uploadClips.length
+              ? 'failed'
+              : 'partial',
+      };
+      setBulkUploadResult(resultPayload);
+
+      if (totals.errors === 0) {
+        setMessage(`Bulk upload succeeded — ${summary}`);
+      } else if (totals.created + totals.updated + totals.skipped > 0) {
+        setError(`Bulk upload finished with errors — ${summary}`);
+      } else {
+        setError(`Bulk upload failed — ${summary}`);
+      }
+
       load();
-      setTimeout(() => setMessage(''), 8000);
+      setTimeout(() => setMessage(''), 10000);
     } catch (err) {
+      setBulkUploadResult({ phase: 'failed', summary: err.message, errorDetails });
       setError(err.message);
     } finally {
       setUploadingBulk(false);
@@ -419,9 +467,10 @@ export default function ManageVideos() {
       >
         <h3 style={{ marginBottom: '0.5rem' }}>Bulk upload (folder)</h3>
         <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Select a folder with <strong>data/*.mp4</strong> and <strong>annotations/*_post.json</strong>{' '}
-          (same layout as your local dataset). Each clip uploads video + reference files to storage
-          and creates a task. Works from the browser — keep this tab open for large batches.
+          Select a folder with videos in <strong>data/</strong> and optional JSON in{' '}
+          <strong>annotations/</strong>. No strict naming rules — videos and JSON are paired when
+          filenames are <strong>80%+ similar</strong>. JSON is optional. Supported video formats:
+          mp4, webm, mov, mkv, avi, m4v.
         </p>
 
         <div className="form-group">
@@ -435,8 +484,8 @@ export default function ManageVideos() {
             disabled={uploadingBulk}
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-            Example: select <code>D:\Bittensor\example</code> — files inside{' '}
-            <code>data/</code> and <code>annotations/</code> are matched by clip ID.
+            Example: <code>D:\Bittensor\3754293_2</code> with <code>data/3754293_2_p000.mp4</code> and
+            optional <code>annotations/3754293_2_p000_post.json</code>.
           </p>
         </div>
 
@@ -482,24 +531,116 @@ export default function ManageVideos() {
         </label>
 
         {uploadSummary && (
-          <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
-            Ready to upload <strong>{uploadSummary.total}</strong> clips ·{' '}
-            {uploadSummary.withPostRef} with _post.json · {uploadSummary.withRawRef} with raw .json
-            · {uploadSummary.alreadyInApp} already in app
+          <div
+            className={`alert ${uploadSummary.total === 0 ? 'alert-error' : 'alert-info'}`}
+            style={{ marginBottom: '1rem' }}
+          >
+            {uploadSummary.total === 0 ? (
+              <>
+                <strong>No videos ready to upload.</strong>{' '}
+                {uploadSummary.rejectedVideoCount > 0
+                  ? `Found ${uploadSummary.rejectedVideoCount} video file(s) that could not be used.`
+                  : 'No supported video files were found in data/.'}
+              </>
+            ) : (
+              <>
+                Ready to upload <strong>{uploadSummary.total}</strong> video(s) ·{' '}
+                {uploadSummary.withPostRef} with matched JSON · {uploadSummary.withRawRef} with extra
+                raw JSON · {uploadSummary.withoutJson} without JSON · {uploadSummary.alreadyInApp}{' '}
+                already in app
+                {uploadSummary.rejectedCount > 0 && (
+                  <> · {uploadSummary.rejectedCount} file(s) ignored</>
+                )}
+              </>
+            )}
+            {uploadSummary.rejectedSamples?.length > 0 && (
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.82rem' }}>
+                {uploadSummary.rejectedSamples.map((item) => (
+                  <li key={`${item.name}-${item.reason}`}>
+                    <code>{item.name}</code> — {item.reason}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {uploadingBulk && (
+          <div className="alert alert-info bulk-upload-status" style={{ marginBottom: '1rem' }}>
+            <strong>Upload in progress…</strong>{' '}
+            {uploadProgress
+              ? `${uploadProgress.completed}/${uploadProgress.total} clips processed`
+              : `Starting upload of ${uploadClips.length} clips…`}
+            {uploadProgress && (
+              <>
+                {' '}
+                — created {uploadProgress.created}, updated {uploadProgress.updated}, skipped{' '}
+                {uploadProgress.skipped}, failed {uploadProgress.errors}
+                {uploadProgress.currentClipId && (
+                  <>
+                    {' '}
+                    · current: <code>{uploadProgress.currentClipId}</code>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {!uploadingBulk && bulkUploadResult && (
+          <div
+            className={`alert ${
+              bulkUploadResult.phase === 'success'
+                ? 'alert-success'
+                : bulkUploadResult.phase === 'partial'
+                  ? 'alert-info'
+                  : 'alert-error'
+            }`}
+            style={{ marginBottom: '1rem' }}
+          >
+            <strong>
+              {bulkUploadResult.phase === 'success'
+                ? 'Bulk upload succeeded'
+                : bulkUploadResult.phase === 'partial'
+                  ? 'Bulk upload finished with errors'
+                  : 'Bulk upload failed'}
+            </strong>
+            {' — '}
+            {bulkUploadResult.summary}
+            {bulkUploadResult.errorDetails?.length > 0 && (
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.82rem' }}>
+                {bulkUploadResult.errorDetails.slice(0, 8).map((item) => (
+                  <li key={item.clipId}>
+                    <code>{item.clipId}</code>: {item.message}
+                  </li>
+                ))}
+                {bulkUploadResult.errorDetails.length > 8 && (
+                  <li>…and {bulkUploadResult.errorDetails.length - 8} more</li>
+                )}
+              </ul>
+            )}
           </div>
         )}
 
         {uploadProgress && uploadingBulk && (
-          <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
-            Uploading {uploadProgress.completed}/{uploadProgress.total} — created{' '}
-            {uploadProgress.created}, updated {uploadProgress.updated}, skipped{' '}
-            {uploadProgress.skipped}, errors {uploadProgress.errors}
-            {uploadProgress.currentClipId && (
-              <>
-                {' '}
-                · current: <code>{uploadProgress.currentClipId}</code>
-              </>
-            )}
+          <div className="bulk-upload-progress-bar" style={{ marginBottom: '1rem' }}>
+            <div
+              style={{
+                height: 8,
+                borderRadius: 4,
+                background: 'var(--border)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.round((uploadProgress.completed / uploadProgress.total) * 100)}%`,
+                  height: '100%',
+                  background: 'var(--primary)',
+                  transition: 'width 0.2s ease',
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -521,15 +662,15 @@ export default function ManageVideos() {
         <h3 style={{ marginBottom: '1rem' }}>Add video</h3>
         <form onSubmit={uploadVideo}>
           <div className="form-group">
-            <label>Video file (.mp4)</label>
+            <label>Video file</label>
             <input
               type="file"
-              accept="video/mp4,.mp4"
+              accept="video/*,.mp4,.webm,.mov,.mkv,.avi,.m4v"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               required
             />
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-              Clips must be 25 fps. Filename can be the clip ID (30 hex chars). Otherwise a new ID is generated automatically.
+              mp4, webm, mov, mkv, avi, or m4v. Reference JSON is optional.
             </p>
           </div>
           <div className="form-group">

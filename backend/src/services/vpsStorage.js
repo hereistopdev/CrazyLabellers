@@ -50,8 +50,9 @@ async function ensureVpsVideoDir(sftp) {
   return dir;
 }
 
-async function uploadVideoToVps(clipId, data) {
-  const remotePath = `${getVpsVideoDir()}/${clipId}.mp4`;
+async function uploadVideoToVps(clipId, data, extension = '.mp4') {
+  const ext = extension.startsWith('.') ? extension : `.${extension}`;
+  const remotePath = `${getVpsVideoDir()}/${clipId}${ext}`;
   const localSize = Buffer.isBuffer(data) ? data.length : fs.statSync(data).size;
 
   await withSftp(async (sftp) => {
@@ -66,11 +67,15 @@ async function uploadVideoToVps(clipId, data) {
 }
 
 async function deleteVideoFromVps(clipId) {
-  const remotePath = `${getVpsVideoDir()}/${clipId}.mp4`;
+  const dir = getVpsVideoDir();
   await withSftp(async (sftp) => {
-    const exists = await sftp.exists(remotePath);
-    if (exists) {
-      await sftp.delete(remotePath);
+    const files = await sftp.list(dir);
+    for (const file of files) {
+      if (file.type !== '-') continue;
+      const stem = file.name.replace(/(\.[a-z0-9]+)$/i, '');
+      if (stem === clipId) {
+        await sftp.delete(`${dir}/${file.name}`);
+      }
     }
   });
   return true;
@@ -85,10 +90,14 @@ async function listVpsClipIds() {
     }
 
     const files = await sftp.list(dir);
-    return files
-      .filter((file) => file.type === '-' && file.name.toLowerCase().endsWith('.mp4'))
-      .map((file) => file.name.replace(/\.mp4$/i, ''))
-      .sort();
+    const clipIds = new Set();
+    for (const file of files) {
+      if (file.type !== '-') continue;
+      const lower = file.name.toLowerCase();
+      if (!/(\.mp4|\.webm|\.mov|\.mkv|\.avi|\.m4v)$/.test(lower)) continue;
+      clipIds.add(file.name.replace(/(\.[a-z0-9]+)$/i, ''));
+    }
+    return [...clipIds].sort();
   });
 }
 

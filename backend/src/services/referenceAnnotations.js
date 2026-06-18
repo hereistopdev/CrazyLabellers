@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { parseReferenceAnnotation } = require('../utils/parseReferenceAnnotation');
-const { CLIP_ID_PATTERN, getExportFilename } = require('../utils/exportAnnotation');
+const { getExportFilename, isValidClipId } = require('../utils/exportAnnotation');
+const { isSafeClipId } = require('../utils/clipId');
 const { ensureVideoDataDir } = require('./videoFiles');
 
 function getAnnotationsDir() {
@@ -13,7 +14,7 @@ function getAnnotationsDir() {
 }
 
 function getReferenceFilePath(clipId, variant = 'post') {
-  if (!CLIP_ID_PATTERN.test(clipId)) {
+  if (!isSafeClipId(clipId)) {
     throw new Error('Invalid clip ID');
   }
 

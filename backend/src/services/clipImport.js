@@ -1,30 +1,36 @@
 const fs = require('fs');
 const VideoAssignment = require('../models/VideoAssignment');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { isVideoFilename, isSafeClipId, getVideoExtension } = require('../utils/clipId');
 const { getVideoDataDir, buildVideoUrl, listStoredClipIds } = require('./videoStorage');
 const { isVpsStorageEnabled } = require('./vpsStorage');
 
 async function importClipsFromDir(dataDir = getVideoDataDir()) {
-  let clipIds;
+  let clipEntries = [];
+
   if (isVpsStorageEnabled()) {
-    clipIds = await listStoredClipIds();
+    const clipIds = await listStoredClipIds();
+    clipEntries = clipIds.map((clipId) => ({ clipId, extension: '.mp4' }));
   } else {
     if (!fs.existsSync(dataDir)) {
       throw new Error(`VIDEO_DATA_DIR not found: ${dataDir}`);
     }
 
-    clipIds = fs
+    clipEntries = fs
       .readdirSync(dataDir)
-      .filter((name) => name.toLowerCase().endsWith('.mp4'))
-      .map((name) => name.replace(/\.mp4$/i, ''))
-      .filter((clipId) => CLIP_ID_PATTERN.test(clipId));
+      .filter((name) => isVideoFilename(name))
+      .map((name) => ({
+        clipId: name.replace(/(\.[a-z0-9]+)$/i, ''),
+        extension: getVideoExtension(name),
+      }))
+      .filter((entry) => isSafeClipId(entry.clipId));
   }
 
   let created = 0;
   let skipped = 0;
   const imported = [];
 
-  for (const clipId of clipIds.sort()) {
+  for (const entry of clipEntries.sort((a, b) => a.clipId.localeCompare(b.clipId))) {
+    const { clipId, extension } = entry;
     const existing = await VideoAssignment.findOne({ clipId });
     if (existing) {
       skipped += 1;
@@ -35,7 +41,7 @@ async function importClipsFromDir(dataDir = getVideoDataDir()) {
       clipId,
       title: clipId,
       description: 'Football clip for event labeling',
-      videoUrl: buildVideoUrl(clipId),
+      videoUrl: buildVideoUrl(clipId, extension),
       gameTime: '1 - 00:00',
       durationSeconds: 30,
       fps: 25,
@@ -48,7 +54,7 @@ async function importClipsFromDir(dataDir = getVideoDataDir()) {
   return {
     created,
     skipped,
-    total: clipIds.length,
+    total: clipEntries.length,
     imported,
     dataDir: isVpsStorageEnabled() ? process.env.VPS_VIDEO_DIR : dataDir,
   };

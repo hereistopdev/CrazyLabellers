@@ -1,7 +1,7 @@
 const VideoAssignment = require('../models/VideoAssignment');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { isSafeClipId, getVideoExtension } = require('../utils/clipId');
 const { isFreeTaskKind, validateTaskPrice, DEFAULT_TASK_PRICE } = require('../config/payments');
-const { storeVideoFile } = require('./videoStorage');
+const { storeVideoFile, buildVideoUrl } = require('./videoStorage');
 const { saveReferenceForClip } = require('./referenceStorage');
 const { resolveClipId, createVideoAssignment } = require('./videoFiles');
 
@@ -21,6 +21,7 @@ async function importClipFromUpload({
   videoFile,
   referencePostFile,
   referenceRawFile,
+  clipId: explicitClipId,
   kind = 'production',
   taskPrice,
   skipExisting = true,
@@ -34,10 +35,12 @@ async function importClipFromUpload({
     throw new Error('Video file is required');
   }
 
-  const clipId = resolveClipId(videoFile.originalname);
-  if (!CLIP_ID_PATTERN.test(clipId)) {
-    throw new Error(`Invalid clip ID in filename: ${videoFile.originalname}`);
+  const clipId = resolveClipId(videoFile.originalname, explicitClipId);
+  if (!isSafeClipId(clipId)) {
+    throw new Error(`Invalid clip ID derived from filename: ${videoFile.originalname}`);
   }
+
+  const videoExtension = getVideoExtension(videoFile.originalname);
 
   const validKinds = ['tutorial', 'pretest', 'production'];
   const taskKind = validKinds.includes(kind) ? kind : 'production';
@@ -60,7 +63,8 @@ async function importClipFromUpload({
     };
   }
 
-  await storeVideoFile(clipId, videoFile);
+  await storeVideoFile(clipId, videoFile, videoExtension);
+  const videoUrl = buildVideoUrl(clipId, videoExtension);
 
   let assignment;
   if (existing) {
@@ -74,6 +78,7 @@ async function importClipFromUpload({
         kind: taskKind,
         taskPrice: resolvedPrice,
         challengeNote: challengeNote || existing.challengeNote,
+        videoUrl,
       },
       { new: true }
     );
@@ -87,6 +92,8 @@ async function importClipFromUpload({
       taskPrice: resolvedPrice,
       challengeNote,
       kind: taskKind,
+      videoUrl,
+      videoExtension,
     });
   }
 
@@ -101,6 +108,7 @@ async function importClipFromUpload({
     id: assignment._id,
     assignment,
     hasReference,
+    videoExtension,
   };
 }
 

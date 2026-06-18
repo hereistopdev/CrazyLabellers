@@ -1,29 +1,40 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
-const { getVideoDataDir } = require('../services/videoStorage');
+const { isSafeVideoFilename, getVideoExtension } = require('../utils/clipId');
+const { findLocalVideoPath } = require('../services/videoStorage');
+
+const CONTENT_TYPES = {
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
+  '.avi': 'video/x-msvideo',
+  '.m4v': 'video/x-m4v',
+};
 
 const router = express.Router();
 
-router.get('/:clipId', (req, res) => {
-  const clipId = req.params.clipId.replace(/\.mp4$/i, '');
+router.get('/:clipFilename', (req, res) => {
+  const clipFilename = decodeURIComponent(req.params.clipFilename);
+  const filename = path.basename(clipFilename);
 
-  if (!CLIP_ID_PATTERN.test(clipId)) {
-    return res.status(400).json({ message: 'Invalid clip ID' });
+  if (!isSafeVideoFilename(filename)) {
+    return res.status(400).json({ message: 'Invalid video file' });
   }
 
-  const filePath = path.join(getVideoDataDir(), `${clipId}.mp4`);
-  if (!fs.existsSync(filePath)) {
+  const filePath = findLocalVideoPath(filename);
+  if (!filePath) {
     return res.status(404).json({ message: 'Video not found' });
   }
 
   const stat = fs.statSync(filePath);
   const fileSize = stat.size;
   const range = req.headers.range;
+  const contentType = CONTENT_TYPES[getVideoExtension(filename)] || 'application/octet-stream';
 
   res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Type', contentType);
   res.setHeader('Cache-Control', 'public, max-age=86400');
 
   if (range) {

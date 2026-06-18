@@ -1,11 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const VideoAssignment = require('../models/VideoAssignment');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { matchBulkFiles } = require('../utils/matchBulkFiles');
+const { isVideoFilename, getVideoExtension } = require('../utils/clipId');
 const { buildVideoUrl, getVideoDataDir } = require('./videoStorage');
+const { isFreeTaskKind, validateTaskPrice, DEFAULT_TASK_PRICE } = require('../config/payments');
 const { isVpsStorageEnabled, listVpsClipIds, uploadVideoToVps } = require('./vpsStorage');
 const { saveReferenceForClip } = require('./referenceStorage');
-const { isFreeTaskKind, validateTaskPrice, DEFAULT_TASK_PRICE } = require('../config/payments');
 
 function resolveBulkLayout(sourceDir) {
   const resolved = path.resolve(sourceDir);
@@ -28,34 +29,37 @@ function resolveBulkLayout(sourceDir) {
   return { sourceDir: resolved, dataDir, annotationsDir };
 }
 
-function listClipIdsFromDataDir(dataDir) {
-  if (!fs.existsSync(dataDir)) {
-    return [];
-  }
+function listEntriesFromDir(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).map((name) => ({ name, dir }));
+}
 
-  return fs
-    .readdirSync(dataDir)
-    .filter((name) => name.toLowerCase().endsWith('.mp4'))
-    .map((name) => name.replace(/\.mp4$/i, ''))
-    .filter((clipId) => CLIP_ID_PATTERN.test(clipId))
-    .sort();
+function listClipMatchesFromLayout(layout) {
+  const videoEntries = listEntriesFromDir(layout.dataDir)
+    .filter((entry) => isVideoFilename(entry.name))
+    .map((entry) => ({ name: entry.name }));
+
+  const jsonEntries = layout.annotationsDir
+    ? listEntriesFromDir(layout.annotationsDir)
+        .filter((entry) => entry.name.toLowerCase().endsWith('.json'))
+        .map((entry) => ({ name: entry.name }))
+    : [];
+
+  return matchBulkFiles([...videoEntries, ...jsonEntries]);
 }
 
 async function previewBulkFolder(sourceDir) {
   const layout = resolveBulkLayout(sourceDir);
-  const clipIds = listClipIdsFromDataDir(layout.dataDir);
+  const { clips, ignored, threshold } = listClipMatchesFromLayout(layout);
+  const clipIds = clips.map((clip) => clip.clipId);
 
   let withPostReference = 0;
   let withRawReference = 0;
 
   if (layout.annotationsDir) {
-    for (const clipId of clipIds) {
-      if (fs.existsSync(path.join(layout.annotationsDir, `${clipId}_post.json`))) {
-        withPostReference += 1;
-      }
-      if (fs.existsSync(path.join(layout.annotationsDir, `${clipId}.json`))) {
-        withRawReference += 1;
-      }
+    for (const clip of clips) {
+      if (clip.postRefName) withPostReference += 1;
+      if (clip.rawRefName) withRawReference += 1;
     }
   }
 
@@ -76,66 +80,67 @@ async function previewBulkFolder(sourceDir) {
     totalClips: clipIds.length,
     withPostReference,
     withRawReference,
+    withoutReference: clips.filter((clip) => !clip.postRefName && !clip.rawRefName).length,
+    ignoredCount: ignored.length,
+    matchThreshold: threshold,
     existingInDb,
     existingOnVps,
     vpsEnabled: isVpsStorageEnabled(),
     sampleClipIds: clipIds.slice(0, 5),
+    ignoredSamples: ignored.slice(0, 5),
   };
 }
 
-async function importReferencesForClip(clipId, annotationsDir) {
+async function importReferencesForClip(clipId, annotationsDir, clipMatch) {
   if (!annotationsDir) {
     return { imported: 0 };
   }
 
   let imported = 0;
-  const postPath = path.join(annotationsDir, `${clipId}_post.json`);
-  const rawPath = path.join(annotationsDir, `${clipId}.json`);
 
-  if (fs.existsSync(postPath)) {
-    const rawJson = JSON.parse(fs.readFileSync(postPath, 'utf8'));
+  const importFile = async (filename, variant) => {
+    if (!filename) return;
+    const filePath = path.join(annotationsDir, filename);
+    if (!fs.existsSync(filePath)) return;
+    const rawJson = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     await saveReferenceForClip(clipId, rawJson, {
-      variant: 'post',
-      sourceFilename: `${clipId}_post.json`,
+      variant,
+      sourceFilename: filename,
     });
     imported += 1;
-  }
+  };
 
-  if (fs.existsSync(rawPath)) {
-    const rawJson = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
-    await saveReferenceForClip(clipId, rawJson, {
-      variant: 'raw',
-      sourceFilename: `${clipId}.json`,
-    });
-    imported += 1;
-  }
+  await importFile(clipMatch.postRefName, 'post');
+  await importFile(clipMatch.rawRefName, 'raw');
 
   return { imported };
 }
 
-async function uploadVideoFromFolder(clipId, dataDir, existingVpsClips, skipExistingVideos) {
-  const filePath = path.join(dataDir, `${clipId}.mp4`);
+async function uploadVideoFromFolder(clipId, dataDir, videoName, existingVpsClips, skipExistingVideos) {
+  const filePath = path.join(dataDir, videoName);
   if (!fs.existsSync(filePath)) {
     throw new Error(`Video file missing: ${filePath}`);
   }
 
+  const extension = getVideoExtension(videoName);
+
   if (isVpsStorageEnabled()) {
-    if (skipExistingVideos && existingVpsClips.has(clipId)) {
-      return { uploaded: false, skipped: true, storage: 'vps' };
+    if (skipExistingVideos && existingVpsClips.has(`${clipId}${extension}`)) {
+      return { uploaded: false, skipped: true, storage: 'vps', extension };
     }
-    await uploadVideoToVps(clipId, filePath);
-    existingVpsClips.add(clipId);
-    return { uploaded: true, skipped: false, storage: 'vps' };
+    await uploadVideoToVps(clipId, filePath, extension);
+    existingVpsClips.add(`${clipId}${extension}`);
+    return { uploaded: true, skipped: false, storage: 'vps', extension };
   }
 
   const targetDir = getVideoDataDir();
   fs.mkdirSync(targetDir, { recursive: true });
-  const targetPath = path.join(targetDir, `${clipId}.mp4`);
+  const targetPath = path.join(targetDir, `${clipId}${extension}`);
   if (skipExistingVideos && fs.existsSync(targetPath)) {
-    return { uploaded: false, skipped: true, storage: 'local' };
+    return { uploaded: false, skipped: true, storage: 'local', extension };
   }
   fs.copyFileSync(filePath, targetPath);
-  return { uploaded: true, skipped: false, storage: 'local' };
+  return { uploaded: true, skipped: false, storage: 'local', extension };
 }
 
 async function importBulkFromFolder({
@@ -151,8 +156,8 @@ async function importBulkFromFolder({
   continueOnError = true,
 } = {}) {
   const layout = resolveBulkLayout(sourceDir);
-  const allClipIds = listClipIdsFromDataDir(layout.dataDir);
-  const batch = allClipIds.slice(offset, offset + limit);
+  const { clips: allMatches } = listClipMatchesFromLayout(layout);
+  const batch = allMatches.slice(offset, offset + limit);
 
   const validKinds = ['tutorial', 'pretest', 'production'];
   const taskKind = validKinds.includes(kind) ? kind : 'production';
@@ -164,14 +169,18 @@ async function importBulkFromFolder({
 
   const existingAssignments = new Set(
     (
-      await VideoAssignment.find({ clipId: { $in: batch } })
+      await VideoAssignment.find({ clipId: { $in: batch.map((clip) => clip.clipId) } })
         .select('clipId')
         .lean()
     ).map((row) => row.clipId)
   );
 
   const existingVpsClips = isVpsStorageEnabled()
-    ? new Set(await listVpsClipIds())
+    ? new Set(
+        (await listVpsClipIds()).flatMap((clipId) =>
+          ['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'].map((ext) => `${clipId}${ext}`)
+        )
+      )
     : new Set();
 
   let created = 0;
@@ -182,30 +191,35 @@ async function importBulkFromFolder({
   const errors = [];
   const imported = [];
 
-  for (const clipId of batch) {
+  for (const clipMatch of batch) {
+    const { clipId, videoName } = clipMatch;
+
     try {
       if (skipExisting && existingAssignments.has(clipId)) {
         skipped += 1;
         if (importReferences && layout.annotationsDir) {
-          const refResult = await importReferencesForClip(clipId, layout.annotationsDir);
+          const refResult = await importReferencesForClip(clipId, layout.annotationsDir, clipMatch);
           referencesImported += refResult.imported;
         }
         continue;
       }
 
+      let extension = getVideoExtension(videoName);
       if (uploadVideos) {
         const uploadResult = await uploadVideoFromFolder(
           clipId,
           layout.dataDir,
+          videoName,
           existingVpsClips,
           skipExistingVideos
         );
+        extension = uploadResult.extension || extension;
         if (uploadResult.uploaded) videosUploaded += 1;
         if (uploadResult.skipped) videosSkipped += 1;
       }
 
       if (importReferences && layout.annotationsDir) {
-        const refResult = await importReferencesForClip(clipId, layout.annotationsDir);
+        const refResult = await importReferencesForClip(clipId, layout.annotationsDir, clipMatch);
         referencesImported += refResult.imported;
       }
 
@@ -213,7 +227,7 @@ async function importBulkFromFolder({
         clipId,
         title: clipId,
         description: 'Football clip for event labeling',
-        videoUrl: buildVideoUrl(clipId),
+        videoUrl: buildVideoUrl(clipId, extension),
         gameTime: '1 - 00:00',
         durationSeconds: 30,
         fps: 25,
@@ -238,7 +252,7 @@ async function importBulkFromFolder({
     sourceDir: layout.sourceDir,
     dataDir: layout.dataDir,
     annotationsDir: layout.annotationsDir,
-    totalClips: allClipIds.length,
+    totalClips: allMatches.length,
     offset,
     limit,
     processed: batch.length,
@@ -249,8 +263,8 @@ async function importBulkFromFolder({
     referencesImported,
     errors,
     imported,
-    nextOffset: nextOffset < allClipIds.length ? nextOffset : null,
-    done: nextOffset >= allClipIds.length,
+    nextOffset: nextOffset < allMatches.length ? nextOffset : null,
+    done: nextOffset >= allMatches.length,
     kind: taskKind,
     taskPrice: resolvedPrice,
   };
@@ -258,7 +272,7 @@ async function importBulkFromFolder({
 
 module.exports = {
   resolveBulkLayout,
-  listClipIdsFromDataDir,
+  listClipMatchesFromLayout,
   previewBulkFolder,
   importBulkFromFolder,
 };

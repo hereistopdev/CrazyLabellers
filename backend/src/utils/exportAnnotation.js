@@ -1,4 +1,11 @@
-const CLIP_ID_PATTERN = /^[a-f0-9]{30}$/i;
+const { isSafeClipId } = require('./clipId');
+
+// Legacy alias kept for existing imports.
+const CLIP_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+
+function isValidClipId(clipId) {
+  return isSafeClipId(clipId);
+}
 
 function toExportLabel(eventType, variant) {
   const snake = eventType.trim().replace(/\s+/g, '_');
@@ -32,10 +39,10 @@ function exportAnnotation(events, { gameTime = '1 - 00:00', variant = 'post' } =
 }
 
 function getExportFilename(clipId, variant) {
-  if (!CLIP_ID_PATTERN.test(clipId)) {
+  if (!isValidClipId(clipId)) {
     throw new Error('Invalid clip ID');
   }
   return variant === 'post' ? `${clipId}_post.json` : `${clipId}.json`;
 }
 
-module.exports = { exportAnnotation, getExportFilename, CLIP_ID_PATTERN };
+module.exports = { exportAnnotation, getExportFilename, CLIP_ID_PATTERN, isValidClipId };

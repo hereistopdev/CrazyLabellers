@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const ClipReference = require('../models/ClipReference');
 const { parseReferenceAnnotation } = require('../utils/parseReferenceAnnotation');
-const { getExportFilename, CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { getExportFilename, isValidClipId } = require('../utils/exportAnnotation');
+const { isSafeClipId } = require('../utils/clipId');
 const { getAnnotationsDir } = require('./referenceAnnotations');
 const { isVpsStorageEnabled, withSftp } = require('./vpsStorage');
 
@@ -46,7 +47,7 @@ async function writeReferenceToVps(clipId, rawJson, variant = 'post') {
 }
 
 async function saveReferenceForClip(clipId, rawJson, { variant = 'post', sourceFilename = '' } = {}) {
-  if (!CLIP_ID_PATTERN.test(clipId)) {
+  if (!isSafeClipId(clipId)) {
     throw new Error('Invalid clip ID');
   }
 
@@ -97,7 +98,7 @@ async function hasReferenceForClip(clipId, variant = 'post') {
 }
 
 async function loadReferenceForClip(clipId, variant = 'post') {
-  if (!CLIP_ID_PATTERN.test(clipId)) {
+  if (!isSafeClipId(clipId)) {
     return { hasReference: false, events: [], variant, source: 'none' };
   }
 

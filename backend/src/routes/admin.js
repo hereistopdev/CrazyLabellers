@@ -21,7 +21,8 @@ const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotati
 const { importClipsFromDir } = require('../services/clipImport');
 const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
 const { importClipFromUpload } = require('../services/clipUpload');
-const { isRemoteVideoStorage, storeVideoFile, getStorageStatus } = require('../services/videoStorage');
+const { isRemoteVideoStorage, getStorageStatus } = require('../services/videoStorage');
+const { isVideoFilename } = require('../utils/clipId');
 const { saveReferenceForClip, deleteReferenceForClip, hasReferenceForClip } = require('../services/referenceStorage');
 const {
   ensureVideoDataDir,
@@ -618,17 +619,17 @@ router.post('/videos/bulk-clip', auth, requireRole('admin'), uploadBulkClip, asy
       return res.status(400).json({ message: 'Video file is required' });
     }
 
-    if (
-      !videoFile.mimetype?.includes('mp4') &&
-      !videoFile.originalname.toLowerCase().endsWith('.mp4')
-    ) {
-      return res.status(400).json({ message: 'Only .mp4 video files are allowed' });
+    if (!isVideoFilename(videoFile.originalname)) {
+      return res.status(400).json({
+        message: 'Unsupported video format. Allowed: mp4, webm, mov, mkv, avi, m4v',
+      });
     }
 
     const result = await importClipFromUpload({
       videoFile,
       referencePostFile: req.files?.referencePost?.[0],
       referenceRawFile: req.files?.referenceRaw?.[0],
+      clipId: req.body.clipId,
       kind: req.body.kind,
       taskPrice: req.body.taskPrice,
       skipExisting: req.body.skipExisting !== 'false',
@@ -657,11 +658,10 @@ router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, asy
       return res.status(400).json({ message: 'No video file uploaded' });
     }
 
-    if (
-      !videoFile.mimetype?.includes('mp4') &&
-      !videoFile.originalname.toLowerCase().endsWith('.mp4')
-    ) {
-      return res.status(400).json({ message: 'Only .mp4 video files are allowed' });
+    if (!isVideoFilename(videoFile.originalname)) {
+      return res.status(400).json({
+        message: 'Unsupported video format. Allowed: mp4, webm, mov, mkv, avi, m4v',
+      });
     }
 
     const result = await importClipFromUpload({
