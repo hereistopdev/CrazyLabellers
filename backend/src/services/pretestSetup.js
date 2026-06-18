@@ -34,10 +34,18 @@ async function setupPretestClips({ pretestCount = DEFAULT_PRETEST_COUNT, dataDir
   let pretestMarked = 0;
   let productionMarked = 0;
   let created = 0;
+  let skippedTutorials = 0;
 
   for (const clipId of clipIds) {
-    const kind = pretestClipIds.has(clipId) ? 'pretest' : 'production';
     let assignment = await VideoAssignment.findOne({ clipId });
+
+    // Tutorials are configured by admin — never reclassify them on deploy.
+    if (assignment?.kind === 'tutorial') {
+      skippedTutorials += 1;
+      continue;
+    }
+
+    const kind = pretestClipIds.has(clipId) ? 'pretest' : 'production';
 
     if (!assignment) {
       assignment = await VideoAssignment.create({
@@ -56,7 +64,7 @@ async function setupPretestClips({ pretestCount = DEFAULT_PRETEST_COUNT, dataDir
         taskPrice: kind === 'pretest' ? 0 : undefined,
       });
       created += 1;
-    } else {
+    } else if (assignment.kind === 'pretest' || assignment.kind === 'production' || !assignment.kind) {
       assignment.kind = kind;
       if (kind === 'pretest') {
         assignment.taskPrice = 0;
@@ -67,6 +75,8 @@ async function setupPretestClips({ pretestCount = DEFAULT_PRETEST_COUNT, dataDir
           'Practice labeling test clip scored against reference annotations.';
       }
       await assignment.save();
+    } else {
+      continue;
     }
 
     if (kind === 'pretest') pretestMarked += 1;
@@ -74,16 +84,23 @@ async function setupPretestClips({ pretestCount = DEFAULT_PRETEST_COUNT, dataDir
   }
 
   await VideoAssignment.updateMany(
-    { clipId: { $exists: true, $nin: clipIds } },
+    {
+      clipId: { $exists: true, $nin: clipIds },
+      kind: { $nin: ['tutorial', 'pretest'] },
+    },
     { $set: { kind: 'production' } }
   );
 
-  await VideoAssignment.updateMany({ kind: { $exists: false } }, { $set: { kind: 'production' } });
+  await VideoAssignment.updateMany(
+    { kind: { $exists: false } },
+    { $set: { kind: 'production' } }
+  );
 
   return {
     pretestMarked,
     productionMarked,
     created,
+    skippedTutorials,
     pretestClipIds: [...pretestClipIds],
     totalWithReference: clipIds.length,
   };

@@ -1,7 +1,7 @@
-import { isAdmin, isChecker, isLabeller } from './roles';
+import { isAdmin, isValidator, isLabeller } from './roles';
 
 export function canUseLabeler(user) {
-  return isLabeller(user) || isAdmin(user) || isChecker(user);
+  return isLabeller(user) || isAdmin(user) || isValidator(user);
 }
 
 export function labelerPath(assignmentId) {

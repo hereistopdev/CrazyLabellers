@@ -138,13 +138,20 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
       update.taskPrice = validateTaskPrice(taskPrice, { kind: effectiveKind });
     }
     if (sortOrder !== undefined) update.sortOrder = parseInt(sortOrder, 10) || 0;
-    if (groupId !== undefined) update.groupId = groupId || null;
+    if (groupId !== undefined && effectiveKind !== 'tutorial') update.groupId = groupId || null;
     if (challengeNote !== undefined) update.challengeNote = String(challengeNote);
     if (gameTime !== undefined) update.gameTime = String(gameTime);
     if (durationSeconds !== undefined) update.durationSeconds = parseInt(durationSeconds, 10) || 30;
     if (tutorialIntro !== undefined) update.tutorialIntro = String(tutorialIntro);
     if (tutorialSteps !== undefined) update.tutorialSteps = normalizeTutorialSteps(tutorialSteps);
-    if (status !== undefined) update.status = status;
+    if (status !== undefined && effectiveKind !== 'tutorial') update.status = status;
+
+    if (effectiveKind === 'tutorial') {
+      update.status = 'available';
+      update.assignedTo = null;
+      update.taskPrice = 0;
+      update.groupId = null;
+    }
 
     const updated = await updateAssignmentFields(req.params.id, update);
     if (!updated) return res.status(404).json({ message: 'Task not found' });

@@ -14,6 +14,17 @@ export default function AdminDashboard() {
       <div className="step-cards">
         <div className="step-card">
           <div className="step-number">1</div>
+          <h3>Manage Validators</h3>
+          <p>Create validator accounts that review submitted tasks and assign scores.</p>
+          <div className="actions-row">
+            <Link to="/admin/validators" className="btn btn-primary btn-sm">
+              Open validators
+            </Link>
+          </div>
+        </div>
+
+        <div className="step-card">
+          <div className="step-number">2</div>
           <h3>Manage Labellers</h3>
           <p>Add, remove, or manually approve labellers without requiring the knowledge test.</p>
           <div className="actions-row">
@@ -24,7 +35,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="step-card">
-          <div className="step-number">2</div>
+          <div className="step-number">3</div>
           <h3>Manage Tasks</h3>
           <p>Tutorial examples, pre-test clips, production groups, and frame explanations.</p>
           <div className="actions-row">
@@ -35,18 +46,18 @@ export default function AdminDashboard() {
         </div>
 
         <div className="step-card">
-          <div className="step-number">3</div>
+          <div className="step-number">4</div>
           <h3>Review & Score Tasks</h3>
           <p>Review labeled videos, assign review points (0–100), and calculate labeller earnings.</p>
           <div className="actions-row">
-            <Link to="/admin" className="btn btn-primary btn-sm">
+            <Link to="/review" className="btn btn-primary btn-sm">
               Review submissions
             </Link>
           </div>
         </div>
 
         <div className="step-card">
-          <div className="step-number">4</div>
+          <div className="step-number">5</div>
           <h3>Finance Dashboard</h3>
           <p>See total payouts, per-labeller earnings, review points, and set the rate per point.</p>
           <div className="actions-row">

@@ -186,9 +186,13 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  getCheckers: () => request('/admin/checkers'),
+  getValidators: () => request('/admin/validators'),
+  createValidator: (body) =>
+    request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),
+  deleteValidator: (id) => request(`/admin/validators/${id}`, { method: 'DELETE' }),
+  getCheckers: () => request('/admin/validators'),
   createChecker: (body) =>
-    request('/admin/checkers', { method: 'POST', body: JSON.stringify(body) }),
+    request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),
   createAssignment: (body) =>
     request('/assignments', { method: 'POST', body: JSON.stringify(body) }),
   getFinanceDashboard: () => request('/admin/finance/dashboard'),

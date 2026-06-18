@@ -362,7 +362,11 @@ export default function ManageLabellers() {
                   <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>
                     <option value="">Select assignment...</option>
                     {assignments
-                      .filter((a) => a.status === 'available' || !a.assignedTo)
+                      .filter(
+                        (a) =>
+                          a.kind === 'production' &&
+                          (a.status === 'available' || !a.assignedTo)
+                      )
                       .map((a) => (
                         <option key={a._id} value={a._id}>
                           {a.title}

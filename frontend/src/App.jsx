@@ -11,6 +11,7 @@ import KnowledgeTest from './pages/KnowledgeTest';
 import Assignments from './pages/Assignments';
 import Labeling from './pages/Labeling';
 import Admin from './pages/Admin';
+import ManageValidators from './pages/ManageValidators';
 import ManageLabellers from './pages/ManageLabellers';
 import ManageVideos from './pages/ManageVideos';
 import FinanceDashboard from './pages/FinanceDashboard';
@@ -194,6 +195,14 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <ManageVideos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/validators"
+          element={
+            <ProtectedRoute adminOnly>
+              <ManageValidators />
             </ProtectedRoute>
           }
         />

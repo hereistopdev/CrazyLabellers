@@ -226,7 +226,7 @@ router.patch('/submissions/:id/validate', auth, requireReviewerRole, async (req,
   }
 });
 
-router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker'), async (req, res) => {
+router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker', 'validator'), async (req, res) => {
   try {
     const { status, reviewerNotes, reviewPoints, rating, reviewComment, aspects } = req.body;
 

@@ -2,12 +2,16 @@ export function isAdmin(user) {
   return user?.role === 'admin';
 }
 
+export function isValidator(user) {
+  return user?.role === 'validator' || user?.role === 'checker';
+}
+
 export function isChecker(user) {
-  return user?.role === 'checker';
+  return isValidator(user);
 }
 
 export function isReviewer(user) {
-  return isAdmin(user) || isChecker(user);
+  return isAdmin(user) || isValidator(user);
 }
 
 export function isLabeller(user) {
@@ -16,7 +20,7 @@ export function isLabeller(user) {
 
 export function roleLabel(user) {
   if (isAdmin(user)) return 'Admin';
-  if (isChecker(user)) return 'Checker';
+  if (isValidator(user)) return 'Validator';
   return 'Labeller';
 }
 

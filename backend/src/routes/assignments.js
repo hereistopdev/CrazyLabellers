@@ -54,10 +54,8 @@ router.get('/', auth, async (req, res) => {
           });
         }
         filter = {
-          $and: [
-            { $or: [{ kind: 'production' }, { kind: { $exists: false } }] },
-            { $or: [{ assignedTo: req.user._id }, { status: 'available' }] },
-          ],
+          kind: { $nin: ['tutorial', 'pretest'] },
+          $or: [{ assignedTo: req.user._id }, { status: 'available' }],
         };
       }
     } else if (kind) {

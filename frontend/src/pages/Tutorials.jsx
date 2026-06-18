@@ -85,12 +85,12 @@ export default function Tutorials() {
         </div>
       )}
 
-      {assignments.filter((a) => a.kind === 'tutorial' || !a.kind).length === 0 ? (
+      {assignments.filter((a) => a.kind === 'tutorial').length === 0 ? (
         <div className="empty-state">No tutorial clips configured yet. Ask an admin to mark videos as Tutorial.</div>
       ) : (
         <div className="task-list">
           {assignments
-            .filter((a) => a.kind === 'tutorial' || !a.kind)
+            .filter((a) => a.kind === 'tutorial')
             .map((a, index) => {
             const subtitle = assignmentSubtitle(a);
             const stepCount = a.tutorialSteps?.length || 0;

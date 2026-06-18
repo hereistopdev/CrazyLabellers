@@ -1,12 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { isAdmin, isChecker, roleLabel } from '../utils/roles';
+import { isAdmin, isValidator, roleLabel } from '../utils/roles';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const admin = isAdmin(user);
-  const checker = isChecker(user);
+  const validator = isValidator(user);
 
   const handleLogout = () => {
     logout();
@@ -41,6 +41,12 @@ export default function Layout() {
                 Videos
               </NavLink>
               <NavLink
+                to="/admin/validators"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Validators
+              </NavLink>
+              <NavLink
                 to="/admin/labellers"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
@@ -65,7 +71,7 @@ export default function Layout() {
                 Admin
               </NavLink>
             </>
-          ) : checker ? (
+          ) : validator ? (
             <>
               <NavLink
                 to="/review"
@@ -137,7 +143,7 @@ export default function Layout() {
             <span className="user-badge">
               {user?.name}
               <span className={`role-badge role-${user?.role}`}>{roleLabel(user)}</span>
-              {!admin && !checker && (
+              {!admin && !validator && (
                 <span className={`status-badge status-${user?.status}`} style={{ marginLeft: 4 }}>
                   {user?.status?.replace('_', ' ')}
                 </span>

@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from './AdminDashboard';
-import { isChecker } from '../utils/roles';
+import { isValidator } from '../utils/roles';
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
@@ -10,12 +10,12 @@ export default function Dashboard() {
     return <AdminDashboard />;
   }
 
-  if (isChecker(user)) {
+  if (isValidator(user)) {
     return (
       <div>
         <div className="page-header">
           <h1>Hello, {user?.name}</h1>
-          <p>Review labeller submissions with video playback and reference comparison.</p>
+          <p>Review submitted labeller tasks, compare against reference annotations, and assign scores.</p>
         </div>
         <Link to="/review" className="btn btn-primary">
           Open review queue

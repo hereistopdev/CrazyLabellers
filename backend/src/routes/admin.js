@@ -55,48 +55,102 @@ const uploadReferenceOnly = multer({
 
 const router = express.Router();
 
-router.post('/checkers', auth, requireRole('admin'), async (req, res) => {
+async function createValidatorAccount({ name, email, password }) {
+  if (!name || !email || !password) {
+    const error = new Error('Name, email, and password are required');
+    error.status = 400;
+    throw error;
+  }
+
+  if (password.length < 6) {
+    const error = new Error('Password must be at least 6 characters');
+    error.status = 400;
+    throw error;
+  }
+
+  const existing = await User.findOne({ email: email.toLowerCase() });
+  if (existing) {
+    const error = new Error('Email already registered');
+    error.status = 409;
+    throw error;
+  }
+
+  return User.create({
+    name,
+    email,
+    password,
+    role: 'validator',
+    status: 'approved',
+  });
+}
+
+router.post('/validators', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email, and password are required' });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) {
-      return res.status(409).json({ message: 'Email already registered' });
-    }
-
-    const checker = await User.create({
-      name,
-      email,
-      password,
-      role: 'checker',
-      status: 'approved',
-    });
-
+    const validator = await createValidatorAccount(req.body);
     return res.status(201).json({
-      id: checker._id,
-      name: checker.name,
-      email: checker.email,
-      role: checker.role,
-      status: checker.status,
-      createdAt: checker.createdAt,
+      id: validator._id,
+      name: validator.name,
+      email: validator.email,
+      role: validator.role,
+      status: validator.status,
+      createdAt: validator.createdAt,
     });
   } catch (error) {
-    return res.status(400).json({ message: error.message });
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.get('/validators', auth, requireRole('admin'), async (_req, res) => {
+  try {
+    const validators = await User.find({ role: { $in: ['validator', 'checker'] } })
+      .select('-password')
+      .sort({ createdAt: -1 });
+    return res.json(validators);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/validators/:id', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const validator = await User.findOne({
+      _id: req.params.id,
+      role: { $in: ['validator', 'checker'] },
+    });
+
+    if (!validator) {
+      return res.status(404).json({ message: 'Validator not found' });
+    }
+
+    await User.deleteOne({ _id: validator._id });
+    return res.json({ message: 'Validator removed' });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/checkers', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const validator = await createValidatorAccount(req.body);
+    return res.status(201).json({
+      id: validator._id,
+      name: validator.name,
+      email: validator.email,
+      role: validator.role,
+      status: validator.status,
+      createdAt: validator.createdAt,
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
   }
 });
 
 router.get('/checkers', auth, requireRole('admin'), async (_req, res) => {
   try {
-    const checkers = await User.find({ role: 'checker' }).select('-password').sort({ createdAt: -1 });
-    return res.json(checkers);
+    const validators = await User.find({ role: { $in: ['validator', 'checker'] } })
+      .select('-password')
+      .sort({ createdAt: -1 });
+    return res.json(validators);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -258,6 +312,18 @@ router.post('/labellers/:id/assign', auth, requireRole('admin'), async (req, res
     const assignment = await VideoAssignment.findById(assignmentId);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.kind === 'tutorial') {
+      return res.status(400).json({
+        message: 'Tutorial clips are open to all labellers for study — they cannot be assigned',
+      });
+    }
+
+    if (assignment.kind === 'pretest') {
+      return res.status(400).json({
+        message: 'Pre-test clips are claimed by labellers directly — use that flow instead',
+      });
     }
 
     assignment.assignedTo = labeller._id;

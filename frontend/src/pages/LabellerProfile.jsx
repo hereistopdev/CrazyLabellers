@@ -92,7 +92,7 @@ export default function LabellerProfile() {
         <section className="card profile-section">
           <h3>Client reviews</h3>
           {reviews.length === 0 ? (
-            <p className="profile-empty">No reviews yet. Reviews are left when a checker approves work.</p>
+            <p className="profile-empty">No reviews yet. Reviews are left when a validator approves work.</p>
           ) : (
             <ul className="profile-review-list">
               {reviews.map((review) => (

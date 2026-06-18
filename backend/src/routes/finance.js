@@ -31,7 +31,7 @@ async function aggregateLabellerEarnings(matchExtra = {}) {
   ]);
 }
 
-router.get('/settings', auth, requireRole('admin'), async (_req, res) => {
+router.get('/settings', auth, requireRole('admin', 'checker', 'validator'), async (_req, res) => {
   try {
     const settings = await getSettings();
     return res.json(settings);

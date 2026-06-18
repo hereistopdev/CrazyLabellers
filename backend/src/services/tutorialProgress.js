@@ -42,6 +42,14 @@ async function refreshTutorialCompletion(userId) {
   return { user, progress };
 }
 
+/** Tutorials are study material — always open, never assigned to one labeller. */
+async function ensureTutorialAssignmentsOpen() {
+  await VideoAssignment.updateMany(
+    { kind: 'tutorial' },
+    { $set: { status: 'available', assignedTo: null, taskPrice: 0 } }
+  );
+}
+
 function canAccessTutorial(user) {
   if (user.status === 'approved' || user.status === 'passed_test') {
     return true;
@@ -67,6 +75,7 @@ function canAccessProduction(user) {
 module.exports = {
   getTutorialProgress,
   refreshTutorialCompletion,
+  ensureTutorialAssignmentsOpen,
   canAccessTutorial,
   canAccessPretest,
   canAccessProduction,

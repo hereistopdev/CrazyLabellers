@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { isAdmin } from '../utils/roles';
+import { isAdmin, isValidator } from '../utils/roles';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import VideoLabelLink from '../components/VideoLabelLink';
@@ -20,7 +20,8 @@ export default function ReviewQueue() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const admin = isAdmin(user);
-  const [tab, setTab] = useState('videos');
+  const validatorOnly = isValidator(user) && !admin;
+  const [tab, setTab] = useState(validatorOnly ? 'submissions' : 'videos');
   const [submissions, setSubmissions] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [statusFilter, setStatusFilter] = useState('submitted');
