@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { isAdmin, isLabeller } from '../utils/roles';
@@ -13,7 +13,6 @@ import {
 import FrameMagnifier from '../components/FrameMagnifier';
 import TutorialEventOverlay from '../components/TutorialEventOverlay';
 import EventPickerModal from '../components/EventPickerModal';
-import LabelingScoreModal from '../components/LabelingScoreModal';
 import TutorialPanel from '../components/TutorialPanel';
 import TutorialEditorPanel from '../components/TutorialEditorPanel';
 import ReviewTimeline from '../components/ReviewTimeline';
@@ -32,6 +31,7 @@ function formatTime(seconds) {
 
 export default function Labeling() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const adminMode = isAdmin(user);
   const labellerMode = isLabeller(user);
@@ -48,7 +48,6 @@ export default function Labeling() {
   const [playMode, setPlayMode] = useState('paused');
   const [magnifyEnabled, setMagnifyEnabled] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
-  const [gradingResult, setGradingResult] = useState(null);
   const [mediaDuration, setMediaDuration] = useState(null);
   const [reference, setReference] = useState(null);
   const [tutorialDone, setTutorialDone] = useState(false);
@@ -93,6 +92,24 @@ export default function Labeling() {
 
         if (cancelled) return;
 
+        if (
+          labellerMode &&
+          assign.kind === 'pretest' &&
+          labels.status === 'submitted'
+        ) {
+          if (!labels.pretestScoreReviewSeenAt) {
+            navigate(`/labeling-test/${id}/review`, { replace: true });
+            return;
+          }
+          navigate('/labeling-test', {
+            replace: true,
+            state: {
+              message: 'This pre-test clip is complete. Open another clip from the list.',
+            },
+          });
+          return;
+        }
+
         setAssignment(assign);
         setEventTypes(types);
         setEvents(labels.events || []);
@@ -107,7 +124,7 @@ export default function Labeling() {
     return () => {
       cancelled = true;
     };
-  }, [id, labellerMode]);
+  }, [id, labellerMode, navigate]);
 
   useEffect(() => {
     if (!labellerMode || assignment?.kind !== 'tutorial') {
@@ -300,19 +317,12 @@ export default function Labeling() {
           await refreshUser();
           setMessage('Tutorial completed! Continue to the next tutorial or pre-test.');
         } else if (status === 'submitted' && assignment?.kind === 'pretest') {
-          if (data.grading) {
-            setGradingResult(data.grading);
-          }
           await refreshUser();
-          if (data.grading && !data.grading.error) {
-            setMessage(
-              data.grading.passed
-                ? `Pre-test passed — ${data.grading.autoScore}/100`
-                : `Score: ${data.grading.autoScore}/100 — try another clip for 80+`
-            );
-          } else {
-            setMessage('Submitted but could not auto-score against reference data.');
+          if (data.grading?.scoreReviewUrl) {
+            navigate(data.grading.scoreReviewUrl);
+            return;
           }
+          setMessage('Submitted but could not open score review.');
         } else if (status === 'submitted') {
           setMessage('Submitted for review!');
         } else {
@@ -327,7 +337,7 @@ export default function Labeling() {
         setSaving(false);
       }
     },
-    [id, events, assignment?.kind, refreshUser]
+    [id, events, assignment?.kind, refreshUser, navigate]
   );
 
   const handleCompleteTutorial = useCallback(async () => {
@@ -787,13 +797,6 @@ export default function Labeling() {
         onClose={() => setShowEventPicker(false)}
       />
 
-      {gradingResult && (
-        <LabelingScoreModal
-          grading={gradingResult}
-          assignmentTitle={assignment?.title}
-          onClose={() => setGradingResult(null)}
-        />
-      )}
     </div>
   );
 }

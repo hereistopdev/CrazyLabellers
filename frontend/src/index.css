@@ -2144,6 +2144,24 @@ tbody tr:hover {
   display: block;
 }
 
+.pretest-score-review .review-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.pretest-score-sidebar {
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+}
+
+@media (max-width: 1100px) {
+  .pretest-score-review .review-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
 .review-video-panel {
   width: 100%;
 }

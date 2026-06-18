@@ -17,6 +17,7 @@ import ManageVideos from './pages/ManageVideos';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Earnings from './pages/Earnings';
 import LabelingTest from './pages/LabelingTest';
+import PretestScoreReview from './pages/PretestScoreReview';
 import Tutorials from './pages/Tutorials';
 import ManageTasks from './pages/ManageTasks';
 import ReviewQueue from './pages/ReviewQueue';
@@ -151,6 +152,14 @@ export default function App() {
           element={
             <ProtectedRoute labellerOnly>
               <LabelingTest />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="labeling-test/:assignmentId/review"
+          element={
+            <ProtectedRoute labellerOnly>
+              <PretestScoreReview />
             </ProtectedRoute>
           }
         />

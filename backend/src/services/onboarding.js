@@ -101,7 +101,7 @@ async function getPretestClipsWithProgress(userId) {
   const submissions = await LabelSubmission.find({
     userId,
     assignmentId: { $in: assignments.map((a) => a._id) },
-  }).select('assignmentId autoScore status updatedAt events');
+  }).select('assignmentId autoScore status updatedAt events pretestScoreReviewSeenAt');
 
   const submissionByAssignment = new Map(
     submissions.map((s) => [String(s.assignmentId), s])
@@ -123,6 +123,7 @@ async function getPretestClipsWithProgress(userId) {
       userProgress,
       lastScore: submission?.autoScore ?? null,
       lastSubmittedAt: hasSubmitted ? submission.updatedAt : null,
+      scoreReviewAvailable: hasSubmitted && !submission?.pretestScoreReviewSeenAt,
     };
   });
 }

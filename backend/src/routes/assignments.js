@@ -303,6 +303,25 @@ router.put('/:id/labels', auth, async (req, res) => {
       });
     }
 
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind === 'pretest'
+    ) {
+      const existing = await LabelSubmission.findOne({
+        assignmentId: req.params.id,
+        userId: req.user._id,
+      });
+      if (existing?.status === 'submitted') {
+        if (status === 'submitted') {
+          return res.status(400).json({ message: 'Pre-test already submitted for this clip' });
+        }
+        return res.status(403).json({
+          message: 'This pre-test clip is already submitted and cannot be edited',
+        });
+      }
+    }
+
     const submission = await LabelSubmission.findOneAndUpdate(
       { assignmentId: req.params.id, userId: req.user._id },
       {
@@ -345,6 +364,7 @@ router.put('/:id/labels', auth, async (req, res) => {
             labelingTestPassed: user.labelingTestPassed,
             canAccessProduction: canAccessProduction(user),
           };
+          grading.scoreReviewUrl = `/labeling-test/${assignment._id}/review`;
         } else if (assignment.kind === 'production' || !assignment.kind) {
           grading.suggestedReviewPoints = scoreResult.totalScore;
         }

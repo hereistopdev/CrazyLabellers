@@ -1,0 +1,53 @@
+const { loadReferenceForClip } = require('./referenceStorage');
+const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
+const { ensureSubmissionAutoScore } = require('./grading');
+
+async function buildScoreReviewPayload(submission, assignment, { ensureScore = true } = {}) {
+  if (ensureScore && submission?._id) {
+    await ensureSubmissionAutoScore(submission, assignment);
+  }
+
+  const reference = assignment?.clipId
+    ? await loadReferenceForClip(assignment.clipId, 'post')
+    : { hasReference: false, events: [] };
+
+  const submissionEvents = submission?.events || [];
+  const comparison = reference.hasReference
+    ? compareAnnotations(submissionEvents, reference.events)
+    : null;
+
+  const eventRows = buildEventReviewRows(
+    submissionEvents,
+    comparison,
+    submission?.eventValidations || []
+  );
+
+  return {
+    submission: {
+      _id: submission._id,
+      events: submission.events,
+      status: submission.status,
+      autoScore: submission.autoScore,
+      autoScoreBreakdown: submission.autoScoreBreakdown,
+      pretestScoreReviewSeenAt: submission.pretestScoreReviewSeenAt,
+      updatedAt: submission.updatedAt,
+    },
+    assignment,
+    autoScore: submission?.autoScore,
+    autoScoreBreakdown: submission?.autoScoreBreakdown,
+    passThreshold: 80,
+    reference: {
+      hasReference: reference.hasReference,
+      events: reference.events,
+      variant: reference.variant,
+      annotationCount: reference.annotationCount || 0,
+      source: reference.source,
+    },
+    comparison,
+    eventRows,
+    missingReferenceEvents: comparison?.missingInSubmission || [],
+    extraSubmissionEvents: comparison?.extraInSubmission || [],
+  };
+}
+
+module.exports = { buildScoreReviewPayload };

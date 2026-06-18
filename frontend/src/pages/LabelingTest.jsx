@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
 import { labelerPath } from '../utils/labelerAccess';
 
-const PROGRESS_LABELS = {
-  open: 'Not started',
-  in_progress: 'In progress',
-  submitted: 'Submitted',
-};
+function progressLabel(assignment) {
+  const progress = assignment.userProgress || 'open';
+  if (progress === 'submitted') {
+    return assignment.scoreReviewAvailable ? 'Review pending' : 'Completed';
+  }
+  if (progress === 'in_progress') return 'In progress';
+  return 'Not started';
+}
 
 export default function LabelingTest() {
   const { refreshUser } = useAuth();
+  const location = useLocation();
   const [status, setStatus] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +45,7 @@ export default function LabelingTest() {
   const canProduction = status?.canAccessProduction;
   const tutorialsDone = status?.tutorialsCompleted;
   const canAccess = status?.canAccessPretest;
+  const bannerMessage = location.state?.message;
 
   return (
     <div>
@@ -48,11 +53,13 @@ export default function LabelingTest() {
         <h1>Labeling pre-test</h1>
         <p>
           You receive <strong>3 random clips</strong> from the admin pre-test pool. Open any of your
-          clips directly — no claim needed. Each submission is scored automatically. Score{' '}
-          <strong>80/100 or higher</strong> to unlock real labeling tasks.
+          clips directly — no claim needed. Each submission is scored automatically. After submit,
+          you get a <strong>one-time</strong> score review with reference data, then move on to your
+          other clips. Score <strong>80/100 or higher</strong> to unlock real labeling tasks.
         </p>
       </div>
 
+      {bannerMessage && <div className="alert alert-info">{bannerMessage}</div>}
       {error && <div className="alert alert-error">{error}</div>}
 
       {!tutorialsDone && (
@@ -134,12 +141,7 @@ export default function LabelingTest() {
           {assignments.map((a, index) => {
             const progress = a.userProgress || 'open';
             const subtitle = assignmentSubtitle(a);
-            const actionLabel =
-              progress === 'submitted'
-                ? 'Review clip'
-                : progress === 'in_progress'
-                  ? 'Continue labeling'
-                  : 'Start clip';
+            const reviewPending = progress === 'submitted' && a.scoreReviewAvailable;
 
             return (
               <div key={a._id} className="task-list-item card">
@@ -150,7 +152,7 @@ export default function LabelingTest() {
                     Duration: {a.durationSeconds || 30}s ·{' '}
                     <span className="status-badge status-passed_test">Pre-test · Free</span>
                     {' · '}
-                    {PROGRESS_LABELS[progress] || progress}
+                    {progressLabel(a)}
                     {a.lastScore != null && (
                       <>
                         {' · '}
@@ -162,9 +164,22 @@ export default function LabelingTest() {
                   </p>
                 </div>
                 <div className="task-list-actions">
-                  <Link to={labelerPath(String(a._id))} className="btn btn-primary btn-sm">
-                    {actionLabel}
-                  </Link>
+                  {reviewPending ? (
+                    <Link
+                      to={`/labeling-test/${a._id}/review`}
+                      className="btn btn-primary btn-sm"
+                    >
+                      View score review
+                    </Link>
+                  ) : progress === 'submitted' ? (
+                    <span className="detail-muted" style={{ fontSize: '0.85rem' }}>
+                      Review viewed
+                    </span>
+                  ) : (
+                    <Link to={labelerPath(String(a._id))} className="btn btn-primary btn-sm">
+                      {progress === 'in_progress' ? 'Continue labeling' : 'Start clip'}
+                    </Link>
+                  )}
                 </div>
               </div>
             );

@@ -104,6 +104,12 @@ export const api = {
   getLabelingTestStatus: () => request('/labeling-test/status'),
   getLabelingTestAssignments: () => request('/labeling-test/assignments'),
   getLabelingTestResults: () => request('/labeling-test/results'),
+  getPretestScoreReview: (assignmentId) =>
+    request(`/labeling-test/assignments/${assignmentId}/score-review`),
+  acknowledgePretestScoreReview: (assignmentId) =>
+    request(`/labeling-test/assignments/${assignmentId}/score-review/acknowledge`, {
+      method: 'POST',
+    }),
   getTutorialStatus: () => request('/tutorials/status'),
   getTutorialAssignments: () => request('/tutorials/assignments'),
   getTutorialAssignment: (id) => request(`/tutorials/assignments/${id}`),

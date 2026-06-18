@@ -7,8 +7,8 @@ const { isReviewer, canAccessReview } = require('../config/roles');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
 const { upsertLabellerReview } = require('../services/labellerProfile');
 const { loadReferenceForClip } = require('../services/referenceStorage');
-const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
-const { ensureSubmissionAutoScore } = require('../services/grading');
+const { compareAnnotations } = require('../utils/compareAnnotations');
+const { buildScoreReviewPayload } = require('../services/scoreReview');
 
 const router = express.Router();
 
@@ -25,41 +25,11 @@ function requireReviewerRole(req, res, next) {
 }
 
 async function buildReviewPayload(submission, assignment, variant = 'post', { preview = false } = {}) {
-  if (!preview && submission?._id) {
-    await ensureSubmissionAutoScore(submission, assignment);
-  }
-
-  const reference = assignment?.clipId
-    ? await loadReferenceForClip(assignment.clipId, variant)
-    : { hasReference: false, events: [] };
-
-  const submissionEvents = submission?.events || [];
-  const comparison = reference.hasReference
-    ? compareAnnotations(submissionEvents, reference.events)
-    : null;
-
-  const eventRows = buildEventReviewRows(
-    submissionEvents,
-    comparison,
-    submission?.eventValidations || []
-  );
-
+  const payload = await buildScoreReviewPayload(submission, assignment, { ensureScore: !preview });
   return {
+    ...payload,
     preview,
     submission,
-    assignment,
-    autoScore: submission?.autoScore,
-    autoScoreBreakdown: submission?.autoScoreBreakdown,
-    reference: {
-      hasReference: reference.hasReference,
-      events: reference.events,
-      variant: reference.variant,
-      annotationCount: reference.annotationCount || 0,
-      source: reference.source,
-    },
-    comparison,
-    eventRows,
-    missingReferenceEvents: comparison?.missingInSubmission || [],
   };
 }
 
