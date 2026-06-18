@@ -9,7 +9,7 @@ const VideoAssignment = require('../models/VideoAssignment');
 const { auth, requireRole } = require('../middleware/auth');
 const { LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
-const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice } = require('../config/payments');
+const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { upsertLabellerReview, getLabellerStats } = require('../services/labellerProfile');
 const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
 const { importClipsFromDir } = require('../services/clipImport');
@@ -324,7 +324,7 @@ router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, 
     const points = status === 'approved' ? clampReviewPoints(parseInt(reviewPoints, 10) || 0) : 0;
     const earnings =
       status === 'approved'
-        ? calculateTaskEarnings(points, assignment?.taskPrice, settings.ratePerPoint)
+        ? calculateTaskEarnings(points, assignment?.taskPrice, settings.ratePerPoint, assignment?.kind)
         : 0;
 
     const submission = await LabelSubmission.findByIdAndUpdate(
@@ -396,24 +396,27 @@ router.get('/assignments', auth, requireRole('admin'), async (_req, res) => {
 router.patch('/assignments/:id/price', auth, requireRole('admin'), async (req, res) => {
   try {
     const { taskPrice, challengeNote } = req.body;
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
     const update = {};
 
-    if (taskPrice !== undefined) {
-      update.taskPrice = validateTaskPrice(taskPrice);
+    if (isFreeTaskKind(assignment.kind)) {
+      update.taskPrice = 0;
+    } else if (taskPrice !== undefined) {
+      update.taskPrice = validateTaskPrice(taskPrice, { kind: assignment.kind });
     }
     if (challengeNote !== undefined) {
       update.challengeNote = String(challengeNote).trim();
     }
 
-    const assignment = await VideoAssignment.findByIdAndUpdate(
+    const updated = await VideoAssignment.findByIdAndUpdate(
       req.params.id,
       { $set: update },
       { new: true, runValidators: false }
     ).populate('assignedTo', 'name email status');
-
-    if (!assignment) {
-      return res.status(404).json({ message: 'Assignment not found' });
-    }
 
     return res.json(assignment);
   } catch (error) {
@@ -428,16 +431,29 @@ router.patch('/assignments/bulk-price', auth, requireRole('admin'), async (req, 
       return res.status(400).json({ message: 'assignmentIds array is required' });
     }
 
+    const assignments = await VideoAssignment.find({ _id: { $in: assignmentIds } });
+    const freeIds = assignments.filter((a) => isFreeTaskKind(a.kind)).map((a) => a._id);
+    const paidIds = assignments.filter((a) => !isFreeTaskKind(a.kind)).map((a) => a._id);
+
     const update = {};
-    if (taskPrice !== undefined) {
+    if (taskPrice !== undefined && paidIds.length > 0) {
       update.taskPrice = validateTaskPrice(taskPrice);
     }
     if (challengeNote !== undefined) {
       update.challengeNote = String(challengeNote).trim();
     }
 
-    const result = await VideoAssignment.updateMany({ _id: { $in: assignmentIds } }, update);
-    return res.json({ modified: result.modifiedCount, taskPrice: update.taskPrice });
+    let modified = 0;
+    if (Object.keys(update).length > 0 && paidIds.length > 0) {
+      const result = await VideoAssignment.updateMany({ _id: { $in: paidIds } }, update);
+      modified += result.modifiedCount;
+    }
+    if (freeIds.length > 0) {
+      const result = await VideoAssignment.updateMany({ _id: { $in: freeIds } }, { taskPrice: 0 });
+      modified += result.modifiedCount;
+    }
+
+    return res.json({ modified, taskPrice: update.taskPrice ?? 0 });
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }
@@ -470,7 +486,13 @@ router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, asy
 
     const clipId = resolveClipId(videoFile.originalname);
     const durationSeconds = parseInt(req.body.durationSeconds, 10) || 30;
-    const taskPrice = req.body.taskPrice != null ? validateTaskPrice(req.body.taskPrice) : undefined;
+    const kind = req.body.kind;
+    const taskPrice =
+      isFreeTaskKind(kind)
+        ? 0
+        : req.body.taskPrice != null
+          ? validateTaskPrice(req.body.taskPrice, { kind })
+          : undefined;
 
     await storeVideoFile(clipId, videoFile);
 

@@ -20,7 +20,7 @@ const videoAssignmentSchema = new mongoose.Schema(
     tutorialIntro: { type: String, default: '' },
     // Plain objects — eventType/explanation are optional; admin fills in gradually.
     tutorialSteps: { type: [mongoose.Schema.Types.Mixed], default: [] },
-    taskPrice: { type: Number, default: 1, min: 0.3, max: 2 },
+    taskPrice: { type: Number, default: 1, min: 0, max: 2 },
     challengeNote: { type: String, default: '' },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: {

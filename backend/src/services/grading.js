@@ -30,6 +30,20 @@ async function gradeSubmissionAgainstReference(submission, assignment) {
   return { scoreResult, reference };
 }
 
+async function ensureSubmissionAutoScore(submission, assignment) {
+  if (submission?.autoScore != null || !assignment?.clipId) {
+    return submission;
+  }
+
+  try {
+    await gradeSubmissionAgainstReference(submission, assignment);
+  } catch {
+    // Reference may be missing — review can proceed manually.
+  }
+
+  return submission;
+}
+
 async function recordLabelingTestAttempt(userId, assignmentId, submission, scoreResult) {
   const result = await LabelingTestResult.create({
     userId,
@@ -60,6 +74,7 @@ async function recordLabelingTestAttempt(userId, assignmentId, submission, score
 
 module.exports = {
   gradeSubmissionAgainstReference,
+  ensureSubmissionAutoScore,
   recordLabelingTestAttempt,
   canAccessPretest,
   canAccessProduction,

@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
 const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
-const { validateTaskPrice } = require('../config/payments');
+const { validateTaskPrice, isFreeTaskKind, DEFAULT_TASK_PRICE } = require('../config/payments');
 const { getVideoDataDir, buildVideoUrl } = require('./videoStorage');
 const { removeStoredVideoFile } = require('./videoStorage');
 
@@ -45,6 +45,11 @@ async function createVideoAssignment({
 
   const validKinds = ['tutorial', 'pretest', 'production'];
   const taskKind = validKinds.includes(kind) ? kind : 'production';
+  const resolvedPrice = isFreeTaskKind(taskKind)
+    ? 0
+    : taskPrice != null
+      ? validateTaskPrice(taskPrice, { kind: taskKind })
+      : DEFAULT_TASK_PRICE;
 
   return VideoAssignment.create({
     clipId,
@@ -56,7 +61,7 @@ async function createVideoAssignment({
     fps: 25,
     kind: taskKind,
     sortOrder: parseInt(sortOrder, 10) || 0,
-    taskPrice: taskPrice != null ? validateTaskPrice(taskPrice) : 1,
+    taskPrice: resolvedPrice,
     challengeNote: challengeNote || '',
     status: 'available',
   });

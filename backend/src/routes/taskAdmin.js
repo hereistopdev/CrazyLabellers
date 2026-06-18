@@ -3,7 +3,7 @@ const VideoAssignment = require('../models/VideoAssignment');
 const TaskGroup = require('../models/TaskGroup');
 const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
-const { validateTaskPrice } = require('../config/payments');
+const { validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { hasReferenceForClip } = require('../services/referenceStorage');
 const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
 const { updateAssignmentFields } = require('../services/assignmentUpdate');
@@ -130,9 +130,15 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
       }
       update.kind = kind;
     }
+
+    const effectiveKind = update.kind ?? task.kind;
+    if (isFreeTaskKind(effectiveKind)) {
+      update.taskPrice = 0;
+    } else if (taskPrice !== undefined) {
+      update.taskPrice = validateTaskPrice(taskPrice, { kind: effectiveKind });
+    }
     if (sortOrder !== undefined) update.sortOrder = parseInt(sortOrder, 10) || 0;
     if (groupId !== undefined) update.groupId = groupId || null;
-    if (taskPrice !== undefined) update.taskPrice = validateTaskPrice(taskPrice);
     if (challengeNote !== undefined) update.challengeNote = String(challengeNote);
     if (gameTime !== undefined) update.gameTime = String(gameTime);
     if (durationSeconds !== undefined) update.durationSeconds = parseInt(durationSeconds, 10) || 30;

@@ -23,10 +23,14 @@ router.get('/me', auth, async (req, res) => {
       userId: req.user._id,
       status: { $in: ['submitted', 'approved', 'rejected'] },
     })
-      .populate('assignmentId', 'title taskPrice challengeNote')
+      .populate('assignmentId', 'title taskPrice challengeNote kind')
       .sort({ updatedAt: -1 });
 
-    const approved = submissions.filter((s) => s.status === 'approved');
+    const paidSubmissions = submissions.filter(
+      (s) => s.assignmentId && !['tutorial', 'pretest'].includes(s.assignmentId.kind)
+    );
+
+    const approved = paidSubmissions.filter((s) => s.status === 'approved');
     const totalEarnings = approved.reduce((sum, s) => sum + (s.earnings || 0), 0);
     const totalPoints = approved.reduce((sum, s) => sum + (s.reviewPoints || 0), 0);
 
@@ -44,9 +48,9 @@ router.get('/me', auth, async (req, res) => {
         avgPoints: approved.length
           ? Math.round((totalPoints / approved.length) * 10) / 10
           : 0,
-        pendingReview: submissions.filter((s) => s.status === 'submitted').length,
+        pendingReview: paidSubmissions.filter((s) => s.status === 'submitted').length,
       },
-      tasks: submissions.map((s) => {
+      tasks: paidSubmissions.map((s) => {
         const review = ratingBySubmission.get(String(s._id));
         return {
           id: s._id,

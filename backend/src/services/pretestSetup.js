@@ -53,11 +53,13 @@ async function setupPretestClips({ pretestCount = DEFAULT_PRETEST_COUNT, dataDir
         fps: 25,
         kind,
         status: 'available',
+        taskPrice: kind === 'pretest' ? 0 : undefined,
       });
       created += 1;
     } else {
       assignment.kind = kind;
       if (kind === 'pretest') {
+        assignment.taskPrice = 0;
         assignment.title = assignment.title.startsWith('Labeling test')
           ? assignment.title
           : `Labeling test — ${clipId.slice(0, 8)}`;

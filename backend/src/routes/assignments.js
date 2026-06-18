@@ -11,7 +11,6 @@ const {
 } = require('../services/grading');
 const {
   canAccessTutorial,
-  refreshTutorialCompletion,
 } = require('../services/tutorialProgress');
 
 const router = express.Router();
@@ -36,10 +35,7 @@ router.get('/', auth, async (req, res) => {
         if (!canAccessTutorial(req.user)) {
           return res.status(403).json({ message: 'Pass the knowledge test first' });
         }
-        filter = {
-          kind: 'tutorial',
-          $or: [{ assignedTo: req.user._id }, { status: 'available' }],
-        };
+        filter = { kind: 'tutorial' };
       } else if (kind === 'pretest') {
         if (!canAccessPretest(req.user)) {
           return res.status(403).json({
@@ -140,6 +136,13 @@ router.post('/:id/claim', auth, async (req, res) => {
       });
     }
 
+    if (assignment.kind === 'tutorial') {
+      return res.json({
+        ...assignment.toObject(),
+        message: 'Tutorials are open to all labellers — no claim required',
+      });
+    }
+
     if (assignment.status !== 'available') {
       return res.status(400).json({ message: 'Assignment is not available' });
     }
@@ -173,6 +176,7 @@ router.get('/:id/export', auth, async (req, res) => {
     if (
       isLabeller(req.user) &&
       !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
@@ -237,6 +241,7 @@ router.put('/:id/labels', auth, async (req, res) => {
     if (
       isLabeller(req.user) &&
       !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
@@ -244,6 +249,12 @@ router.put('/:id/labels', auth, async (req, res) => {
 
     if (status === 'submitted' && isAdmin(req.user)) {
       return res.status(400).json({ message: 'Admins cannot submit assignments as labellers' });
+    }
+
+    if (assignment.kind === 'tutorial' && isLabeller(req.user) && !isAdmin(req.user)) {
+      return res.status(400).json({
+        message: 'Tutorials are not submitted for review. Use Mark tutorial complete instead.',
+      });
     }
 
     const submission = await LabelSubmission.findOneAndUpdate(
@@ -258,17 +269,6 @@ router.put('/:id/labels', auth, async (req, res) => {
     let grading = null;
 
     if (status === 'submitted') {
-      if (assignment.kind === 'tutorial') {
-        submission.status = 'approved';
-        await submission.save();
-        await patchAssignment(assignment._id, { status: 'available', assignedTo: null });
-        const { user, progress } = await refreshTutorialCompletion(req.user._id);
-        return res.json({
-          submission,
-          tutorial: { completed: true, progress, tutorialsCompleted: user.tutorialsCompleted },
-        });
-      }
-
       assignment.status = 'submitted';
       await patchAssignment(assignment._id, { status: 'submitted' });
 
@@ -302,15 +302,13 @@ router.put('/:id/labels', auth, async (req, res) => {
           if (!scoreResult.passed) {
             await patchAssignment(assignment._id, { status: 'available', assignedTo: null });
           }
-        } else if (scoreResult.passed && !submission.reviewPoints) {
-          submission.reviewPoints = scoreResult.totalScore;
-          await submission.save();
+        } else if (assignment.kind === 'production' || !assignment.kind) {
           grading.suggestedReviewPoints = scoreResult.totalScore;
         }
       } catch (gradeError) {
         grading = { error: gradeError.message };
       }
-    } else if (assignment.status === 'assigned') {
+    } else if (assignment.kind !== 'tutorial' && assignment.status === 'assigned') {
       await patchAssignment(assignment._id, { status: 'in_progress' });
     }
 

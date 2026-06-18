@@ -8,6 +8,7 @@ const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = req
 const { upsertLabellerReview } = require('../services/labellerProfile');
 const { loadReferenceForClip } = require('../services/referenceStorage');
 const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
+const { ensureSubmissionAutoScore } = require('../services/grading');
 
 const router = express.Router();
 
@@ -19,6 +20,10 @@ function requireReviewerRole(req, res, next) {
 }
 
 async function buildReviewPayload(submission, assignment, variant = 'post', { preview = false } = {}) {
+  if (!preview && submission?._id) {
+    await ensureSubmissionAutoScore(submission, assignment);
+  }
+
   const reference = assignment?.clipId
     ? await loadReferenceForClip(assignment.clipId, variant)
     : { hasReference: false, events: [] };
@@ -39,6 +44,7 @@ async function buildReviewPayload(submission, assignment, variant = 'post', { pr
     submission,
     assignment,
     autoScore: submission?.autoScore,
+    autoScoreBreakdown: submission?.autoScoreBreakdown,
     reference: {
       hasReference: reference.hasReference,
       events: reference.events,
@@ -113,10 +119,14 @@ router.get('/submissions', auth, requireReviewerRole, async (req, res) => {
 
     const submissions = await LabelSubmission.find(filter)
       .populate('userId', 'name email status')
-      .populate('assignmentId', 'title videoUrl clipId taskPrice challengeNote')
+      .populate('assignmentId', 'title videoUrl clipId taskPrice challengeNote kind')
       .sort({ updatedAt: -1 });
 
-    return res.json(submissions);
+    const reviewable = submissions.filter(
+      (s) => s.assignmentId && !['tutorial', 'pretest'].includes(s.assignmentId.kind)
+    );
+
+    return res.json(reviewable);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -238,7 +248,7 @@ router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker'), a
     const points = status === 'approved' ? clampReviewPoints(parseInt(reviewPoints, 10) || 0) : 0;
     const earnings =
       status === 'approved'
-        ? calculateTaskEarnings(points, assignment?.taskPrice, settings.ratePerPoint)
+        ? calculateTaskEarnings(points, assignment?.taskPrice, settings.ratePerPoint, assignment?.kind)
         : 0;
 
     const submission = await LabelSubmission.findByIdAndUpdate(

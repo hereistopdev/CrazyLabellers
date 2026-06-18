@@ -52,6 +52,8 @@ router.get('/assignments', auth, async (req, res) => {
       return res.status(403).json({ message: msg });
     }
 
+    await VideoAssignment.updateMany({ kind: 'pretest' }, { $set: { taskPrice: 0 } });
+
     const assignments = await VideoAssignment.find({
       kind: 'pretest',
       $or: [{ assignedTo: req.user._id }, { status: 'available' }],
@@ -59,7 +61,26 @@ router.get('/assignments', auth, async (req, res) => {
       .populate('assignedTo', 'name email')
       .sort({ createdAt: 1 });
 
-    return res.json(assignments);
+    const submissions = await LabelSubmission.find({
+      userId: req.user._id,
+      assignmentId: { $in: assignments.map((a) => a._id) },
+    }).select('assignmentId autoScore status updatedAt');
+
+    const submissionByAssignment = new Map(
+      submissions.map((s) => [String(s.assignmentId), s])
+    );
+
+    return res.json(
+      assignments.map((a) => {
+        const submission = submissionByAssignment.get(String(a._id));
+        return {
+          ...a.toObject(),
+          taskPrice: 0,
+          lastScore: submission?.autoScore ?? null,
+          lastSubmittedAt: submission?.status === 'submitted' ? submission.updatedAt : null,
+        };
+      })
+    );
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
