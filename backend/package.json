@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "seed": "node src/seed/seed.js",
     "import-clips": "node src/scripts/importClips.js",
+    "import-bulk": "node src/scripts/importBulkFolder.js",
     "sync-content": "node src/scripts/syncContent.js"
   },
   "engines": {

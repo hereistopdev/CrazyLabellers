@@ -5,7 +5,10 @@ import { formatMoney, isFreeTaskKind } from '../utils/money';
 import { readVideoDurationFromFile } from '../utils/videoDuration';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import VideoLabelLink from '../components/VideoLabelLink';
+import { parseBulkUploadFiles, summarizeBulkUpload } from '../utils/parseBulkUploadFiles';
 import { openLabelerRow } from '../utils/labelerAccess';
+
+const UPLOAD_CONCURRENCY = 2;
 
 const MIN_PRICE = 0.3;
 const MAX_PRICE = 2;
@@ -53,6 +56,13 @@ export default function ManageVideos() {
   const [savingPrice, setSavingPrice] = useState(null);
   const [savingKind, setSavingKind] = useState(null);
   const [storage, setStorage] = useState(null);
+  const [uploadClips, setUploadClips] = useState([]);
+  const [uploadSummary, setUploadSummary] = useState(null);
+  const [uploadBulkKind, setUploadBulkKind] = useState('production');
+  const [uploadBulkTaskPrice, setUploadBulkTaskPrice] = useState(1);
+  const [uploadSkipExisting, setUploadSkipExisting] = useState(true);
+  const [uploadingBulk, setUploadingBulk] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -136,6 +146,87 @@ export default function ManageVideos() {
       setError(err.message);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleBulkFolderSelect = (event) => {
+    const files = event.target.files;
+    if (!files?.length) {
+      return;
+    }
+
+    const parsed = parseBulkUploadFiles(files);
+    const existingClipIds = new Set(videos.map((v) => v.clipId).filter(Boolean));
+    setUploadClips(parsed);
+    setUploadSummary(summarizeBulkUpload(parsed, existingClipIds));
+    setUploadProgress(null);
+    setError('');
+    event.target.value = '';
+  };
+
+  const runBulkUpload = async () => {
+    if (uploadClips.length === 0) {
+      setError('Choose a folder with data/*.mp4 and annotations/*.json first');
+      return;
+    }
+
+    setUploadingBulk(true);
+    setError('');
+
+    const totals = { created: 0, skipped: 0, updated: 0, errors: 0 };
+    let completed = 0;
+    let index = 0;
+
+    const uploadOne = async (clip) => {
+      const formData = new FormData();
+      formData.append('video', clip.video, clip.video.name);
+      if (clip.postRef) {
+        formData.append('referencePost', clip.postRef, clip.postRef.name);
+      }
+      if (clip.rawRef) {
+        formData.append('referenceRaw', clip.rawRef, clip.rawRef.name);
+      }
+      formData.append('kind', uploadBulkKind);
+      formData.append('taskPrice', String(isFreeTaskKind(uploadBulkKind) ? 0 : uploadBulkTaskPrice));
+      formData.append('skipExisting', String(uploadSkipExisting));
+
+      const result = await api.uploadBulkClip(formData);
+      if (result.skipped) totals.skipped += 1;
+      else if (result.updated) totals.updated += 1;
+      else totals.created += 1;
+    };
+
+    const worker = async () => {
+      while (index < uploadClips.length) {
+        const current = index;
+        index += 1;
+        const clip = uploadClips[current];
+        try {
+          await uploadOne(clip);
+        } catch (err) {
+          totals.errors += 1;
+        }
+        completed += 1;
+        setUploadProgress({
+          completed,
+          total: uploadClips.length,
+          ...totals,
+          currentClipId: clip.clipId,
+        });
+      }
+    };
+
+    try {
+      await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()));
+      setMessage(
+        `Bulk upload done — ${totals.created} created, ${totals.updated} updated, ${totals.skipped} skipped, ${totals.errors} failed`
+      );
+      load();
+      setTimeout(() => setMessage(''), 8000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploadingBulk(false);
     }
   };
 
@@ -267,9 +358,8 @@ export default function ManageVideos() {
       <div className="page-header">
         <h1>Manage Videos</h1>
         <p>
-          Upload, import, or remove football clips. Mark each as <strong>Tutorial</strong>,{' '}
-          <strong>Pre-test</strong>, or <strong>Real task</strong>. Tutorial frame explanations
-          are configured on <Link to="/admin/tasks">Manage tasks</Link>.
+          Upload, import, or remove football clips. Use <strong>Bulk upload</strong> to import a
+          whole folder of videos and reference JSON at once.
         </p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
           <Link to="/admin" className="btn btn-secondary btn-sm">
@@ -298,6 +388,107 @@ export default function ManageVideos() {
           {!storage.ok && storage.message && <div style={{ marginTop: 6 }}>{storage.message}</div>}
         </div>
       )}
+
+      <div className="card bulk-import-panel" style={{ marginBottom: '2rem', padding: '1.25rem' }}>
+        <h3 style={{ marginBottom: '0.5rem' }}>Bulk upload (folder)</h3>
+        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          Select a folder with <strong>data/*.mp4</strong> and <strong>annotations/*_post.json</strong>{' '}
+          (same layout as your local dataset). Each clip uploads video + reference files to storage
+          and creates a task. Works from the browser — keep this tab open for large batches.
+        </p>
+
+        <div className="form-group">
+          <label>Choose folder</label>
+          <input
+            type="file"
+            webkitdirectory=""
+            directory=""
+            multiple
+            onChange={handleBulkFolderSelect}
+            disabled={uploadingBulk}
+          />
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+            Example: select <code>D:\Bittensor\example</code> — files inside{' '}
+            <code>data/</code> and <code>annotations/</code> are matched by clip ID.
+          </p>
+        </div>
+
+        <div className="form-grid" style={{ marginBottom: '1rem' }}>
+          <label>
+            Task type for new clips
+            <select
+              value={uploadBulkKind}
+              onChange={(e) => setUploadBulkKind(e.target.value)}
+              disabled={uploadingBulk}
+            >
+              {TASK_KINDS.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!isFreeTaskKind(uploadBulkKind) && (
+            <label>
+              Task price ($)
+              <input
+                type="number"
+                min={MIN_PRICE}
+                max={MAX_PRICE}
+                step="0.1"
+                value={uploadBulkTaskPrice}
+                onChange={(e) => setUploadBulkTaskPrice(parseFloat(e.target.value) || 1)}
+                disabled={uploadingBulk}
+              />
+            </label>
+          )}
+        </div>
+
+        <label className="review-playback-toggle" style={{ display: 'block', marginBottom: '1rem' }}>
+          <input
+            type="checkbox"
+            checked={uploadSkipExisting}
+            onChange={(e) => setUploadSkipExisting(e.target.checked)}
+            disabled={uploadingBulk}
+          />
+          Skip clips already in the app (still updates reference JSON if provided)
+        </label>
+
+        {uploadSummary && (
+          <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+            Ready to upload <strong>{uploadSummary.total}</strong> clips ·{' '}
+            {uploadSummary.withPostRef} with _post.json · {uploadSummary.withRawRef} with raw .json
+            · {uploadSummary.alreadyInApp} already in app
+          </div>
+        )}
+
+        {uploadProgress && uploadingBulk && (
+          <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+            Uploading {uploadProgress.completed}/{uploadProgress.total} — created{' '}
+            {uploadProgress.created}, updated {uploadProgress.updated}, skipped{' '}
+            {uploadProgress.skipped}, errors {uploadProgress.errors}
+            {uploadProgress.currentClipId && (
+              <>
+                {' '}
+                · current: <code>{uploadProgress.currentClipId}</code>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="actions-row">
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={runBulkUpload}
+            disabled={uploadingBulk || uploadClips.length === 0}
+          >
+            {uploadingBulk
+              ? `Uploading ${uploadProgress?.completed ?? 0}/${uploadClips.length}...`
+              : `Upload ${uploadClips.length || 0} clips`}
+          </button>
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom: '2rem' }}>
         <h3 style={{ marginBottom: '1rem' }}>Add video</h3>

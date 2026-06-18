@@ -157,11 +157,16 @@ export const api = {
   getAdminAssignments: () => request('/admin/assignments'),
   getStorageStatus: () => request('/admin/storage-status'),
   uploadVideo: (formData) => uploadRequest('/admin/videos', formData),
+  uploadBulkClip: (formData) => uploadRequest('/admin/videos/bulk-clip', formData),
   uploadAssignmentReference: (assignmentId, formData) =>
     uploadRequest(`/admin/assignments/${assignmentId}/reference`, formData),
   deleteVideo: (id, deleteFile = true) =>
     request(`/admin/videos/${id}?deleteFile=${deleteFile}`, { method: 'DELETE' }),
   importClips: () => request('/admin/import-clips', { method: 'POST' }),
+  previewBulkImport: (sourceDir) =>
+    request(`/admin/import-folder/preview?sourceDir=${encodeURIComponent(sourceDir)}`),
+  importBulkFolder: (body) =>
+    request('/admin/import-folder', { method: 'POST', body: JSON.stringify(body) }),
   getSubmissions: () => request('/admin/submissions'),
   reviewSubmission: (id, body) =>
     request(`/review/submissions/${id}/review`, {

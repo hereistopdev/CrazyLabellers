@@ -13,6 +13,8 @@ const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, valida
 const { upsertLabellerReview, getLabellerStats } = require('../services/labellerProfile');
 const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
 const { importClipsFromDir } = require('../services/clipImport');
+const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
+const { importClipFromUpload } = require('../services/clipUpload');
 const { isRemoteVideoStorage, storeVideoFile, getStorageStatus } = require('../services/videoStorage');
 const { saveReferenceForClip, deleteReferenceForClip, hasReferenceForClip } = require('../services/referenceStorage');
 const {
@@ -28,6 +30,15 @@ const uploadVideoWithReference = multer({
 }).fields([
   { name: 'video', maxCount: 1 },
   { name: 'reference', maxCount: 1 },
+]);
+
+const uploadBulkClip = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+}).fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'referencePost', maxCount: 1 },
+  { name: 'referenceRaw', maxCount: 1 },
 ]);
 
 const uploadReferenceOnly = multer({
@@ -468,6 +479,43 @@ router.get('/storage-status', auth, requireRole('admin'), async (_req, res) => {
   }
 });
 
+router.post('/videos/bulk-clip', auth, requireRole('admin'), uploadBulkClip, async (req, res) => {
+  try {
+    const videoFile = req.files?.video?.[0];
+    if (!videoFile) {
+      return res.status(400).json({ message: 'Video file is required' });
+    }
+
+    if (
+      !videoFile.mimetype?.includes('mp4') &&
+      !videoFile.originalname.toLowerCase().endsWith('.mp4')
+    ) {
+      return res.status(400).json({ message: 'Only .mp4 video files are allowed' });
+    }
+
+    const result = await importClipFromUpload({
+      videoFile,
+      referencePostFile: req.files?.referencePost?.[0],
+      referenceRawFile: req.files?.referenceRaw?.[0],
+      kind: req.body.kind,
+      taskPrice: req.body.taskPrice,
+      skipExisting: req.body.skipExisting !== 'false',
+      title: req.body.title,
+      description: req.body.description,
+      gameTime: req.body.gameTime,
+      durationSeconds: parseInt(req.body.durationSeconds, 10) || 30,
+      challengeNote: req.body.challengeNote,
+    });
+
+    return res.status(result.skipped ? 200 : 201).json({
+      ...result,
+      storage: isRemoteVideoStorage() ? 'vps' : 'local',
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
 router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, async (req, res) => {
   try {
     const videoFile = req.files?.video?.[0];
@@ -484,43 +532,23 @@ router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, asy
       return res.status(400).json({ message: 'Only .mp4 video files are allowed' });
     }
 
-    const clipId = resolveClipId(videoFile.originalname);
-    const durationSeconds = parseInt(req.body.durationSeconds, 10) || 30;
-    const kind = req.body.kind;
-    const taskPrice =
-      isFreeTaskKind(kind)
-        ? 0
-        : req.body.taskPrice != null
-          ? validateTaskPrice(req.body.taskPrice, { kind })
-          : undefined;
-
-    await storeVideoFile(clipId, videoFile);
-
-    const assignment = await createVideoAssignment({
-      clipId,
-      title: req.body.title?.trim() || clipId,
-      description: req.body.description?.trim() || '',
-      gameTime: req.body.gameTime?.trim() || '1 - 00:00',
-      durationSeconds,
-      taskPrice,
-      challengeNote: req.body.challengeNote?.trim() || '',
+    const result = await importClipFromUpload({
+      videoFile,
+      referencePostFile: referenceFile,
       kind: req.body.kind,
-      sortOrder: req.body.sortOrder,
+      taskPrice: req.body.taskPrice,
+      skipExisting: false,
+      title: req.body.title,
+      description: req.body.description,
+      gameTime: req.body.gameTime,
+      durationSeconds: parseInt(req.body.durationSeconds, 10) || 30,
+      challengeNote: req.body.challengeNote,
     });
 
-    let referenceSaved = false;
-    if (referenceFile) {
-      const rawJson = JSON.parse(referenceFile.buffer.toString('utf8'));
-      await saveReferenceForClip(clipId, rawJson, {
-        sourceFilename: referenceFile.originalname,
-      });
-      referenceSaved = true;
-    }
-
     return res.status(201).json({
-      ...assignment.toObject(),
+      ...result.assignment.toObject(),
       storage: isRemoteVideoStorage() ? 'vps' : 'local',
-      hasReference: referenceSaved,
+      hasReference: result.hasReference,
     });
   } catch (error) {
     return res.status(400).json({ message: error.message });
@@ -572,6 +600,56 @@ router.delete('/videos/:id', auth, requireRole('admin'), async (req, res) => {
   } catch (error) {
     const status = error.message === 'Video not found' ? 404 : 400;
     return res.status(status).json({ message: error.message });
+  }
+});
+
+router.get('/import-folder/preview', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const sourceDir = req.query.sourceDir?.trim();
+    if (!sourceDir) {
+      return res.status(400).json({ message: 'sourceDir query parameter is required' });
+    }
+    const preview = await previewBulkFolder(sourceDir);
+    return res.json(preview);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.post('/import-folder', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const {
+      sourceDir,
+      offset = 0,
+      limit = 25,
+      uploadVideos = true,
+      importReferences = true,
+      skipExisting = true,
+      skipExistingVideos = true,
+      kind = 'production',
+      taskPrice,
+    } = req.body;
+
+    if (!sourceDir?.trim()) {
+      return res.status(400).json({ message: 'sourceDir is required' });
+    }
+
+    const batchLimit = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 100);
+    const result = await importBulkFromFolder({
+      sourceDir: sourceDir.trim(),
+      offset: parseInt(offset, 10) || 0,
+      limit: batchLimit,
+      uploadVideos: Boolean(uploadVideos),
+      importReferences: Boolean(importReferences),
+      skipExisting: Boolean(skipExisting),
+      skipExistingVideos: Boolean(skipExistingVideos),
+      kind,
+      taskPrice,
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
   }
 });
 
