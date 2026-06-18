@@ -24,20 +24,26 @@ export default function Dashboard() {
     );
   }
 
-  const passedKnowledge = user?.bestTestScore >= 80;
-  const tutorialsDone = Boolean(user?.tutorialsCompleted);
-  const canPretest = passedKnowledge && tutorialsDone;
+  const onboarding = user?.onboarding;
+  const passedKnowledge =
+    onboarding?.steps?.knowledge?.passed ??
+    (user?.bestTestScore >= 80 || user?.status === 'passed_test' || user?.status === 'approved');
+  const tutorialsDone =
+    onboarding?.steps?.tutorials?.passed ?? Boolean(user?.tutorialsCompleted);
+  const canPretest =
+    onboarding?.canAccessPretest ?? (passedKnowledge && tutorialsDone);
   const passedLabeling =
-    user?.labelingTestPassed || (user?.bestLabelingTestScore ?? 0) >= 80 || user?.status === 'approved';
-  const canProduction = canPretest && passedLabeling;
+    onboarding?.steps?.labelingTest?.passed ??
+    (user?.labelingTestPassed || (user?.bestLabelingTestScore ?? 0) >= 80 || user?.status === 'approved');
+  const canProduction = onboarding?.canAccessProduction ?? (canPretest && passedLabeling);
 
   return (
     <div>
       <div className="page-header">
         <h1>Hello, {user?.name}</h1>
         <p>
-          Learn terminology, pass the knowledge test, complete guided tutorials, then label 3
-          pre-test clips before unlocking real paid tasks.
+          Knowledge test → tutorials → video pre-test → real tasks. After tutorials you get{' '}
+          <strong>3 random clips</strong> from the admin pre-test pool to label and score.
         </p>
       </div>
 
@@ -56,7 +62,8 @@ export default function Dashboard() {
 
       {canPretest && !passedLabeling && (
         <div className="alert alert-info">
-          Tutorials complete. Label 3 pre-test clips and score at least 80/100 to unlock real tasks.
+          Tutorials complete. You will receive 3 random pre-test clips from the pool. Score at least
+          80/100 to unlock real tasks.
         </div>
       )}
 
@@ -123,8 +130,8 @@ export default function Dashboard() {
           <div className="step-number">4</div>
           <h3>Labeling Pre-test</h3>
           <p>
-            Label 3 reference clips. Auto score out of 100 — 80+ required. Each reference event
-            counts equally; frame accuracy gives 100, 90, 80… per event.
+            Label your assigned practice clips (3 random picks from the admin pool). Auto score out
+            of 100 — 80+ required to unlock real tasks.
           </p>
           <div className="actions-row">
             {canPretest ? (

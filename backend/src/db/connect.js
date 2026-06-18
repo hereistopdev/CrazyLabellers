@@ -4,21 +4,28 @@ let memoryServer = null;
 let dbMode = 'unknown';
 
 async function connectDB() {
-  let uri = process.env.MONGODB_URI;
-
   if (process.env.USE_MEMORY_DB === 'true') {
     const { MongoMemoryServer } = require('mongodb-memory-server');
     memoryServer = await MongoMemoryServer.create();
-    uri = memoryServer.getUri('football-labeling');
+    const uri = memoryServer.getUri('football-labeling');
     dbMode = 'memory';
-    console.log('Using in-memory MongoDB (USE_MEMORY_DB=true)');
-  } else if (uri?.includes('mongodb+srv')) {
+    console.log('Using in-memory MongoDB (USE_MEMORY_DB=true — dev/tests only)');
+    await mongoose.connect(uri);
+    console.log(`MongoDB connected (${dbMode})`);
+    return;
+  }
+
+  const uri = process.env.MONGODB_URI?.trim();
+  if (!uri) {
+    throw new Error(
+      'MONGODB_URI is required in backend/.env. Use your MongoDB Atlas connection string for local and production.'
+    );
+  }
+
+  if (uri.includes('mongodb.net') || uri.includes('mongodb+srv')) {
     dbMode = 'atlas';
-  } else if (uri) {
-    dbMode = 'local';
   } else {
-    uri = 'mongodb://127.0.0.1:27017/football-labeling';
-    dbMode = 'local';
+    dbMode = 'mongodb';
   }
 
   try {
@@ -33,9 +40,7 @@ async function connectDB() {
     }
     if (err.message?.includes('querySrv ECONNREFUSED') || err.code === 'ECONNREFUSED') {
       throw new Error(
-        'Cannot reach MongoDB Atlas (DNS/network). For local dev set USE_MEMORY_DB=true in .env. ' +
-          'For Atlas: verify cluster hostname in Atlas → Connect, check Network Access (0.0.0.0/0), ' +
-          'or use the standard (non-SRV) connection string.'
+        'Cannot reach MongoDB. Verify MONGODB_URI, Atlas Network Access (allow your IP), and cluster status.'
       );
     }
     throw err;

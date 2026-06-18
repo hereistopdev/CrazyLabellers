@@ -76,11 +76,17 @@ export default function ManageValidators() {
           annotations, and assign scores (0–100).
         </p>
         <p className="page-sub-link">
-          Validator login: <code>/login</code>
+          Sign-up: <Link to="/register?role=validator">Validator register</Link> · Login:{' '}
+          <code>/login</code>
         </p>
-        <Link to="/admin" style={{ fontSize: '0.88rem' }}>
-          ← Admin dashboard
-        </Link>
+        <div className="actions-row" style={{ marginTop: '0.5rem' }}>
+          <Link to="/admin/labellers" className="btn btn-secondary btn-sm">
+            Manage labellers
+          </Link>
+          <Link to="/admin" className="btn btn-secondary btn-sm">
+            Admin dashboard
+          </Link>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

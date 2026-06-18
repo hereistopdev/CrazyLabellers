@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+import { isValidator } from '../utils/roles';
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -16,7 +18,13 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      navigate(user.role === 'admin' ? '/admin' : '/');
+      if (user.role === 'admin') {
+        navigate('/admin');
+      } else if (isValidator(user)) {
+        navigate('/review');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -30,8 +38,7 @@ export default function Login() {
         <div className="auth-badge">Shrinik</div>
         <h1>Sign in</h1>
         <p className="subtitle">
-          Labellers sign in here to access terminology, tests, and labeling work. Admins use the
-          same login with admin credentials.
+          Labellers and validators sign in here. Admins use the same page with admin credentials.
         </p>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -67,7 +74,10 @@ export default function Login() {
         </form>
 
         <p className="auth-footer">
-          New labeller? <Link to="/register">Register here</Link>
+          New user?{' '}
+          <Link to="/register">Register as labeller</Link>
+          {' · '}
+          <Link to="/register?role=validator">Register as validator</Link>
         </p>
       </div>
     </div>

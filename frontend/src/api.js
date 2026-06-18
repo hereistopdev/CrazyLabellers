@@ -150,6 +150,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  updateLabellerOnboarding: (id, body) =>
+    request(`/admin/labellers/${id}/onboarding`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   assignToLabeller: (labellerId, assignmentId) =>
     request(`/admin/labellers/${labellerId}/assign`, {
       method: 'POST',

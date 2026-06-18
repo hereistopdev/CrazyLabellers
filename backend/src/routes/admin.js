@@ -11,6 +11,12 @@ const { LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { upsertLabellerReview, getLabellerStats } = require('../services/labellerProfile');
+const {
+  getOnboardingStatus,
+  applyOnboardingGrants,
+  getCurrentOnboardingStep,
+  ONBOARDING_STEP_LABELS,
+} = require('../services/onboarding');
 const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
 const { importClipsFromDir } = require('../services/clipImport');
 const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
@@ -207,7 +213,16 @@ router.get('/labellers', auth, requireRole('admin'), async (req, res) => {
     }
 
     const labellers = await User.find(filter).select('-password').sort({ createdAt: -1 });
-    return res.json(labellers);
+    return res.json(
+      labellers.map((labeller) => {
+        const step = getCurrentOnboardingStep(labeller);
+        return {
+          ...labeller.toObject(),
+          onboardingStep: step,
+          onboardingStepLabel: ONBOARDING_STEP_LABELS[step] || step,
+        };
+      })
+    );
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -224,7 +239,8 @@ router.get('/labellers/:id', auth, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Labeller not found' });
     }
 
-    const [testResults, submissions, assignmentsClaimed, profileStats] = await Promise.all([
+    const [testResults, submissions, assignmentsClaimed, profileStats, onboarding] =
+      await Promise.all([
       TestResult.find({ userId: labeller._id }).sort({ createdAt: -1 }).limit(10),
       LabelSubmission.find({ userId: labeller._id })
         .populate('assignmentId', 'title status taskPrice')
@@ -232,16 +248,42 @@ router.get('/labellers/:id', auth, requireRole('admin'), async (req, res) => {
         .limit(20),
       VideoAssignment.countDocuments({ assignedTo: labeller._id }),
       getLabellerStats(labeller._id),
+      getOnboardingStatus(labeller._id),
     ]);
 
     return res.json({
       labeller: { ...labeller.toObject(), ...profileStats },
+      onboarding,
       testResults,
       submissions,
       assignmentsClaimed,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/labellers/:id/onboarding', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const labeller = await User.findOne({
+      _id: req.params.id,
+      role: { $in: LABELLER_ROLES },
+    });
+
+    if (!labeller) {
+      return res.status(404).json({ message: 'Labeller not found' });
+    }
+
+    const onboarding = await applyOnboardingGrants(req.params.id, {
+      knowledgeTest: req.body.knowledgeTest,
+      tutorials: req.body.tutorials,
+      labelingTest: req.body.labelingTest,
+      resetPretestClips: req.body.resetPretestClips,
+    });
+
+    return res.json(onboarding);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
   }
 });
 

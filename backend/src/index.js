@@ -81,12 +81,16 @@ app.use((err, _req, res, _next) => {
 });
 
 async function start() {
+  if (process.env.USE_MEMORY_DB === 'true') {
+    console.warn('WARNING: USE_MEMORY_DB=true — data is ephemeral and not shared with production.');
+  }
+
   if (process.env.NODE_ENV === 'production' && process.env.USE_MEMORY_DB === 'true') {
     throw new Error('USE_MEMORY_DB must be false in production. Use MongoDB Atlas.');
   }
 
-  if (process.env.NODE_ENV === 'production' && !process.env.MONGODB_URI) {
-    throw new Error('MONGODB_URI is required in production.');
+  if (!process.env.MONGODB_URI?.trim() && process.env.USE_MEMORY_DB !== 'true') {
+    throw new Error('MONGODB_URI is required. Add your MongoDB Atlas URI to backend/.env');
   }
 
   await connectDB();
@@ -114,8 +118,5 @@ async function start() {
 
 start().catch((err) => {
   console.error('Failed to start server:', err.message);
-  if (process.env.USE_MEMORY_DB !== 'true') {
-    console.error('\nTip: Set USE_MEMORY_DB=true in backend/.env for local dev without MongoDB');
-  }
   process.exit(1);
 });

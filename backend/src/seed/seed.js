@@ -9,9 +9,9 @@ async function seed() {
   if (result.skipped) {
     console.log('Seed skipped');
   } else {
-    console.log(`Seeded ${result.terminology} terminology entries`);
-    console.log(`Seeded ${result.questions} test questions`);
-    console.log(`Seeded ${result.assignments} sample video assignments`);
+    console.log(`Synced ${result.terminology} terminology entries`);
+    console.log(`Synced ${result.questions} test questions`);
+    console.log(`${result.assignments} video assignment(s) in database`);
     console.log(`Admin user: ${result.adminEmail} / admin123`);
   }
 

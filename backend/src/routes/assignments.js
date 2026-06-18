@@ -6,12 +6,14 @@ const { isLabeller, isAdmin } = require('../config/roles');
 const {
   gradeSubmissionAgainstReference,
   recordLabelingTestAttempt,
-  canAccessPretest,
-  canAccessProduction,
 } = require('../services/grading');
 const {
   canAccessTutorial,
-} = require('../services/tutorialProgress');
+  canAccessPretest,
+  canAccessProduction,
+  hasPassedKnowledgeTest,
+  isPretestClipForUser,
+} = require('../services/onboarding');
 
 const router = express.Router();
 
@@ -25,7 +27,7 @@ router.get('/', auth, async (req, res) => {
     const kind = req.query.kind;
 
     if (isLabeller(req.user)) {
-      if (req.user.status !== 'passed_test' && req.user.status !== 'approved') {
+      if (!hasPassedKnowledgeTest(req.user) && req.user.status !== 'approved') {
         return res.status(403).json({
           message: 'You must pass the knowledge test before accessing labeling assignments',
         });
@@ -39,13 +41,12 @@ router.get('/', auth, async (req, res) => {
       } else if (kind === 'pretest') {
         if (!canAccessPretest(req.user)) {
           return res.status(403).json({
-            message: 'Complete all tutorial tasks before the labeling pre-test',
+            message: 'Complete the knowledge test and tutorials before the video pre-test',
           });
         }
-        filter = {
-          kind: 'pretest',
-          $or: [{ assignedTo: req.user._id }, { status: 'available' }],
-        };
+        const { ensurePretestClipsForUser } = require('../services/onboarding');
+        const pretestClips = await ensurePretestClipsForUser(req.user._id);
+        return res.json(pretestClips);
       } else {
         if (!canAccessProduction(req.user)) {
           return res.status(403).json({
@@ -92,8 +93,16 @@ router.get('/:id', auth, async (req, res) => {
         return res.json(assignment);
       }
 
-      if (kind === 'pretest' && !canAccessPretest(req.user)) {
-        return res.status(403).json({ message: 'Complete tutorials before pre-test' });
+      if (kind === 'pretest') {
+        if (!canAccessPretest(req.user)) {
+          return res.status(403).json({ message: 'Complete tutorials before pre-test' });
+        }
+        const User = require('../models/User');
+        const user = await User.findById(req.user._id);
+        if (!isPretestClipForUser(user, assignment._id)) {
+          return res.status(403).json({ message: 'This pre-test clip is not assigned to you' });
+        }
+        return res.json(assignment);
       }
       if (kind === 'production' && !canAccessProduction(req.user)) {
         return res.status(403).json({
@@ -119,7 +128,7 @@ router.post('/', auth, requireRole('admin'), async (req, res) => {
 
 router.post('/:id/claim', auth, async (req, res) => {
   try {
-    if (req.user.status !== 'passed_test' && req.user.status !== 'approved') {
+    if (!hasPassedKnowledgeTest(req.user) && req.user.status !== 'approved') {
       return res.status(403).json({ message: 'Pass the knowledge test first' });
     }
 
@@ -132,11 +141,11 @@ router.post('/:id/claim', auth, async (req, res) => {
       return res.status(403).json({ message: 'Pass the knowledge test first' });
     }
     if (assignment.kind === 'pretest' && !canAccessPretest(req.user)) {
-      return res.status(403).json({ message: 'Complete all tutorial tasks first' });
+      return res.status(403).json({ message: 'Complete tutorials before the video pre-test' });
     }
     if (assignment.kind === 'production' && !canAccessProduction(req.user)) {
       return res.status(403).json({
-        message: 'Pass the labeling pre-test (80/100+) before claiming real tasks',
+        message: 'Pass the video pre-test (80/100+) before claiming real tasks',
       });
     }
 
@@ -144,6 +153,26 @@ router.post('/:id/claim', auth, async (req, res) => {
       return res.json({
         ...assignment.toObject(),
         message: 'Tutorials are open to all labellers — no claim required',
+      });
+    }
+
+    if (assignment.kind === 'pretest') {
+      const User = require('../models/User');
+      const user = await User.findById(req.user._id);
+      if (!isPretestClipForUser(user, assignment._id)) {
+        return res.status(403).json({ message: 'This clip is not in your assigned pre-test set' });
+      }
+
+      await LabelSubmission.findOneAndUpdate(
+        { assignmentId: assignment._id, userId: req.user._id },
+        { assignmentId: assignment._id, userId: req.user._id, events: [], status: 'draft' },
+        { upsert: true, new: true }
+      );
+
+      return res.json({
+        ...assignment.toObject(),
+        assignedTo: req.user._id,
+        status: 'assigned',
       });
     }
 
@@ -180,7 +209,17 @@ router.get('/:id/export', auth, async (req, res) => {
     if (
       isLabeller(req.user) &&
       !isAdmin(req.user) &&
+      assignment.kind === 'pretest' &&
+      !isPretestClipForUser(req.user, assignment._id)
+    ) {
+      return res.status(403).json({ message: 'This pre-test clip is not assigned to you' });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
       assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest' &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
@@ -245,7 +284,17 @@ router.put('/:id/labels', auth, async (req, res) => {
     if (
       isLabeller(req.user) &&
       !isAdmin(req.user) &&
+      assignment.kind === 'pretest' &&
+      !isPretestClipForUser(req.user, assignment._id)
+    ) {
+      return res.status(403).json({ message: 'This pre-test clip is not assigned to you' });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
       assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest' &&
       assignment.assignedTo?.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: 'You are not assigned to this video' });
@@ -273,8 +322,9 @@ router.put('/:id/labels', auth, async (req, res) => {
     let grading = null;
 
     if (status === 'submitted') {
-      assignment.status = 'submitted';
-      await patchAssignment(assignment._id, { status: 'submitted' });
+      if (assignment.kind !== 'pretest') {
+        await patchAssignment(assignment._id, { status: 'submitted' });
+      }
 
       try {
         const { scoreResult } = await gradeSubmissionAgainstReference(submission, assignment);
@@ -302,10 +352,6 @@ router.put('/:id/labels', auth, async (req, res) => {
             labelingTestPassed: user.labelingTestPassed,
             canAccessProduction: canAccessProduction(user),
           };
-
-          if (!scoreResult.passed) {
-            await patchAssignment(assignment._id, { status: 'available', assignedTo: null });
-          }
         } else if (assignment.kind === 'production' || !assignment.kind) {
           grading.suggestedReviewPoints = scoreResult.totalScore;
         }

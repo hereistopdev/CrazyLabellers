@@ -22,6 +22,12 @@ const userSchema = new mongoose.Schema(
     labelingTestAttempts: { type: Number, default: 0 },
     labelingTestPassed: { type: Boolean, default: false },
     tutorialsCompleted: { type: Boolean, default: false },
+    pretestClipIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'VideoAssignment' }],
+    onboardingOverrides: {
+      knowledgeTest: { type: Boolean, default: false },
+      tutorials: { type: Boolean, default: false },
+      labelingTest: { type: Boolean, default: false },
+    },
   },
   { timestamps: true }
 );

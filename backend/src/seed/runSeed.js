@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const VideoAssignment = require('../models/VideoAssignment');
-const { terminologies, testQuestions, sampleAssignments } = require('./data');
+const { terminologies, testQuestions } = require('./data');
 const { syncTerminology, syncTestQuestions } = require('./syncContent');
 const { setupPretestClips } = require('../services/pretestSetup');
 const { ensureTutorialAssignmentsOpen } = require('../services/tutorialProgress');
@@ -13,15 +13,7 @@ async function runSeed({ force = false } = {}) {
   await syncTerminology();
   await syncTestQuestions();
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  const assignmentCount = await VideoAssignment.countDocuments();
-  if (!isProduction && (force || assignmentCount === 0)) {
-    if (assignmentCount === 0) {
-      await VideoAssignment.insertMany(sampleAssignments);
-    } else if (force) {
-      await VideoAssignment.insertMany(sampleAssignments);
-    }
-  }
+  // Videos/tasks come from MongoDB (admin upload / bulk import) — no local sample clips.
 
   const adminEmail = 'admin@labeling.local';
   let admin = await User.findOne({ email: adminEmail });

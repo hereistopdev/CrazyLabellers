@@ -9,6 +9,15 @@ import Pagination from '../components/Pagination';
 
 const EMPTY_FORM = { name: '', email: '', password: '', status: 'pending' };
 
+const ONBOARDING_STEP_LABELS = {
+  knowledge: 'Knowledge test',
+  tutorials: 'Tutorials',
+  labelingTest: 'Video pre-test',
+  production: 'Real tasks',
+};
+
+const ONBOARDING_STEPS = ['knowledge', 'tutorials', 'labelingTest', 'production'];
+
 export default function ManageLabellers() {
   const [labellers, setLabellers] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -23,6 +32,17 @@ export default function ManageLabellers() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [assignTo, setAssignTo] = useState('');
+  const [onboardingSaving, setOnboardingSaving] = useState('');
+
+  const labellersForTable = labellers.map((l) => ({
+    ...l,
+    onboardingStepLabel: l.onboardingStepLabel || ONBOARDING_STEP_LABELS[l.onboardingStep] || '',
+  }));
+
+  const labellerTable = useTableData(labellersForTable, {
+    searchKeys: ['name', 'email', 'status', 'onboardingStepLabel'],
+    pageSize: 25,
+  });
 
   const loadLabellers = () => {
     setLoading(true);
@@ -110,10 +130,41 @@ export default function ManageLabellers() {
     }
   };
 
-  const labellerTable = useTableData(labellers, {
-    searchKeys: ['name', 'email', 'status'],
-    pageSize: 25,
-  });
+  const grantOnboarding = async (stepKey, grant) => {
+    if (!selectedId) return;
+    setOnboardingSaving(stepKey);
+    setError('');
+    try {
+      const onboarding = await api.updateLabellerOnboarding(selectedId, { [stepKey]: grant });
+      setDetail((prev) => (prev ? { ...prev, onboarding } : prev));
+      loadLabellers();
+      setMessage(grant ? 'Step marked as passed' : 'Manual grant removed');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setOnboardingSaving('');
+    }
+  };
+
+  const resetPretestClips = async () => {
+    if (!selectedId) return;
+    if (!window.confirm('Pick 3 new random pre-test clips for this labeller on their next visit?')) {
+      return;
+    }
+    setOnboardingSaving('reset');
+    setError('');
+    try {
+      const onboarding = await api.updateLabellerOnboarding(selectedId, { resetPretestClips: true });
+      setDetail((prev) => (prev ? { ...prev, onboarding } : prev));
+      setMessage('Pre-test clips reset — new random set on next visit');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setOnboardingSaving('');
+    }
+  };
 
   if (loading && labellers.length === 0) {
     return <div className="loading">Loading labellers...</div>;
@@ -125,8 +176,14 @@ export default function ManageLabellers() {
         <h1>Manage Labellers</h1>
         <p>Add, remove, approve, and assign work to labellers.</p>
         <p className="page-sub-link">
-          Labeller sign-up: <code>/register</code> · Labeller login: <code>/login</code>
+          Sign-up: <Link to="/register">Labeller</Link> ·{' '}
+          <Link to="/register?role=validator">Validator</Link> · Login: <code>/login</code>
         </p>
+        <div className="actions-row" style={{ marginTop: '0.5rem' }}>
+          <Link to="/admin/validators" className="btn btn-secondary btn-sm">
+            Manage validators
+          </Link>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -223,6 +280,7 @@ export default function ManageLabellers() {
               <tr>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Onboarding</th>
                 <th>Status</th>
                 <th>Score</th>
                 <th>Actions</th>
@@ -231,13 +289,13 @@ export default function ManageLabellers() {
             <tbody>
               {labellers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
                     No labellers yet. Add one manually or share the register page.
                   </td>
                 </tr>
               ) : labellerTable.totalCount === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
                     No labellers match your search
                   </td>
                 </tr>
@@ -250,6 +308,11 @@ export default function ManageLabellers() {
                   >
                     <td>{l.name}</td>
                     <td>{l.email}</td>
+                    <td>
+                      <span className={`status-badge status-${l.onboardingStep || 'pending'}`}>
+                        {l.onboardingStepLabel || ONBOARDING_STEP_LABELS[l.onboardingStep] || '—'}
+                      </span>
+                    </td>
                     <td>
                       <span className={`status-badge status-${l.status}`}>
                         {l.status.replace('_', ' ')}
@@ -385,7 +448,113 @@ export default function ManageLabellers() {
                 )}
               </div>
 
-              {['passed_test', 'approved'].includes(detail.labeller.status) && (
+              {detail.onboarding && (
+                <div className="onboarding-panel" style={{ marginTop: '1.25rem' }}>
+                  <h4>Onboarding progress</h4>
+                  <p className="detail-muted" style={{ marginBottom: '0.75rem' }}>
+                    Current step:{' '}
+                    <strong>
+                      {ONBOARDING_STEP_LABELS[detail.onboarding.currentStep] ||
+                        detail.onboarding.currentStep}
+                    </strong>
+                    {detail.onboarding.pretestPool?.total > 0 && (
+                      <>
+                        {' '}
+                        · Pre-test pool: {detail.onboarding.pretestPool.total} clips (
+                        {detail.onboarding.pretestPool.clipsPerLabeller} assigned per labeller)
+                      </>
+                    )}
+                  </p>
+                  <ol className="onboarding-steps" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {ONBOARDING_STEPS.map((stepId, index) => {
+                      const step = detail.onboarding.steps?.[stepId];
+                      if (!step) return null;
+                      const isCurrent = detail.onboarding.currentStep === stepId;
+                      const grantKey =
+                        stepId === 'production' ? null : stepId === 'labelingTest' ? 'labelingTest' : stepId;
+
+                      return (
+                        <li
+                          key={stepId}
+                          className="card"
+                          style={{
+                            marginBottom: '0.65rem',
+                            padding: '0.75rem 1rem',
+                            borderLeft: isCurrent ? '3px solid var(--primary)' : undefined,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                            <div>
+                              <strong>
+                                {index + 1}. {step.label}
+                              </strong>
+                              {' · '}
+                              <span className={`status-badge ${step.passed ? 'status-approved' : 'status-pending'}`}>
+                                {step.passed ? 'Passed' : 'Not passed'}
+                              </span>
+                              {step.manualGrant && (
+                                <span className="status-badge status-passed_test" style={{ marginLeft: 6 }}>
+                                  Admin grant
+                                </span>
+                              )}
+                              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                                {stepId === 'knowledge' && (
+                                  <>Score: {step.score}% (need {step.requiredScore}%+)</>
+                                )}
+                                {stepId === 'tutorials' && (
+                                  <>
+                                    Completed: {step.completed}/{step.total}
+                                  </>
+                                )}
+                                {stepId === 'labelingTest' && (
+                                  <>
+                                    Score: {step.score}/100 (need {step.requiredScore}+) · Clips assigned:{' '}
+                                    {step.clipsAssigned}/{step.clipsRequired}
+                                  </>
+                                )}
+                                {stepId === 'production' && (
+                                  <>{step.unlocked ? 'Unlocked for real tasks' : 'Locked until pre-test passed'}</>
+                                )}
+                              </div>
+                            </div>
+                            {grantKey && (
+                              <div style={{ flexShrink: 0 }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  disabled={onboardingSaving === grantKey}
+                                  onClick={() =>
+                                    grantOnboarding(grantKey, step.manualGrant ? false : true)
+                                  }
+                                >
+                                  {onboardingSaving === grantKey
+                                    ? 'Saving…'
+                                    : step.manualGrant
+                                      ? 'Revoke grant'
+                                      : 'Grant passed'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          {stepId === 'labelingTest' && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              style={{ marginTop: 8 }}
+                              disabled={onboardingSaving === 'reset'}
+                              onClick={resetPretestClips}
+                            >
+                              {onboardingSaving === 'reset' ? 'Resetting…' : 'Reset random pre-test clips'}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
+
+              {detail.onboarding?.canAccessProduction && (
                 <div className="assign-box">
                   <h4>Assign video</h4>
                   <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>

@@ -297,6 +297,38 @@ textarea {
   color: var(--info);
 }
 
+.auth-role-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.auth-role-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  background: var(--surface);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.auth-role-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-role-option.active {
+  border-color: var(--accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+}
+
 .auth-steps {
   margin-top: 1.25rem;
   padding: 0.85rem 1rem;

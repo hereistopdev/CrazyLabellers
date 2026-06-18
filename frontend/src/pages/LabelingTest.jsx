@@ -60,9 +60,9 @@ export default function LabelingTest() {
       <div className="page-header">
         <h1>Labeling pre-test</h1>
         <p>
-          Label <strong>3 practice clips</strong> (free — no payment). Each submission is scored
-          automatically against reference annotations. Score <strong>80/100 or higher</strong> to
-          unlock real labeling tasks.
+          You receive <strong>3 random clips</strong> from the admin pre-test pool (typically ~50
+          clips). Each submission is scored automatically against reference annotations. Score{' '}
+          <strong>80/100 or higher</strong> to unlock real labeling tasks.
         </p>
       </div>
 
@@ -81,9 +81,17 @@ export default function LabelingTest() {
           <div className="label">Best score / 100</div>
         </div>
         <div className="stat-card">
-          <div className="value">{status?.pretestCount ?? 3}</div>
-          <div className="label">Pre-test clips</div>
+          <div className="value">
+            {status?.clipsAssigned ?? 0}/{status?.pretestCount ?? 3}
+          </div>
+          <div className="label">Your pre-test clips</div>
         </div>
+        {status?.pretestPool?.total > 0 && (
+          <div className="stat-card">
+            <div className="value">{status.pretestPool.total}</div>
+            <div className="label">Clips in pool</div>
+          </div>
+        )}
         <div className="stat-card">
           <div className="value">{status?.attempts ?? 0}</div>
           <div className="label">Attempts</div>

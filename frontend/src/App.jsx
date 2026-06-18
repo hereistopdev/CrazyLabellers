@@ -109,6 +109,14 @@ export default function App() {
         }
       />
       <Route
+        path="/validator/register"
+        element={
+          <PublicOnlyRoute>
+            <Register />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
         element={
           <ProtectedRoute>
             <Layout />

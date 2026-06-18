@@ -5,7 +5,7 @@ const { computeLabelingScore, PASS_THRESHOLD } = require('../utils/labelingScore
 const {
   canAccessPretest,
   canAccessProduction,
-} = require('./tutorialProgress');
+} = require('./onboarding');
 
 async function gradeSubmissionAgainstReference(submission, assignment) {
   if (!assignment?.clipId) {
