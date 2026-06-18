@@ -791,53 +791,66 @@ export default function ManageVideos() {
       </h2>
 
       {videos.length > 0 && (
-        <div className="card bulk-price-bar" style={{ marginBottom: '1rem', padding: '1rem' }}>
-          <strong>Bulk actions</strong>
-          <div className="actions-row" style={{ marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <select
-              value={bulkKind}
-              onChange={(e) => setBulkKind(e.target.value)}
-              className="kind-select"
-            >
-              {TASK_KINDS.map((k) => (
-                <option key={k.value} value={k.value}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={applyBulkKind}
-              disabled={savingKind === 'bulk' || selectedIds.length === 0}
-            >
-              {savingKind === 'bulk' ? 'Saving...' : `Set type for ${selectedIds.length} selected`}
-            </button>
+        <div className="card bulk-actions-bar">
+          <strong className="bulk-actions-title">Bulk actions</strong>
+          <div className="bulk-actions-row">
+            <div className="bulk-actions-field">
+              <span>Task type</span>
+              <select
+                value={bulkKind}
+                onChange={(e) => setBulkKind(e.target.value)}
+                className="kind-select field-input--inline"
+              >
+                {TASK_KINDS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="bulk-actions-actions">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={applyBulkKind}
+                disabled={savingKind === 'bulk' || selectedIds.length === 0}
+              >
+                {savingKind === 'bulk' ? 'Saving...' : `Set type for ${selectedIds.length} selected`}
+              </button>
+            </div>
           </div>
-          <div className="actions-row" style={{ marginTop: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <input
-              type="number"
-              min={MIN_PRICE}
-              max={MAX_PRICE}
-              step="0.1"
-              value={bulkPrice}
-              onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 1)}
-              style={{ width: 90 }}
-            />
-            <input
-              value={bulkChallenge}
-              onChange={(e) => setBulkChallenge(e.target.value)}
-              placeholder="Challenge note (optional)"
-              style={{ flex: 1, minWidth: 180 }}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={applyBulkPrice}
-              disabled={savingPrice === 'bulk' || selectedIds.length === 0}
-            >
-              {savingPrice === 'bulk' ? 'Saving...' : `Apply to ${selectedIds.length} selected`}
-            </button>
+          <div className="bulk-actions-row">
+            <div className="bulk-actions-field">
+              <span>Price ($)</span>
+              <input
+                type="number"
+                min={MIN_PRICE}
+                max={MAX_PRICE}
+                step="0.1"
+                value={bulkPrice}
+                onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 1)}
+                className="field-input--inline field-input--number"
+              />
+            </div>
+            <div className="bulk-actions-field bulk-actions-field--grow">
+              <span>Challenge note</span>
+              <input
+                value={bulkChallenge}
+                onChange={(e) => setBulkChallenge(e.target.value)}
+                placeholder="Optional note for labellers"
+                className="field-input--inline field-input--grow"
+              />
+            </div>
+            <div className="bulk-actions-actions">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={applyBulkPrice}
+                disabled={savingPrice === 'bulk' || selectedIds.length === 0}
+              >
+                {savingPrice === 'bulk' ? 'Saving...' : `Apply to ${selectedIds.length} selected`}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -937,7 +950,7 @@ export default function ManageVideos() {
                         max={MAX_PRICE}
                         step="0.1"
                         defaultValue={video.taskPrice ?? 1}
-                        className="price-input"
+                        className="price-input field-input--sm"
                         onBlur={(e) => {
                           const next = parseFloat(e.target.value);
                           if (next !== video.taskPrice && !Number.isNaN(next)) {
@@ -952,7 +965,7 @@ export default function ManageVideos() {
                     <input
                       defaultValue={video.challengeNote || ''}
                       placeholder="—"
-                      className="challenge-input"
+                      className="challenge-input field-input--sm"
                       onBlur={(e) => {
                         if (e.target.value !== (video.challengeNote || '')) {
                           savePrice(video._id, video.taskPrice ?? 1, e.target.value);
@@ -966,7 +979,7 @@ export default function ManageVideos() {
                       value={video.kind || 'production'}
                       onChange={(e) => saveKind(video._id, e.target.value)}
                       disabled={savingKind === video._id}
-                      className="kind-select"
+                      className="kind-select field-input--sm"
                       title="Task type"
                     >
                       {TASK_KINDS.map((k) => (
