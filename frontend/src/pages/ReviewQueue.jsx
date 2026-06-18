@@ -158,6 +158,7 @@ export default function ReviewQueue() {
                   <th>Video</th>
                   <th>Labeller</th>
                   <th>Events</th>
+                  <th>Auto score</th>
                   <th>Status</th>
                   <th>Submitted</th>
                   <th>Updated</th>
@@ -180,6 +181,13 @@ export default function ReviewQueue() {
                     </td>
                     <td>{submission.userId?.name}</td>
                     <td>{submission.events?.length || 0}</td>
+                    <td>
+                      {submission.autoScore != null ? (
+                        <strong>{submission.autoScore}/100</strong>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>
                       <span className={`status-pill status-${submission.status}`}>
                         {submission.status}

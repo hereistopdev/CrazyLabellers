@@ -3,10 +3,27 @@ export function formatMoney(amount, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 }
 
-export function calcTaskEarnings(reviewPoints, taskPrice, ratePerPoint = 0.1) {
-  const points = Math.max(0, Math.min(100, reviewPoints || 0));
-  if (taskPrice != null && taskPrice > 0) {
-    return Math.round(taskPrice * (points / 100) * 100) / 100;
+export function isFreeTaskKind(kind) {
+  return kind === 'tutorial' || kind === 'pretest';
+}
+
+export function effectiveTaskPrice(assignmentOrKind, taskPrice) {
+  const kind =
+    typeof assignmentOrKind === 'string' ? assignmentOrKind : assignmentOrKind?.kind;
+  if (isFreeTaskKind(kind)) {
+    return 0;
   }
-  return Math.round(points * ratePerPoint * 100) / 100;
+  const price =
+    taskPrice ??
+    (typeof assignmentOrKind === 'object' ? assignmentOrKind?.taskPrice : undefined);
+  return price != null ? price : 1;
+}
+
+export function calcTaskEarnings(reviewPoints, taskPrice, ratePerPoint = 0.1, kind) {
+  const points = Math.max(0, Math.min(100, reviewPoints || 0));
+  const price = effectiveTaskPrice(kind, taskPrice);
+  if (price > 0) {
+    return Math.round(price * (points / 100) * 100) / 100;
+  }
+  return 0;
 }

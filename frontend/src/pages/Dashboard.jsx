@@ -98,8 +98,8 @@ export default function Dashboard() {
           <div className="step-number">3</div>
           <h3>Labeling Tutorials</h3>
           <p>
-            Guided examples with frame-by-frame explanations of why each event belongs on that
-            frame.
+            Open any tutorial clip (no claim needed). Follow the frame explanations, then mark each
+            one complete — no labeling submission required.
           </p>
           <div className="actions-row">
             {passedKnowledge ? (

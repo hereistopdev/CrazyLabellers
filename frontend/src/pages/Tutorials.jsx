@@ -3,19 +3,15 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
+import { formatMoney } from '../utils/money';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
 
-function assigneeId(assignment) {
-  return assignment?.assignedTo?._id || assignment?.assignedTo || null;
-}
-
 export default function Tutorials() {
-  const { user, refreshUser } = useAuth();
+  const { refreshUser } = useAuth();
   const [status, setStatus] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [claiming, setClaiming] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -32,18 +28,6 @@ export default function Tutorials() {
     load();
     refreshUser().catch(() => {});
   }, []);
-
-  const handleClaim = async (id) => {
-    setClaiming(id);
-    try {
-      await api.claimAssignment(id);
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setClaiming(null);
-    }
-  };
 
   if (loading) return <div className="loading">Loading tutorials...</div>;
 
@@ -68,8 +52,8 @@ export default function Tutorials() {
       <div className="page-header">
         <h1>Labeling tutorials</h1>
         <p>
-          Practice with guided examples. Each clip explains <strong>why</strong> an event belongs on
-          a specific frame. Complete all tutorials to unlock the 3-clip pre-test.
+          Open any tutorial clip — no claim needed. Read the frame explanations, then mark complete
+          when finished. Tutorials are free ({formatMoney(0)}). Complete all to unlock the 3-clip pre-test.
         </p>
       </div>
 
@@ -95,7 +79,8 @@ export default function Tutorials() {
         </div>
       ) : (
         <div className="alert alert-info">
-          Watch each clip, read the frame explanations, label the events, then submit to mark complete.
+          Watch each clip and follow the explanations. No labeling submission is required for
+          tutorials.
         </div>
       )}
 
@@ -104,9 +89,6 @@ export default function Tutorials() {
       ) : (
         <div className="task-list">
           {assignments.map((a, index) => {
-            const mine = assigneeId(a) === user?.id;
-            const isAssigned = mine && ['assigned', 'in_progress'].includes(a.status);
-            const canClaim = a.status === 'available' && !a.tutorialCompleted;
             const subtitle = assignmentSubtitle(a);
             const stepCount = a.tutorialSteps?.length || 0;
 
@@ -128,31 +110,9 @@ export default function Tutorials() {
                   </p>
                 </div>
                 <div className="task-list-actions">
-                  {canClaim && (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => handleClaim(a._id)}
-                      disabled={claiming === a._id}
-                    >
-                      {claiming === a._id ? 'Starting...' : 'Start tutorial'}
-                    </button>
-                  )}
-                  {isAssigned && (
-                    <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
-                      Continue tutorial
-                    </Link>
-                  )}
-                  {a.tutorialCompleted && (
-                    <Link to={`/label/${a._id}`} className="btn btn-secondary btn-sm">
-                      Review again
-                    </Link>
-                  )}
-                  {!canClaim && !isAssigned && !a.tutorialCompleted && a.status !== 'available' && (
-                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      In use by another labeller
-                    </span>
-                  )}
+                  <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
+                    {a.tutorialCompleted ? 'Review again' : 'Open tutorial'}
+                  </Link>
                 </div>
               </div>
             );

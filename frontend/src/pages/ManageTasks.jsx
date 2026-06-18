@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatTimestamp } from '../utils/formatTimestamp';
-import { formatMoney } from '../utils/money';
+import { formatMoney, isFreeTaskKind } from '../utils/money';
 import VideoLabelLink from '../components/VideoLabelLink';
 import { openLabelerRow } from '../utils/labelerAccess';
 
@@ -58,7 +58,7 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
       kind: form.kind,
       sortOrder: Number(form.sortOrder) || 0,
       groupId: form.groupId || null,
-      taskPrice: Number(form.taskPrice),
+      taskPrice: isFreeTaskKind(form.kind) ? 0 : Number(form.taskPrice),
       challengeNote: form.challengeNote,
       tutorialIntro: form.tutorialIntro,
       tutorialSteps: form.tutorialSteps.map((s) => ({
@@ -80,7 +80,17 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
         </label>
         <label>
           Kind
-          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+          <select
+            value={form.kind}
+            onChange={(e) => {
+              const kind = e.target.value;
+              setForm({
+                ...form,
+                kind,
+                taskPrice: isFreeTaskKind(kind) ? 0 : form.taskPrice || 1,
+              });
+            }}
+          >
             <option value="tutorial">Tutorial</option>
             <option value="pretest">Pre-test</option>
             <option value="production">Real task</option>
@@ -129,6 +139,12 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
               />
             </label>
           </>
+        )}
+        {(form.kind === 'tutorial' || form.kind === 'pretest') && (
+          <p className="form-grid-full" style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+            {form.kind === 'tutorial' ? 'Tutorial' : 'Pre-test'} clips are free for labellers (
+            {formatMoney(0)}).
+          </p>
         )}
         <label className="form-grid-full">
           Description

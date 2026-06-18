@@ -5,7 +5,7 @@ import { FPS } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
 import { isEditableTarget } from '../config/labelingHotkeys';
-import { formatMoney, calcTaskEarnings } from '../utils/money';
+import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
 import StarRating from '../components/StarRating';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import {
@@ -129,7 +129,15 @@ export default function ReviewSubmission() {
       .then(([data, settings]) => {
         setReviewData(data);
         if (!isPreview) {
-          setReviewPoints(data.submission?.reviewPoints || 80);
+          const autoScore = data.submission?.autoScore;
+          const existingPoints = data.submission?.reviewPoints;
+          setReviewPoints(
+            existingPoints != null && existingPoints > 0
+              ? existingPoints
+              : autoScore != null
+                ? autoScore
+                : 80
+          );
           setReviewerNotes(data.submission?.reviewerNotes || '');
           setRatePerPoint(settings.ratePerPoint);
           setCurrency(settings.currency || 'USD');
@@ -440,8 +448,11 @@ export default function ReviewSubmission() {
   if (loading) return <div className="loading">Loading review...</div>;
   if (error && !reviewData) return <div className="alert alert-error">{error}</div>;
 
-  const earnings = calcTaskEarnings(reviewPoints, assignment?.taskPrice, ratePerPoint);
-  const maxPayout = assignment?.taskPrice ?? calcTaskEarnings(100, assignment?.taskPrice, ratePerPoint);
+  const taskPrice = effectiveTaskPrice(assignment, assignment?.taskPrice);
+  const earnings = calcTaskEarnings(reviewPoints, taskPrice, ratePerPoint, assignment?.kind);
+  const maxPayout = calcTaskEarnings(100, taskPrice, ratePerPoint, assignment?.kind);
+  const autoScore = reviewData?.autoScore ?? submission?.autoScore;
+  const autoScoreBreakdown = reviewData?.autoScoreBreakdown ?? submission?.autoScoreBreakdown;
   const validatedCount = eventRows.filter((row) => row.validation.status !== 'pending').length;
 
   return (
@@ -469,15 +480,29 @@ export default function ReviewSubmission() {
             · Status: <strong>{submission?.status}</strong>
           </p>
         )}
-        {assignment?.taskPrice != null && (
+        {taskPrice > 0 && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Task price: up to {formatMoney(assignment.taskPrice)}
+            Task price: up to {formatMoney(taskPrice)}
             {assignment.challengeNote && ` · ${assignment.challengeNote}`}
           </p>
         )}
-        {submission?.autoScore != null && (
+        {autoScore != null && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Auto score: <strong>{submission.autoScore}/100</strong>
+            Auto score (reference comparison): <strong>{autoScore}/100</strong>
+            {!isPreview && submission?.status === 'submitted' && autoScore !== reviewPoints && (
+              <>
+                {' '}
+                ·{' '}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginLeft: 4, verticalAlign: 'baseline' }}
+                  onClick={() => setReviewPoints(autoScore)}
+                >
+                  Use auto score
+                </button>
+              </>
+            )}
           </p>
         )}
         {reference?.hasReference && comparison?.summary && (
@@ -633,8 +658,33 @@ export default function ReviewSubmission() {
 
           {!isPreview && submission?.status === 'submitted' && (
             <div className="review-final-bar">
+              {autoScoreBreakdown?.length > 0 && (
+                <div className="labeling-score-breakdown" style={{ marginBottom: '1rem' }}>
+                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Auto score breakdown</h4>
+                  {autoScoreBreakdown.map((item) => (
+                    <div key={`${item.eventType}-${item.referenceIndex}`} className="labeling-score-row">
+                      <span className="type">{item.eventType}</span>
+                      <span className="meta">
+                        {item.status === 'missing'
+                          ? 'missing'
+                          : `${item.frameDiff ?? 0}f off · ${item.score} pts`}
+                      </span>
+                      <strong>{item.score}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="review-final-score">
-                <label>Points</label>
+                <label>Review points</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={reviewPoints}
+                  onChange={(e) => setReviewPoints(parseInt(e.target.value, 10) || 0)}
+                  className="review-points-input"
+                  style={{ width: 72, marginRight: 8 }}
+                />
                 <input
                   type="range"
                   min="0"
@@ -645,7 +695,7 @@ export default function ReviewSubmission() {
                 />
                 <span>
                   <strong>{reviewPoints}</strong> → {formatMoney(earnings, currency)}
-                  {assignment?.taskPrice != null && (
+                  {taskPrice > 0 && (
                     <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>
                       (max {formatMoney(maxPayout, currency)})
                     </span>

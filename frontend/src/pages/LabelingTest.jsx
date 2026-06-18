@@ -60,8 +60,9 @@ export default function LabelingTest() {
       <div className="page-header">
         <h1>Labeling pre-test</h1>
         <p>
-          Label <strong>3 practice clips</strong> and get an automatic score against reference
-          annotations. Score <strong>80/100 or higher</strong> to unlock real labeling tasks.
+          Label <strong>3 practice clips</strong> (free — no payment). Each submission is scored
+          automatically against reference annotations. Score <strong>80/100 or higher</strong> to
+          unlock real labeling tasks.
         </p>
       </div>
 
@@ -148,9 +149,15 @@ export default function LabelingTest() {
                   {subtitle && <p className="task-list-subtitle">{subtitle}</p>}
                   <p className="task-list-meta">
                     Duration: {a.durationSeconds || 30}s ·{' '}
-                    <span className="status-badge status-passed_test">Pre-test</span>
+                    <span className="status-badge status-passed_test">Pre-test · Free</span>
                     {' · '}
                     {STATUS_LABELS[a.status] || a.status}
+                    {a.lastScore != null && (
+                      <>
+                        {' · '}
+                        Last score: <strong>{a.lastScore}/100</strong>
+                      </>
+                    )}
                     {' · '}
                     Updated {formatTimestamp(a.updatedAt)}
                   </p>

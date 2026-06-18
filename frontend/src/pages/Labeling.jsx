@@ -50,6 +50,7 @@ export default function Labeling() {
   const [gradingResult, setGradingResult] = useState(null);
   const [mediaDuration, setMediaDuration] = useState(null);
   const [reference, setReference] = useState(null);
+  const [tutorialDone, setTutorialDone] = useState(false);
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
@@ -69,6 +70,21 @@ export default function Labeling() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!labellerMode || assignment?.kind !== 'tutorial') {
+      setTutorialDone(false);
+      return;
+    }
+
+    api
+      .getTutorialStatus()
+      .then((status) => {
+        const match = status.tutorials?.find((t) => String(t.id) === id);
+        setTutorialDone(Boolean(match?.completed));
+      })
+      .catch(() => {});
+  }, [id, labellerMode, assignment?.kind]);
 
   useEffect(() => {
     if (!adminMode || !id) {
@@ -245,16 +261,20 @@ export default function Labeling() {
         if (status === 'submitted' && data.tutorial?.completed) {
           await refreshUser();
           setMessage('Tutorial completed! Continue to the next tutorial or pre-test.');
-        } else if (status === 'submitted' && data.grading && !data.grading.error) {
-          setGradingResult(data.grading);
-          if (assignment?.kind === 'pretest') {
-            await refreshUser();
+        if (status === 'submitted' && assignment?.kind === 'pretest') {
+          if (data.grading) {
+            setGradingResult(data.grading);
           }
-          setMessage(
-            data.grading.passed
-              ? `Pre-test passed — ${data.grading.autoScore}/100`
-              : `Submitted — auto score ${data.grading.autoScore}/100`
-          );
+          await refreshUser();
+          if (data.grading && !data.grading.error) {
+            setMessage(
+              data.grading.passed
+                ? `Pre-test passed — ${data.grading.autoScore}/100`
+                : `Score: ${data.grading.autoScore}/100 — try another clip for 80+`
+            );
+          } else {
+            setMessage('Submitted but could not auto-score against reference data.');
+          }
         } else if (status === 'submitted') {
           setMessage('Submitted for review!');
         } else {
@@ -272,7 +292,28 @@ export default function Labeling() {
     [id, events, assignment?.kind, refreshUser]
   );
 
+  const handleCompleteTutorial = useCallback(async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const data = await api.completeTutorial(id);
+      setTutorialDone(true);
+      await refreshUser();
+      setMessage(
+        data.tutorialsCompleted
+          ? 'All tutorials complete! You can continue to the pre-test.'
+          : 'Tutorial marked complete.'
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, [id, refreshUser]);
+
   useEffect(() => {
+    const tutorialLabeller = labellerMode && assignment?.kind === 'tutorial';
+
     const onKeyDown = (event) => {
       if (showEventPicker) return;
       if (isEditableTarget(event.target)) return;
@@ -309,7 +350,7 @@ export default function Labeling() {
         toggleFrameAutoPlay();
         return;
       }
-      if (key === 'm' || key === 'M' || key === 'Enter') {
+      if (!tutorialLabeller && (key === 'm' || key === 'M' || key === 'Enter')) {
         event.preventDefault();
         openEventPicker();
         return;
@@ -319,7 +360,7 @@ export default function Labeling() {
         setMagnifyEnabled((v) => !v);
         return;
       }
-      if ((ctrlKey || metaKey) && key === 's') {
+      if (!tutorialLabeller && (ctrlKey || metaKey) && key === 's') {
         event.preventDefault();
         save('draft');
       }
@@ -327,7 +368,16 @@ export default function Labeling() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showEventPicker, stepFrames, togglePlayPause, toggleFrameAutoPlay, openEventPicker, save]);
+  }, [
+    showEventPicker,
+    stepFrames,
+    togglePlayPause,
+    toggleFrameAutoPlay,
+    openEventPicker,
+    save,
+    labellerMode,
+    assignment?.kind,
+  ]);
 
   const removeEvent = async (index) => {
     const newEvents = events.filter((_, i) => i !== index);
@@ -359,8 +409,9 @@ export default function Labeling() {
   };
 
   const isTutorial = assignment?.kind === 'tutorial';
+  const tutorialLabellerMode = labellerMode && isTutorial;
   const showTutorialEditor = adminMode && isTutorial;
-  const showTutorialGuide = !adminMode && isTutorial;
+  const showTutorialGuide = tutorialLabellerMode;
   const referenceEvents = reference?.hasReference ? reference.events : [];
   const showReference = adminMode && reference?.hasReference;
 
@@ -404,12 +455,16 @@ export default function Labeling() {
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           Clip frame rate: <strong>{fps} fps</strong> — step ±1 or ±5 frames; frame play holds each frame for 0.5s.
           {showTutorialGuide && (
-            <> · <strong>Tutorial</strong> — follow frame explanations, then submit when done.</>
+            <>
+              {' '}
+              · <strong>Tutorial</strong> — follow the frame explanations; no labeling submission
+              required.
+            </>
           )}
           {assignment?.kind === 'pretest' && (
             <>
               {' '}
-              · <strong>Labeling pre-test</strong> — scored automatically against reference data.
+              · <strong>Pre-test</strong> — submit to see your auto score vs reference (free practice).
             </>
           )}
         </p>
@@ -541,6 +596,33 @@ export default function Labeling() {
           />
         )}
 
+        {tutorialLabellerMode ? (
+          <div className="events-panel tutorial-complete-panel">
+            <h3>Tutorial complete</h3>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Review the explanations beside the video. When you understand the clip, mark it
+              complete — nothing is sent to a validator for review.
+            </p>
+            <div className="actions-row" style={{ marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleCompleteTutorial}
+                disabled={saving || tutorialDone}
+              >
+                {tutorialDone ? 'Completed' : 'Mark tutorial complete'}
+              </button>
+              <Link to="/tutorials" className="btn btn-secondary btn-sm">
+                Back to tutorials
+              </Link>
+            </div>
+            {tutorialDone && (
+              <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--accent)' }}>
+                You can reopen this tutorial anytime to review.
+              </p>
+            )}
+          </div>
+        ) : (
         <div className="events-panel">
           {showReference && (
             <ReferenceEventsPanel
@@ -636,6 +718,7 @@ export default function Labeling() {
             )}
           </div>
         </div>
+        )}
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { formatMoney } from '../utils/money';
+import { formatMoney, isFreeTaskKind } from '../utils/money';
 import { readVideoDurationFromFile } from '../utils/videoDuration';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import VideoLabelLink from '../components/VideoLabelLink';
@@ -93,7 +93,7 @@ export default function ManageVideos() {
       if (meta.description) formData.append('description', meta.description);
       formData.append('gameTime', meta.gameTime);
       formData.append('durationSeconds', String(durationSeconds));
-      formData.append('taskPrice', String(meta.taskPrice));
+      formData.append('taskPrice', String(isFreeTaskKind(meta.kind) ? 0 : meta.taskPrice));
       formData.append('kind', meta.kind);
       if (meta.challengeNote) formData.append('challengeNote', meta.challengeNote);
       if (referenceFile) formData.append('reference', referenceFile);
@@ -360,7 +360,14 @@ export default function ManageVideos() {
             <label>Task type</label>
             <select
               value={meta.kind}
-              onChange={(e) => setMeta({ ...meta, kind: e.target.value })}
+              onChange={(e) => {
+                const kind = e.target.value;
+                setMeta({
+                  ...meta,
+                  kind,
+                  taskPrice: isFreeTaskKind(kind) ? 0 : meta.taskPrice || 1,
+                });
+              }}
             >
               {TASK_KINDS.map((k) => (
                 <option key={k.value} value={k.value}>
@@ -375,17 +382,26 @@ export default function ManageVideos() {
           </div>
           <div className="form-group">
             <label>Task price (USD)</label>
-            <input
-              type="number"
-              min={MIN_PRICE}
-              max={MAX_PRICE}
-              step="0.1"
-              value={meta.taskPrice}
-              onChange={(e) => setMeta({ ...meta, taskPrice: parseFloat(e.target.value) || 1 })}
-            />
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-              Set between {formatMoney(MIN_PRICE)} and {formatMoney(MAX_PRICE)} based on clip difficulty.
-            </p>
+            {isFreeTaskKind(meta.kind) ? (
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', margin: 0 }}>
+                {formatMoney(0)} — tutorials and pre-tests are free for labellers.
+              </p>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  min={MIN_PRICE}
+                  max={MAX_PRICE}
+                  step="0.1"
+                  value={meta.taskPrice}
+                  onChange={(e) => setMeta({ ...meta, taskPrice: parseFloat(e.target.value) || 1 })}
+                />
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  Set between {formatMoney(MIN_PRICE)} and {formatMoney(MAX_PRICE)} based on clip
+                  difficulty.
+                </p>
+              </>
+            )}
           </div>
           <div className="form-group">
             <label>Challenge note (optional)</label>
@@ -509,21 +525,25 @@ export default function ManageVideos() {
                     <VideoLabelLink assignmentId={video._id}>{video.title}</VideoLabelLink>
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min={MIN_PRICE}
-                      max={MAX_PRICE}
-                      step="0.1"
-                      defaultValue={video.taskPrice ?? 1}
-                      className="price-input"
-                      onBlur={(e) => {
-                        const next = parseFloat(e.target.value);
-                        if (next !== video.taskPrice && !Number.isNaN(next)) {
-                          savePrice(video._id, next, video.challengeNote || '');
-                        }
-                      }}
-                      disabled={savingPrice === video._id}
-                    />
+                    {isFreeTaskKind(video.kind) ? (
+                      <span style={{ color: 'var(--text-muted)' }}>{formatMoney(0)}</span>
+                    ) : (
+                      <input
+                        type="number"
+                        min={MIN_PRICE}
+                        max={MAX_PRICE}
+                        step="0.1"
+                        defaultValue={video.taskPrice ?? 1}
+                        className="price-input"
+                        onBlur={(e) => {
+                          const next = parseFloat(e.target.value);
+                          if (next !== video.taskPrice && !Number.isNaN(next)) {
+                            savePrice(video._id, next, video.challengeNote || '');
+                          }
+                        }}
+                        disabled={savingPrice === video._id}
+                      />
+                    )}
                   </td>
                   <td>
                     <input
