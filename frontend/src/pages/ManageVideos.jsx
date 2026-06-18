@@ -7,6 +7,9 @@ import { formatTimestamp } from '../utils/formatTimestamp';
 import VideoLabelLink from '../components/VideoLabelLink';
 import { parseBulkUploadFiles, summarizeBulkUpload } from '../utils/parseBulkUploadFiles';
 import { openLabelerRow } from '../utils/labelerAccess';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
 
 const UPLOAD_CONCURRENCY = 2;
 
@@ -33,7 +36,7 @@ const STATUS_LABELS = {
 export default function ManageVideos() {
   const navigate = useNavigate();
   const [videos, setVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
@@ -65,17 +68,36 @@ export default function ManageVideos() {
   const [uploadProgress, setUploadProgress] = useState(null);
 
   const load = () => {
-    setLoading(true);
+    setTableLoading(true);
     Promise.all([api.getAdminAssignments(), api.getStorageStatus()])
       .then(([videosData, storageData]) => {
         setVideos(videosData);
         setStorage(storageData);
       })
       .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .finally(() => setTableLoading(false));
   };
 
+  const videoTable = useTableData(videos, {
+    searchKeys: ['title', 'clipId', 'assignedTo.name', 'status', 'challengeNote'],
+    pageSize: 25,
+    filterFn: (items, filters) =>
+      items.filter((video) => {
+        const kind = video.kind || 'production';
+        if (filters.kind !== 'all' && kind !== filters.kind) return false;
+        if (filters.status !== 'all' && video.status !== filters.status) return false;
+        return true;
+      }),
+    initialFilters: { kind: 'all', status: 'all' },
+  });
+
   useEffect(load, []);
+
+  useEffect(() => {
+    if (window.location.hash === '#bulk-upload') {
+      document.getElementById('bulk-upload')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
 
   const uploadVideo = async (e) => {
     e.preventDefault();
@@ -351,8 +373,6 @@ export default function ManageVideos() {
     );
   };
 
-  if (loading) return <div className="loading">Loading videos...</div>;
-
   return (
     <div>
       <div className="page-header">
@@ -363,8 +383,11 @@ export default function ManageVideos() {
         </p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
           <Link to="/admin" className="btn btn-secondary btn-sm">
-            Back to reviews
+            Back to admin
           </Link>
+          <a href="#bulk-upload" className="btn btn-primary btn-sm">
+            Jump to bulk upload
+          </a>
         </div>
       </div>
 
@@ -389,7 +412,11 @@ export default function ManageVideos() {
         </div>
       )}
 
-      <div className="card bulk-import-panel" style={{ marginBottom: '2rem', padding: '1.25rem' }}>
+      <div
+        id="bulk-upload"
+        className="card bulk-import-panel bulk-upload-highlight"
+        style={{ marginBottom: '2rem', padding: '1.25rem' }}
+      >
         <h3 style={{ marginBottom: '0.5rem' }}>Bulk upload (folder)</h3>
         <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
           Select a folder with <strong>data/*.mp4</strong> and <strong>annotations/*_post.json</strong>{' '}
@@ -618,7 +645,9 @@ export default function ManageVideos() {
         </form>
       </div>
 
-      <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>Videos ({videos.length})</h2>
+      <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>
+        Videos ({videoTable.totalCount} shown / {videos.length} total)
+      </h2>
 
       {videos.length > 0 && (
         <div className="card bulk-price-bar" style={{ marginBottom: '1rem', padding: '1rem' }}>
@@ -673,30 +702,72 @@ export default function ManageVideos() {
       )}
 
       <div className="card table-wrap">
-        {videos.length === 0 ? (
+        <TableToolbar
+          search={videoTable.search}
+          onSearchChange={videoTable.setSearch}
+          searchPlaceholder="Search title, clip ID, assignee, status…"
+          totalCount={videos.length}
+          filteredCount={videoTable.totalCount}
+        >
+          <select
+            className="table-filter-select"
+            value={videoTable.filters.kind}
+            onChange={(e) => videoTable.updateFilter('kind', e.target.value)}
+          >
+            <option value="all">All types</option>
+            {TASK_KINDS.map((k) => (
+              <option key={k.value} value={k.value}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="table-filter-select"
+            value={videoTable.filters.status}
+            onChange={(e) => videoTable.updateFilter('status', e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </TableToolbar>
+
+        {tableLoading ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
-            No videos yet. Upload a clip or import from the data folder.
+            Loading video list…
+          </p>
+        ) : videos.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
+            No videos yet. Use bulk upload above or upload a single clip.
+          </p>
+        ) : videoTable.totalCount === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
+            No videos match your search or filters.
           </p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th></th>
-                <th>Clip ID</th>
-                <th>Title</th>
-                <th>Price</th>
-                <th>Challenge</th>
-                <th>Task type</th>
-                <th>Status</th>
-                <th>Ref</th>
-                <th>Assigned to</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {videos.map((video) => (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Clip ID</th>
+                  <th>Title</th>
+                  <th>Price</th>
+                  <th>Challenge</th>
+                  <th>Task type</th>
+                  <th>Status</th>
+                  <th>Ref</th>
+                  <th>Assigned to</th>
+                  <th>Created</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {videoTable.paginated.map((video) => (
                 <tr
                   key={video._id}
                   className="table-row-link"
@@ -801,9 +872,18 @@ export default function ManageVideos() {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={videoTable.page}
+              totalPages={videoTable.totalPages}
+              pageSize={videoTable.pageSize}
+              onPageChange={videoTable.setPage}
+              onPageSizeChange={videoTable.setPageSize}
+              totalCount={videoTable.totalCount}
+            />
+          </>
         )}
       </div>
     </div>

@@ -4,6 +4,9 @@ import { api } from '../api';
 import { formatMoney } from '../utils/money';
 import VideoLabelLink from '../components/VideoLabelLink';
 import { openLabelerRow } from '../utils/labelerAccess';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
 
 function ReviewModal({ submission, ratePerPoint, currency, onClose, onSubmit }) {
   const [reviewPoints, setReviewPoints] = useState(80);
@@ -106,6 +109,11 @@ export default function Admin() {
 
   useEffect(load, []);
 
+  const submissionTable = useTableData(submissions, {
+    searchKeys: ['assignmentId.title', 'userId.name', 'userId.email'],
+    pageSize: 25,
+  });
+
   const reviewSubmission = async (id, body) => {
     try {
       await api.reviewSubmission(id, body);
@@ -124,7 +132,10 @@ export default function Admin() {
         <h1>Admin Panel</h1>
         <p>Review submissions with points, manage assignments, and track payouts.</p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
-          <Link to="/admin/videos" className="btn btn-primary btn-sm">
+          <Link to="/admin/videos#bulk-upload" className="btn btn-primary btn-sm">
+            Bulk upload videos
+          </Link>
+          <Link to="/admin/videos" className="btn btn-secondary btn-sm">
             Manage videos
           </Link>
           <Link to="/admin/labellers" className="btn btn-primary btn-sm">
@@ -166,22 +177,34 @@ export default function Admin() {
         </span>
       </h2>
       <div className="card table-wrap">
+        <TableToolbar
+          search={submissionTable.search}
+          onSearchChange={submissionTable.setSearch}
+          searchPlaceholder="Search video or labeller…"
+          totalCount={submissions.length}
+          filteredCount={submissionTable.totalCount}
+        />
         {submissions.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
             No pending submissions
           </p>
+        ) : submissionTable.totalCount === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
+            No submissions match your search
+          </p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Video</th>
-                <th>Labeller</th>
-                <th>Events</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {submissions.map((s) => (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Video</th>
+                  <th>Labeller</th>
+                  <th>Events</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submissionTable.paginated.map((s) => (
                 <tr
                   key={s._id}
                   className="table-row-link"
@@ -215,6 +238,15 @@ export default function Admin() {
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={submissionTable.page}
+            totalPages={submissionTable.totalPages}
+            pageSize={submissionTable.pageSize}
+            onPageChange={submissionTable.setPage}
+            onPageSizeChange={submissionTable.setPageSize}
+            totalCount={submissionTable.totalCount}
+          />
+          </>
         )}
       </div>
 

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { formatMoney, isFreeTaskKind } from '../utils/money';
 import VideoLabelLink from '../components/VideoLabelLink';
 import { openLabelerRow } from '../utils/labelerAccess';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
+import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
 
 const KIND_TABS = [
   { id: 'groups', label: 'Groups' },
@@ -14,6 +18,89 @@ const KIND_TABS = [
 ];
 
 const EMPTY_STEP = { frameTime: 0, eventType: '', title: '', explanation: '' };
+
+const PRODUCTION_FILTERS = {
+  group: 'all',
+  status: 'all',
+  priceMin: '',
+  priceMax: '',
+  dateFrom: '',
+  dateTo: '',
+  sortBy: 'createdAt',
+  sortDir: 'desc',
+};
+
+function filterProductionTasks(items, filters) {
+  return items.filter((task) => {
+    const groupKey = task.groupId?._id || task.groupId || 'ungrouped';
+    if (filters.group !== 'all') {
+      if (filters.group === 'ungrouped' && groupKey !== 'ungrouped') return false;
+      if (filters.group !== 'ungrouped' && String(groupKey) !== filters.group) return false;
+    }
+    if (filters.status !== 'all' && task.status !== filters.status) return false;
+    const price = task.taskPrice ?? 0;
+    if (filters.priceMin !== '' && price < parseFloat(filters.priceMin)) return false;
+    if (filters.priceMax !== '' && price > parseFloat(filters.priceMax)) return false;
+    if (!matchesDateRange(task.createdAt, filters.dateFrom, filters.dateTo)) return false;
+    return true;
+  });
+}
+
+function sortProductionTasks(items, filters) {
+  const dir = filters.sortDir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    if (filters.sortBy === 'price') {
+      return ((a.taskPrice ?? 0) - (b.taskPrice ?? 0)) * dir;
+    }
+    if (filters.sortBy === 'title') {
+      return a.title.localeCompare(b.title) * dir;
+    }
+    if (filters.sortBy === 'updatedAt') {
+      return (new Date(a.updatedAt) - new Date(b.updatedAt)) * dir;
+    }
+    return (new Date(a.createdAt) - new Date(b.createdAt)) * dir;
+  });
+}
+
+function TaskRow({ task, tab, navigate, onEdit }) {
+  return (
+    <tr className="table-row-link" onClick={(e) => openLabelerRow(navigate, task._id, e)}>
+      <td>
+        <VideoLabelLink assignmentId={task._id}>
+          <strong>{task.title}</strong>
+        </VideoLabelLink>
+        {task.description && <p className="table-muted">{task.description}</p>}
+      </td>
+      <td>{task.clipId || '—'}</td>
+      {tab === 'tutorial' && <td>{task.tutorialSteps?.length || 0}</td>}
+      {tab === 'production' && <td>{task.groupId?.name || '—'}</td>}
+      {tab === 'production' && (
+        <td>{task.taskPrice != null ? formatMoney(task.taskPrice) : '—'}</td>
+      )}
+      <td>{task.sortOrder ?? 0}</td>
+      <td>{task.status}</td>
+      <td>{task.hasReference ? '✓' : '—'}</td>
+      <td>{task.submissionCount ?? 0}</td>
+      <td>{formatTimestamp(task.createdAt)}</td>
+      <td>{formatTimestamp(task.updatedAt)}</td>
+      <td>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(task._id);
+          }}
+        >
+          Edit metadata
+        </button>{' '}
+        <VideoLabelLink assignmentId={task._id} className="btn btn-primary btn-sm">
+          Open labeler
+        </VideoLabelLink>
+      </td>
+    </tr>
+  );
+}
 
 function TaskEditor({ task, groups, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
@@ -317,6 +404,34 @@ export default function ManageTasks() {
     });
   };
 
+  const groupTable = useTableData(groups, {
+    searchKeys: ['name', 'description'],
+    pageSize: 25,
+  });
+
+  const simpleTaskTable = useTableData(tasks, {
+    searchKeys: ['title', 'clipId', 'description'],
+    pageSize: 25,
+    filterFn: (items, filters) =>
+      items.filter((task) => filters.status === 'all' || task.status === filters.status),
+    initialFilters: { status: 'all' },
+  });
+
+  const productionTable = useTableData(tasks, {
+    searchKeys: ['title', 'clipId', 'description', 'groupId.name', 'challengeNote'],
+    pageSize: 25,
+    filterFn: filterProductionTasks,
+    sortFn: sortProductionTasks,
+    initialFilters: PRODUCTION_FILTERS,
+  });
+
+  const groupedProduction = useMemo(
+    () => groupProductionTasks(productionTable.paginated),
+    [productionTable.paginated]
+  );
+
+  const taskTable = tab === 'production' ? productionTable : simpleTaskTable;
+
   if (loading && tab !== 'groups' && tasks.length === 0 && groups.length === 0) {
     return <div className="loading">Loading tasks...</div>;
   }
@@ -327,7 +442,8 @@ export default function ManageTasks() {
         <h1>Manage tasks</h1>
         <p>
           Configure tutorial examples, pre-test clips (3), production groups, and frame explanations.
-          Upload videos from <Link to="/admin/videos">Videos</Link>, then assign kind and metadata here.
+          Upload videos from <Link to="/admin/videos#bulk-upload">Videos (bulk upload)</Link>, then
+          assign kind and metadata here.
         </p>
       </div>
 
@@ -399,59 +515,80 @@ export default function ManageTasks() {
             </div>
           </form>
 
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Tasks</th>
-                  <th>Order</th>
-                  <th>Created</th>
-                  <th>Updated</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {groups.length === 0 ? (
+          <div className="card table-wrap">
+            <TableToolbar
+              search={groupTable.search}
+              onSearchChange={groupTable.setSearch}
+              searchPlaceholder="Search groups…"
+              totalCount={groups.length}
+              filteredCount={groupTable.totalCount}
+            />
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
                   <tr>
-                    <td colSpan={6} className="empty-cell">
-                      No groups yet
-                    </td>
+                    <th>Name</th>
+                    <th>Tasks</th>
+                    <th>Order</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                    <th />
                   </tr>
-                ) : (
-                  groups.map((g) => (
-                    <tr key={g._id}>
-                      <td>
-                        <strong>{g.name}</strong>
-                        {g.description && (
-                          <p className="table-muted">{g.description}</p>
-                        )}
-                      </td>
-                      <td>{g.taskCount ?? 0}</td>
-                      <td>{g.sortOrder}</td>
-                      <td>{formatTimestamp(g.createdAt)}</td>
-                      <td>{formatTimestamp(g.updatedAt)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => startEditGroup(g)}
-                        >
-                          Edit
-                        </button>{' '}
-                        <button
-                          type="button"
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleDeleteGroup(g._id)}
-                        >
-                          Delete
-                        </button>
+                </thead>
+                <tbody>
+                  {groups.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="empty-cell">
+                        No groups yet
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : groupTable.totalCount === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="empty-cell">
+                        No groups match your search
+                      </td>
+                    </tr>
+                  ) : (
+                    groupTable.paginated.map((g) => (
+                      <tr key={g._id}>
+                        <td>
+                          <strong>{g.name}</strong>
+                          {g.description && <p className="table-muted">{g.description}</p>}
+                        </td>
+                        <td>{g.taskCount ?? 0}</td>
+                        <td>{g.sortOrder}</td>
+                        <td>{formatTimestamp(g.createdAt)}</td>
+                        <td>{formatTimestamp(g.updatedAt)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => startEditGroup(g)}
+                          >
+                            Edit
+                          </button>{' '}
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDeleteGroup(g._id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={groupTable.page}
+              totalPages={groupTable.totalPages}
+              pageSize={groupTable.pageSize}
+              onPageChange={groupTable.setPage}
+              onPageSizeChange={groupTable.setPageSize}
+              totalCount={groupTable.totalCount}
+            />
           </div>
         </div>
       ) : (
@@ -466,71 +603,205 @@ export default function ManageTasks() {
             />
           )}
 
-          <div className="admin-table-wrap" style={{ marginTop: editingId ? '1rem' : 0 }}>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Clip</th>
-                  {tab === 'tutorial' && <th>Steps</th>}
-                  {tab === 'production' && <th>Group</th>}
-                  {tab === 'production' && <th>Price</th>}
-                  <th>Order</th>
-                  <th>Status</th>
-                  <th>Ref</th>
-                  <th>Subs</th>
-                  <th>Created</th>
-                  <th>Updated</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} className="empty-cell">
-                      No {tab} tasks — upload videos and set kind to &quot;{tab}&quot;
-                    </td>
-                  </tr>
-                ) : (
-                  tasks.map((t) => (
-                    <tr
-                      key={t._id}
-                      className="table-row-link"
-                      onClick={(e) => openLabelerRow(navigate, t._id, e)}
-                    >
-                      <td>
-                        <VideoLabelLink assignmentId={t._id}>
-                          <strong>{t.title}</strong>
-                        </VideoLabelLink>
-                        {t.description && <p className="table-muted">{t.description}</p>}
-                      </td>
-                      <td>{t.clipId || '—'}</td>
-                      {tab === 'tutorial' && <td>{t.tutorialSteps?.length || 0}</td>}
-                      {tab === 'production' && <td>{t.groupId?.name || '—'}</td>}
-                      {tab === 'production' && <td>{t.taskPrice != null ? formatMoney(t.taskPrice) : '—'}</td>}
-                      <td>{t.sortOrder ?? 0}</td>
-                      <td>{t.status}</td>
-                      <td>{t.hasReference ? '✓' : '—'}</td>
-                      <td>{t.submissionCount ?? 0}</td>
-                      <td>{formatTimestamp(t.createdAt)}</td>
-                      <td>{formatTimestamp(t.updatedAt)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setEditingId(t._id)}
-                        >
-                          Edit metadata
-                        </button>{' '}
-                        <VideoLabelLink assignmentId={t._id} className="btn btn-primary btn-sm">
-                          Open labeler
-                        </VideoLabelLink>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="card table-wrap" style={{ marginTop: editingId ? '1rem' : 0 }}>
+            <TableToolbar
+              search={taskTable.search}
+              onSearchChange={taskTable.setSearch}
+              searchPlaceholder="Search title, clip ID, group…"
+              totalCount={tasks.length}
+              filteredCount={taskTable.totalCount}
+            >
+              {tab === 'production' ? (
+                <>
+                  <select
+                    className="table-filter-select"
+                    value={taskTable.filters.group}
+                    onChange={(e) => taskTable.updateFilter('group', e.target.value)}
+                  >
+                    <option value="all">All groups</option>
+                    <option value="ungrouped">Ungrouped</option>
+                    {groups.map((g) => (
+                      <option key={g._id} value={g._id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="table-filter-select"
+                    value={taskTable.filters.status}
+                    onChange={(e) => taskTable.updateFilter('status', e.target.value)}
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="available">Available</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                  <input
+                    type="number"
+                    className="table-filter-input"
+                    placeholder="Min $"
+                    value={taskTable.filters.priceMin}
+                    onChange={(e) => taskTable.updateFilter('priceMin', e.target.value)}
+                    style={{ width: 72 }}
+                  />
+                  <input
+                    type="number"
+                    className="table-filter-input"
+                    placeholder="Max $"
+                    value={taskTable.filters.priceMax}
+                    onChange={(e) => taskTable.updateFilter('priceMax', e.target.value)}
+                    style={{ width: 72 }}
+                  />
+                  <input
+                    type="date"
+                    className="table-filter-input"
+                    value={taskTable.filters.dateFrom}
+                    onChange={(e) => taskTable.updateFilter('dateFrom', e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    className="table-filter-input"
+                    value={taskTable.filters.dateTo}
+                    onChange={(e) => taskTable.updateFilter('dateTo', e.target.value)}
+                  />
+                  <select
+                    className="table-filter-select"
+                    value={taskTable.filters.sortBy}
+                    onChange={(e) => taskTable.updateFilter('sortBy', e.target.value)}
+                  >
+                    <option value="createdAt">Sort: created</option>
+                    <option value="updatedAt">Sort: updated</option>
+                    <option value="price">Sort: price</option>
+                    <option value="title">Sort: title</option>
+                  </select>
+                  <select
+                    className="table-filter-select"
+                    value={taskTable.filters.sortDir}
+                    onChange={(e) => taskTable.updateFilter('sortDir', e.target.value)}
+                  >
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </select>
+                </>
+              ) : (
+                <select
+                  className="table-filter-select"
+                  value={taskTable.filters.status}
+                  onChange={(e) => taskTable.updateFilter('status', e.target.value)}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="available">Available</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              )}
+            </TableToolbar>
+
+            {loading ? (
+              <p className="empty-cell">Loading tasks…</p>
+            ) : tasks.length === 0 ? (
+              <p className="empty-cell">
+                No {tab} tasks — upload videos and set kind to &quot;{tab}&quot;
+              </p>
+            ) : taskTable.totalCount === 0 ? (
+              <p className="empty-cell">No tasks match your search or filters</p>
+            ) : tab === 'production' ? (
+              <>
+                {groupedProduction.map((group) => (
+                  <div key={group.id} className="production-group-block">
+                    <h3>
+                      {group.name}{' '}
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        ({group.tasks.length} on this page)
+                      </span>
+                    </h3>
+                    {group.description && <p className="group-desc">{group.description}</p>}
+                    <div className="admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Title</th>
+                            <th>Clip</th>
+                            <th>Price</th>
+                            <th>Order</th>
+                            <th>Status</th>
+                            <th>Ref</th>
+                            <th>Subs</th>
+                            <th>Created</th>
+                            <th>Updated</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.tasks.map((t) => (
+                            <TaskRow
+                              key={t._id}
+                              task={t}
+                              tab={tab}
+                              navigate={navigate}
+                              onEdit={setEditingId}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+                <Pagination
+                  page={taskTable.page}
+                  totalPages={taskTable.totalPages}
+                  pageSize={taskTable.pageSize}
+                  onPageChange={taskTable.setPage}
+                  onPageSizeChange={taskTable.setPageSize}
+                  totalCount={taskTable.totalCount}
+                />
+              </>
+            ) : (
+              <>
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Title</th>
+                        <th>Clip</th>
+                        {tab === 'tutorial' && <th>Steps</th>}
+                        <th>Order</th>
+                        <th>Status</th>
+                        <th>Ref</th>
+                        <th>Subs</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {taskTable.paginated.map((t) => (
+                        <TaskRow
+                          key={t._id}
+                          task={t}
+                          tab={tab}
+                          navigate={navigate}
+                          onEdit={setEditingId}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination
+                  page={taskTable.page}
+                  totalPages={taskTable.totalPages}
+                  pageSize={taskTable.pageSize}
+                  onPageChange={taskTable.setPage}
+                  onPageSizeChange={taskTable.setPageSize}
+                  totalCount={taskTable.totalCount}
+                />
+              </>
+            )}
           </div>
         </>
       )}

@@ -36,6 +36,23 @@ export default function AdminDashboard() {
 
         <div className="step-card">
           <div className="step-number">3</div>
+          <h3>Bulk upload videos</h3>
+          <p>
+            Import a whole folder of clips and reference JSON from your browser (data/*.mp4 +
+            annotations/*.json).
+          </p>
+          <div className="actions-row">
+            <Link to="/admin/videos#bulk-upload" className="btn btn-primary btn-sm">
+              Bulk upload folder
+            </Link>
+            <Link to="/admin/videos" className="btn btn-secondary btn-sm">
+              Manage videos
+            </Link>
+          </div>
+        </div>
+
+        <div className="step-card">
+          <div className="step-number">4</div>
           <h3>Manage Tasks</h3>
           <p>Tutorial examples, pre-test clips, production groups, and frame explanations.</p>
           <div className="actions-row">
@@ -46,7 +63,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="step-card">
-          <div className="step-number">4</div>
+          <div className="step-number">5</div>
           <h3>Review & Score Tasks</h3>
           <p>Review labeled videos, assign review points (0–100), and calculate labeller earnings.</p>
           <div className="actions-row">
@@ -57,7 +74,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="step-card">
-          <div className="step-number">5</div>
+          <div className="step-number">6</div>
           <h3>Finance Dashboard</h3>
           <p>See total payouts, per-labeller earnings, review points, and set the rate per point.</p>
           <div className="actions-row">

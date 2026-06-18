@@ -4,6 +4,10 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { formatMoney } from '../utils/money';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
+import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -32,24 +36,67 @@ export default function Assignments() {
 
   useEffect(load, []);
 
-  const grouped = useMemo(() => {
+  const taskTable = useTableData(assignments, {
+    searchKeys: ['title', 'description', 'clipId', 'groupId.name', 'challengeNote'],
+    pageSize: 12,
+    filterFn: (items, filters) =>
+      items.filter((task) => {
+        const groupKey = task.groupId?._id || task.groupId || 'ungrouped';
+        if (filters.group !== 'all') {
+          if (filters.group === 'ungrouped' && groupKey !== 'ungrouped') return false;
+          if (filters.group !== 'ungrouped' && String(groupKey) !== filters.group) return false;
+        }
+        if (filters.status !== 'all' && task.status !== filters.status) return false;
+        const price = task.taskPrice ?? 0;
+        if (filters.priceMin !== '' && price < parseFloat(filters.priceMin)) return false;
+        if (filters.priceMax !== '' && price > parseFloat(filters.priceMax)) return false;
+        if (!matchesDateRange(task.createdAt, filters.dateFrom, filters.dateTo)) return false;
+        return true;
+      }),
+    sortFn: (items, filters) => {
+      const dir = filters.sortDir === 'asc' ? 1 : -1;
+      return [...items].sort((a, b) => {
+        if (filters.sortBy === 'price') {
+          return ((a.taskPrice ?? 0) - (b.taskPrice ?? 0)) * dir;
+        }
+        if (filters.sortBy === 'title') {
+          return a.title.localeCompare(b.title) * dir;
+        }
+        return (new Date(a.createdAt) - new Date(b.createdAt)) * dir;
+      });
+    },
+    initialFilters: {
+      group: 'all',
+      status: 'all',
+      priceMin: '',
+      priceMax: '',
+      dateFrom: '',
+      dateTo: '',
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+    },
+  });
+
+  const groupOptions = useMemo(() => {
     const map = new Map();
     assignments.forEach((a) => {
       const group = a.groupId;
-      const key = group?._id || 'ungrouped';
+      const key = group?._id || group || 'ungrouped';
       if (!map.has(key)) {
         map.set(key, {
           id: key,
           name: group?.name || 'Other tasks',
-          description: group?.description || '',
           sortOrder: group?.sortOrder ?? 9999,
-          tasks: [],
         });
       }
-      map.get(key).tasks.push(a);
     });
     return [...map.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   }, [assignments]);
+
+  const grouped = useMemo(
+    () => groupProductionTasks(taskTable.paginated),
+    [taskTable.paginated]
+  );
 
   const handleClaim = async (id) => {
     setClaiming(id);
@@ -77,8 +124,93 @@ export default function Assignments() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
+      <div className="card table-wrap" style={{ marginBottom: '1.25rem' }}>
+        <TableToolbar
+          search={taskTable.search}
+          onSearchChange={taskTable.setSearch}
+          searchPlaceholder="Search tasks, groups, clip ID…"
+          totalCount={assignments.length}
+          filteredCount={taskTable.totalCount}
+        >
+          <select
+            className="table-filter-select"
+            value={taskTable.filters.group}
+            onChange={(e) => taskTable.updateFilter('group', e.target.value)}
+          >
+            <option value="all">All groups</option>
+            <option value="ungrouped">Ungrouped</option>
+            {groupOptions
+              .filter((g) => g.id !== 'ungrouped')
+              .map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+          </select>
+          <select
+            className="table-filter-select"
+            value={taskTable.filters.status}
+            onChange={(e) => taskTable.updateFilter('status', e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            className="table-filter-input"
+            placeholder="Min $"
+            value={taskTable.filters.priceMin}
+            onChange={(e) => taskTable.updateFilter('priceMin', e.target.value)}
+            style={{ width: 72 }}
+          />
+          <input
+            type="number"
+            className="table-filter-input"
+            placeholder="Max $"
+            value={taskTable.filters.priceMax}
+            onChange={(e) => taskTable.updateFilter('priceMax', e.target.value)}
+            style={{ width: 72 }}
+          />
+          <input
+            type="date"
+            className="table-filter-input"
+            value={taskTable.filters.dateFrom}
+            onChange={(e) => taskTable.updateFilter('dateFrom', e.target.value)}
+          />
+          <input
+            type="date"
+            className="table-filter-input"
+            value={taskTable.filters.dateTo}
+            onChange={(e) => taskTable.updateFilter('dateTo', e.target.value)}
+          />
+          <select
+            className="table-filter-select"
+            value={taskTable.filters.sortBy}
+            onChange={(e) => taskTable.updateFilter('sortBy', e.target.value)}
+          >
+            <option value="createdAt">Sort: date</option>
+            <option value="price">Sort: price</option>
+            <option value="title">Sort: title</option>
+          </select>
+        </TableToolbar>
+        <Pagination
+          page={taskTable.page}
+          totalPages={taskTable.totalPages}
+          pageSize={taskTable.pageSize}
+          onPageChange={taskTable.setPage}
+          onPageSizeChange={taskTable.setPageSize}
+          totalCount={taskTable.totalCount}
+        />
+      </div>
+
       {assignments.length === 0 ? (
         <div className="empty-state">No assignments available yet.</div>
+      ) : taskTable.totalCount === 0 ? (
+        <div className="empty-state">No tasks match your search or filters.</div>
       ) : (
         grouped.map((group) => (
           <section key={group.id} className="task-group-section">
@@ -105,7 +237,9 @@ export default function Assignments() {
                       {a.taskPrice != null && (
                         <span className="task-price-badge">Pays up to {formatMoney(a.taskPrice)}</span>
                       )}{' '}
-                      <span className={`status-badge status-${a.status === 'available' ? 'approved' : 'passed_test'}`}>
+                      <span
+                        className={`status-badge status-${a.status === 'available' ? 'approved' : 'passed_test'}`}
+                      >
                         {STATUS_LABELS[a.status] || a.status}
                       </span>
                     </p>

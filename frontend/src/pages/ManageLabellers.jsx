@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import StarRating from '../components/StarRating';
 import { LABELLER_STATUSES } from '../utils/roles';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
 
 const EMPTY_FORM = { name: '', email: '', password: '', status: 'pending' };
 
@@ -107,6 +110,11 @@ export default function ManageLabellers() {
     }
   };
 
+  const labellerTable = useTableData(labellers, {
+    searchKeys: ['name', 'email', 'status'],
+    pageSize: 25,
+  });
+
   if (loading && labellers.length === 0) {
     return <div className="loading">Loading labellers...</div>;
   }
@@ -203,6 +211,13 @@ export default function ManageLabellers() {
 
       <div className="labeller-layout">
         <div className="card table-wrap">
+          <TableToolbar
+            search={labellerTable.search}
+            onSearchChange={labellerTable.setSearch}
+            searchPlaceholder="Search name or email…"
+            totalCount={labellers.length}
+            filteredCount={labellerTable.totalCount}
+          />
           <table>
             <thead>
               <tr>
@@ -220,8 +235,14 @@ export default function ManageLabellers() {
                     No labellers yet. Add one manually or share the register page.
                   </td>
                 </tr>
+              ) : labellerTable.totalCount === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ color: 'var(--text-muted)' }}>
+                    No labellers match your search
+                  </td>
+                </tr>
               ) : (
-                labellers.map((l) => (
+                labellerTable.paginated.map((l) => (
                   <tr
                     key={l._id}
                     className={selectedId === l._id ? 'row-selected' : ''}
@@ -289,6 +310,14 @@ export default function ManageLabellers() {
               )}
             </tbody>
           </table>
+          <Pagination
+            page={labellerTable.page}
+            totalPages={labellerTable.totalPages}
+            pageSize={labellerTable.pageSize}
+            onPageChange={labellerTable.setPage}
+            onPageSizeChange={labellerTable.setPageSize}
+            totalCount={labellerTable.totalCount}
+          />
         </div>
 
         <div className="labeller-detail card">

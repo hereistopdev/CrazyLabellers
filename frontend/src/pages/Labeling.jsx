@@ -298,7 +298,7 @@ export default function Labeling() {
         if (status === 'submitted' && data.tutorial?.completed) {
           await refreshUser();
           setMessage('Tutorial completed! Continue to the next tutorial or pre-test.');
-        if (status === 'submitted' && assignment?.kind === 'pretest') {
+        } else if (status === 'submitted' && assignment?.kind === 'pretest') {
           if (data.grading) {
             setGradingResult(data.grading);
           }

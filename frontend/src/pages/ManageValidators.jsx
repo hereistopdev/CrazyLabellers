@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
 
 const EMPTY_FORM = { name: '', email: '', password: '' };
 
@@ -23,6 +26,11 @@ export default function ManageValidators() {
   };
 
   useEffect(loadValidators, []);
+
+  const validatorTable = useTableData(validators, {
+    searchKeys: ['name', 'email', 'role'],
+    pageSize: 25,
+  });
 
   const addValidator = async (e) => {
     e.preventDefault();
@@ -136,6 +144,13 @@ export default function ManageValidators() {
       )}
 
       <div className="card table-wrap">
+        <TableToolbar
+          search={validatorTable.search}
+          onSearchChange={validatorTable.setSearch}
+          searchPlaceholder="Search validators…"
+          totalCount={validators.length}
+          filteredCount={validatorTable.totalCount}
+        />
         <table>
           <thead>
             <tr>
@@ -153,8 +168,14 @@ export default function ManageValidators() {
                   No validators yet. Add one to review submitted tasks.
                 </td>
               </tr>
+            ) : validatorTable.totalCount === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ color: 'var(--text-muted)' }}>
+                  No validators match your search
+                </td>
+              </tr>
             ) : (
-              validators.map((v) => (
+              validatorTable.paginated.map((v) => (
                 <tr key={v._id}>
                   <td>{v.name}</td>
                   <td>{v.email}</td>
@@ -174,6 +195,14 @@ export default function ManageValidators() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={validatorTable.page}
+          totalPages={validatorTable.totalPages}
+          pageSize={validatorTable.pageSize}
+          onPageChange={validatorTable.setPage}
+          onPageSizeChange={validatorTable.setPageSize}
+          totalCount={validatorTable.totalCount}
+        />
       </div>
     </div>
   );

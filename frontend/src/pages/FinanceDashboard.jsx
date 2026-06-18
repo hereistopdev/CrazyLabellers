@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
+import { useTableData } from '../hooks/useTableData';
+import TableToolbar from '../components/TableToolbar';
+import Pagination from '../components/Pagination';
 
 export default function FinanceDashboard() {
   const [data, setData] = useState(null);
@@ -22,6 +25,14 @@ export default function FinanceDashboard() {
   };
 
   useEffect(load, []);
+
+  const earningsTable = useTableData(data?.earningsByLabeller || [], {
+    searchKeys: ['name', 'email', 'status'],
+    pageSize: 25,
+    filterFn: (items, filters) =>
+      items.filter((row) => filters.status === 'all' || row.status === filters.status),
+    initialFilters: { status: 'all' },
+  });
 
   const saveRate = async () => {
     try {
@@ -103,6 +114,25 @@ export default function FinanceDashboard() {
       <div className="finance-layout">
         <div className="card table-wrap">
           <h3 style={{ padding: '1rem 1rem 0' }}>Labeller earnings</h3>
+          <TableToolbar
+            search={earningsTable.search}
+            onSearchChange={earningsTable.setSearch}
+            searchPlaceholder="Search labellers…"
+            totalCount={data?.earningsByLabeller?.length || 0}
+            filteredCount={earningsTable.totalCount}
+          >
+            <select
+              className="table-filter-select"
+              value={earningsTable.filters.status}
+              onChange={(e) => earningsTable.updateFilter('status', e.target.value)}
+            >
+              <option value="all">All statuses</option>
+              <option value="approved">Approved</option>
+              <option value="passed_test">Passed test</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </TableToolbar>
           <table>
             <thead>
               <tr>
@@ -121,8 +151,14 @@ export default function FinanceDashboard() {
                     No reviewed tasks yet
                   </td>
                 </tr>
+              ) : earningsTable.totalCount === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
+                    No labellers match your search
+                  </td>
+                </tr>
               ) : (
-                data.earningsByLabeller.map((l) => (
+                earningsTable.paginated.map((l) => (
                   <tr key={l.labellerId} onClick={() => openLabeller(l.labellerId)} className="clickable-row">
                     <td>
                       <strong>{l.name}</strong>
@@ -143,6 +179,14 @@ export default function FinanceDashboard() {
               )}
             </tbody>
           </table>
+          <Pagination
+            page={earningsTable.page}
+            totalPages={earningsTable.totalPages}
+            pageSize={earningsTable.pageSize}
+            onPageChange={earningsTable.setPage}
+            onPageSizeChange={earningsTable.setPageSize}
+            totalCount={earningsTable.totalCount}
+          />
         </div>
 
         <div className="card labeller-finance-detail">
