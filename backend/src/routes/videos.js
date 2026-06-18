@@ -5,9 +5,7 @@ const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
 
 const router = express.Router();
 
-function getVideoDataDir() {
-  return process.env.VIDEO_DATA_DIR || path.join(__dirname, '..', '..', '..', '..', 'data');
-}
+const { getVideoDataDir } = require('../services/videoStorage');
 
 router.get('/:clipId', (req, res) => {
   const clipId = req.params.clipId.replace(/\.mp4$/i, '');

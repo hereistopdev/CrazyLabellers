@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { formatMoney } from '../utils/money';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -22,7 +23,7 @@ export default function Assignments() {
   const load = () => {
     setLoading(true);
     api
-      .getAssignments()
+      .getAssignments('production')
       .then(setAssignments)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -47,10 +48,10 @@ export default function Assignments() {
   return (
     <div>
       <div className="page-header">
-        <h1>Labeling Assignments</h1>
+        <h1>Production labeling</h1>
         <p>
-          Claim a 30-second video clip, watch it carefully, and mark events at the exact frame
-          they occur.
+          Real 30-second clips for paid labeling. Requires knowledge test (80%+) and labeling
+          pre-test (80/100+).
         </p>
       </div>
 
@@ -73,10 +74,18 @@ export default function Assignments() {
                 </p>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   Duration: {a.durationSeconds}s ·{' '}
+                  {a.taskPrice != null && (
+                    <span className="task-price-badge">Pays up to {formatMoney(a.taskPrice)}</span>
+                  )}{' '}
                   <span className={`status-badge status-${a.status === 'available' ? 'approved' : 'passed_test'}`}>
                     {STATUS_LABELS[a.status] || a.status}
                   </span>
                 </p>
+                {a.challengeNote && (
+                  <p style={{ fontSize: '0.8rem', color: '#fbbf24', marginBottom: '0.5rem' }}>
+                    Challenge: {a.challengeNote}
+                  </p>
+                )}
 
                 <div className="actions-row">
                   {canClaim && (

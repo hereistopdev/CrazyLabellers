@@ -5,7 +5,8 @@ import { FPS } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
 import { isEditableTarget } from '../config/labelingHotkeys';
-import { formatMoney } from '../utils/money';
+import { formatMoney, calcTaskEarnings } from '../utils/money';
+import StarRating from '../components/StarRating';
 import {
   buildSortedEventFrames,
   findNextEventFrame,
@@ -43,6 +44,9 @@ export default function ReviewSubmission() {
   const [message, setMessage] = useState('');
   const [reviewPoints, setReviewPoints] = useState(80);
   const [reviewerNotes, setReviewerNotes] = useState('');
+  const [rating, setRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [aspects, setAspects] = useState({ quality: 5, accuracy: 5, timeliness: 5 });
   const [ratePerPoint, setRatePerPoint] = useState(0.1);
   const [currency, setCurrency] = useState('USD');
 
@@ -334,6 +338,9 @@ export default function ReviewSubmission() {
         status,
         reviewPoints: status === 'approved' ? reviewPoints : 0,
         reviewerNotes,
+        rating: status === 'approved' ? rating : undefined,
+        reviewComment: status === 'approved' ? reviewComment : undefined,
+        aspects: status === 'approved' ? aspects : undefined,
       });
       setMessage(status === 'approved' ? 'Submission approved' : 'Submission rejected');
       load();
@@ -412,7 +419,8 @@ export default function ReviewSubmission() {
   if (loading) return <div className="loading">Loading review...</div>;
   if (error && !reviewData) return <div className="alert alert-error">{error}</div>;
 
-  const earnings = Math.round(reviewPoints * ratePerPoint * 100) / 100;
+  const earnings = calcTaskEarnings(reviewPoints, assignment?.taskPrice, ratePerPoint);
+  const maxPayout = assignment?.taskPrice ?? calcTaskEarnings(100, assignment?.taskPrice, ratePerPoint);
   const validatedCount = eventRows.filter((row) => row.validation.status !== 'pending').length;
 
   return (
@@ -420,10 +428,24 @@ export default function ReviewSubmission() {
       <div className="page-header">
         <h1>{assignment?.title}</h1>
         <p>
-          Labeller: <strong>{submission?.userId?.name}</strong> · {submission?.events?.length || 0}{' '}
-          events · Validated {validatedCount}/{eventRows.length} · Status:{' '}
-          <strong>{submission?.status}</strong>
+          Labeller:{' '}
+          <Link to={`/profile/${submission?.userId?._id || submission?.userId}`}>
+            <strong>{submission?.userId?.name}</strong>
+          </Link>{' '}
+          · {submission?.events?.length || 0} events · Validated {validatedCount}/{eventRows.length} ·
+          Status: <strong>{submission?.status}</strong>
         </p>
+        {assignment?.taskPrice != null && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Task price: up to {formatMoney(assignment.taskPrice)}
+            {assignment.challengeNote && ` · ${assignment.challengeNote}`}
+          </p>
+        )}
+        {submission?.autoScore != null && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Auto score: <strong>{submission.autoScore}/100</strong>
+          </p>
+        )}
         {reference?.hasReference && comparison?.summary && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Reference: {reference.annotationCount} events · Matched {comparison.summary.matchedCount} ·
@@ -585,8 +607,36 @@ export default function ReviewSubmission() {
                 />
                 <span>
                   <strong>{reviewPoints}</strong> → {formatMoney(earnings, currency)}
+                  {assignment?.taskPrice != null && (
+                    <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>
+                      (max {formatMoney(maxPayout, currency)})
+                    </span>
+                  )}
                 </span>
               </div>
+              <div className="review-rating-block">
+                <label>Profile rating</label>
+                <StarRating value={rating} onChange={setRating} />
+                <div className="review-aspects">
+                  {['quality', 'accuracy', 'timeliness'].map((key) => (
+                    <label key={key} className="review-aspect-row">
+                      <span>{key}</span>
+                      <StarRating
+                        value={aspects[key]}
+                        onChange={(value) => setAspects({ ...aspects, [key]: value })}
+                        size="sm"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                rows={2}
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="Public review for labeller profile..."
+                className="review-final-notes"
+              />
               <textarea
                 rows={2}
                 value={reviewerNotes}

@@ -14,6 +14,8 @@ const financeRoutes = require('./routes/finance');
 const earningsRoutes = require('./routes/earnings');
 const videoRoutes = require('./routes/videos');
 const reviewRoutes = require('./routes/review');
+const labelingTestRoutes = require('./routes/labelingTest');
+const labellerRoutes = require('./routes/labellers');
 const { EVENT_TYPES } = require('./config/events');
 
 const app = express();
@@ -63,6 +65,8 @@ app.use('/api/admin/finance', financeRoutes);
 app.use('/api/earnings', earningsRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/review', reviewRoutes);
+app.use('/api/labeling-test', labelingTestRoutes);
+app.use('/api/labellers', labellerRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

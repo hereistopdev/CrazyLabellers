@@ -34,6 +34,9 @@ router.post('/register', async (req, res) => {
         role: user.role,
         status: user.status,
         bestTestScore: user.bestTestScore,
+      bestLabelingTestScore: user.bestLabelingTestScore,
+      labelingTestPassed: user.labelingTestPassed,
+      labelingTestAttempts: user.labelingTestAttempts,
       },
     });
   } catch (error) {
@@ -65,6 +68,9 @@ router.post('/login', async (req, res) => {
         role: user.role,
         status: user.status,
         bestTestScore: user.bestTestScore,
+      bestLabelingTestScore: user.bestLabelingTestScore,
+      labelingTestPassed: user.labelingTestPassed,
+      labelingTestAttempts: user.labelingTestAttempts,
       },
     });
   } catch (error) {

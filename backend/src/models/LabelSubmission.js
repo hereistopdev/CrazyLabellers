@@ -49,6 +49,8 @@ const labelSubmissionSchema = new mongoose.Schema(
     reviewedAt: { type: Date },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reviewerNotes: { type: String, default: '' },
+    autoScore: { type: Number, min: 0, max: 100 },
+    autoScoreBreakdown: { type: Array, default: undefined },
   },
   { timestamps: true }
 );

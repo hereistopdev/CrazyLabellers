@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { formatMoney } from '../utils/money';
+
+const MIN_PRICE = 0.3;
+const MAX_PRICE = 2;
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -19,13 +23,27 @@ export default function ManageVideos() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [file, setFile] = useState(null);
-  const [meta, setMeta] = useState({ title: '', description: '', gameTime: '1 - 00:00', durationSeconds: 30 });
+  const [meta, setMeta] = useState({
+    title: '',
+    description: '',
+    gameTime: '1 - 00:00',
+    durationSeconds: 30,
+    taskPrice: 1,
+    challengeNote: '',
+  });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkPrice, setBulkPrice] = useState(1);
+  const [bulkChallenge, setBulkChallenge] = useState('');
+  const [savingPrice, setSavingPrice] = useState(null);
+  const [storage, setStorage] = useState(null);
 
   const load = () => {
     setLoading(true);
-    api
-      .getAdminAssignments()
-      .then(setVideos)
+    Promise.all([api.getAdminAssignments(), api.getStorageStatus()])
+      .then(([videosData, storageData]) => {
+        setVideos(videosData);
+        setStorage(storageData);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
@@ -48,11 +66,24 @@ export default function ManageVideos() {
       if (meta.description) formData.append('description', meta.description);
       formData.append('gameTime', meta.gameTime);
       formData.append('durationSeconds', String(meta.durationSeconds));
+      formData.append('taskPrice', String(meta.taskPrice));
+      if (meta.challengeNote) formData.append('challengeNote', meta.challengeNote);
 
-      await api.uploadVideo(formData);
+      const result = await api.uploadVideo(formData);
       setFile(null);
-      setMeta({ title: '', description: '', gameTime: '1 - 00:00', durationSeconds: 30 });
-      setMessage('Video added successfully');
+      setMeta({
+        title: '',
+        description: '',
+        gameTime: '1 - 00:00',
+        durationSeconds: 30,
+        taskPrice: 1,
+        challengeNote: '',
+      });
+      setMessage(
+        result.storage === 'vps'
+          ? 'Video uploaded to VPS and added to the app'
+          : 'Video added successfully'
+      );
       load();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
@@ -97,6 +128,49 @@ export default function ManageVideos() {
     }
   };
 
+  const savePrice = async (videoId, taskPrice, challengeNote) => {
+    setSavingPrice(videoId);
+    setError('');
+    try {
+      await api.updateAssignmentPrice(videoId, { taskPrice, challengeNote });
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingPrice(null);
+    }
+  };
+
+  const applyBulkPrice = async () => {
+    if (selectedIds.length === 0) {
+      setError('Select at least one video');
+      return;
+    }
+    setSavingPrice('bulk');
+    setError('');
+    try {
+      await api.bulkUpdateAssignmentPrice({
+        assignmentIds: selectedIds,
+        taskPrice: bulkPrice,
+        challengeNote: bulkChallenge,
+      });
+      setSelectedIds([]);
+      setMessage(`Updated price for ${selectedIds.length} video(s)`);
+      load();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingPrice(null);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   if (loading) return <div className="loading">Loading videos...</div>;
 
   return (
@@ -113,6 +187,24 @@ export default function ManageVideos() {
 
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-success">{message}</div>}
+
+      {storage && (
+        <div className={`alert ${storage.ok ? 'alert-info' : 'alert-error'}`}>
+          {storage.enabled ? (
+            <>
+              <strong>VPS storage connected</strong> — uploads from this page go to{' '}
+              {storage.videoDir} on {storage.host}. Videos play from{' '}
+              {storage.videoBaseUrl || 'VIDEO_BASE_URL'} ({storage.clipCount ?? 0} clips on VPS).
+            </>
+          ) : (
+            <>
+              <strong>Local storage</strong> — clips save to the backend server disk. Set VPS SSH
+              env vars on Render to upload directly to your Linux VPS.
+            </>
+          )}
+          {!storage.ok && storage.message && <div style={{ marginTop: 6 }}>{storage.message}</div>}
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: '2rem' }}>
         <h3 style={{ marginBottom: '1rem' }}>Add video</h3>
@@ -160,6 +252,28 @@ export default function ManageVideos() {
               onChange={(e) => setMeta({ ...meta, durationSeconds: parseInt(e.target.value, 10) || 30 })}
             />
           </div>
+          <div className="form-group">
+            <label>Task price (USD)</label>
+            <input
+              type="number"
+              min={MIN_PRICE}
+              max={MAX_PRICE}
+              step="0.1"
+              value={meta.taskPrice}
+              onChange={(e) => setMeta({ ...meta, taskPrice: parseFloat(e.target.value) || 1 })}
+            />
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+              Set between {formatMoney(MIN_PRICE)} and {formatMoney(MAX_PRICE)} based on clip difficulty.
+            </p>
+          </div>
+          <div className="form-group">
+            <label>Challenge note (optional)</label>
+            <input
+              value={meta.challengeNote}
+              onChange={(e) => setMeta({ ...meta, challengeNote: e.target.value })}
+              placeholder="e.g. Dense events, low visibility"
+            />
+          </div>
           <div className="actions-row">
             <button type="submit" className="btn btn-primary btn-sm" disabled={uploading}>
               {uploading ? 'Uploading...' : 'Upload video'}
@@ -170,13 +284,45 @@ export default function ManageVideos() {
               onClick={importFromFolder}
               disabled={importing}
             >
-              {importing ? 'Scanning...' : 'Import from data folder'}
+              {importing ? 'Scanning...' : storage?.enabled ? 'Sync VPS clips to app' : 'Import from data folder'}
             </button>
           </div>
         </form>
       </div>
 
       <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>Videos ({videos.length})</h2>
+
+      {videos.length > 0 && (
+        <div className="card bulk-price-bar" style={{ marginBottom: '1rem', padding: '1rem' }}>
+          <strong>Bulk set price</strong>
+          <div className="actions-row" style={{ marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <input
+              type="number"
+              min={MIN_PRICE}
+              max={MAX_PRICE}
+              step="0.1"
+              value={bulkPrice}
+              onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 1)}
+              style={{ width: 90 }}
+            />
+            <input
+              value={bulkChallenge}
+              onChange={(e) => setBulkChallenge(e.target.value)}
+              placeholder="Challenge note (optional)"
+              style={{ flex: 1, minWidth: 180 }}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={applyBulkPrice}
+              disabled={savingPrice === 'bulk' || selectedIds.length === 0}
+            >
+              {savingPrice === 'bulk' ? 'Saving...' : `Apply to ${selectedIds.length} selected`}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="card table-wrap">
         {videos.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
@@ -186,8 +332,11 @@ export default function ManageVideos() {
           <table>
             <thead>
               <tr>
+                <th></th>
                 <th>Clip ID</th>
                 <th>Title</th>
+                <th>Price</th>
+                <th>Challenge</th>
                 <th>Status</th>
                 <th>Assigned to</th>
                 <th>Actions</th>
@@ -196,8 +345,45 @@ export default function ManageVideos() {
             <tbody>
               {videos.map((video) => (
                 <tr key={video._id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(video._id)}
+                      onChange={() => toggleSelect(video._id)}
+                    />
+                  </td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{video.clipId || '—'}</td>
                   <td>{video.title}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min={MIN_PRICE}
+                      max={MAX_PRICE}
+                      step="0.1"
+                      defaultValue={video.taskPrice ?? 1}
+                      className="price-input"
+                      onBlur={(e) => {
+                        const next = parseFloat(e.target.value);
+                        if (next !== video.taskPrice && !Number.isNaN(next)) {
+                          savePrice(video._id, next, video.challengeNote || '');
+                        }
+                      }}
+                      disabled={savingPrice === video._id}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      defaultValue={video.challengeNote || ''}
+                      placeholder="—"
+                      className="challenge-input"
+                      onBlur={(e) => {
+                        if (e.target.value !== (video.challengeNote || '')) {
+                          savePrice(video._id, video.taskPrice ?? 1, e.target.value);
+                        }
+                      }}
+                      disabled={savingPrice === video._id}
+                    />
+                  </td>
                   <td>
                     <span className={`status-badge status-${video.status}`}>
                       {STATUS_LABELS[video.status] || video.status}

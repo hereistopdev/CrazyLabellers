@@ -14,8 +14,10 @@ import ManageLabellers from './pages/ManageLabellers';
 import ManageVideos from './pages/ManageVideos';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Earnings from './pages/Earnings';
+import LabelingTest from './pages/LabelingTest';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewSubmission from './pages/ReviewSubmission';
+import LabellerProfile from './pages/LabellerProfile';
 
 function ProtectedRoute({ children, adminOnly = false, labellerOnly = false, reviewerOnly = false }) {
   const { user, loading } = useAuth();
@@ -110,6 +112,14 @@ export default function App() {
           }
         />
         <Route
+          path="labeling-test"
+          element={
+            <ProtectedRoute labellerOnly>
+              <LabelingTest />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="assignments"
           element={
             <ProtectedRoute labellerOnly>
@@ -178,6 +188,22 @@ export default function App() {
           element={
             <ProtectedRoute labellerOnly>
               <Earnings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute labellerOnly>
+              <LabellerProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile/:id"
+          element={
+            <ProtectedRoute>
+              <LabellerProfile />
             </ProtectedRoute>
           }
         />

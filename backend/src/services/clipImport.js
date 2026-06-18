@@ -1,39 +1,30 @@
 const fs = require('fs');
-const path = require('path');
 const VideoAssignment = require('../models/VideoAssignment');
 const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
-
-function getVideoDataDir() {
-  return process.env.VIDEO_DATA_DIR || path.resolve(__dirname, '..', '..', '..', '..', 'data');
-}
-
-function buildVideoUrl(clipId) {
-  const port = process.env.PORT || 5000;
-  const base = process.env.API_BASE_URL || `http://localhost:${port}`;
-  return `${base}/api/videos/${clipId}.mp4`;
-}
+const { getVideoDataDir, buildVideoUrl, listStoredClipIds } = require('./videoStorage');
+const { isVpsStorageEnabled } = require('./vpsStorage');
 
 async function importClipsFromDir(dataDir = getVideoDataDir()) {
-  if (!fs.existsSync(dataDir)) {
-    throw new Error(`VIDEO_DATA_DIR not found: ${dataDir}`);
-  }
+  let clipIds;
+  if (isVpsStorageEnabled()) {
+    clipIds = await listStoredClipIds();
+  } else {
+    if (!fs.existsSync(dataDir)) {
+      throw new Error(`VIDEO_DATA_DIR not found: ${dataDir}`);
+    }
 
-  const files = fs
-    .readdirSync(dataDir)
-    .filter((name) => name.toLowerCase().endsWith('.mp4'))
-    .sort();
+    clipIds = fs
+      .readdirSync(dataDir)
+      .filter((name) => name.toLowerCase().endsWith('.mp4'))
+      .map((name) => name.replace(/\.mp4$/i, ''))
+      .filter((clipId) => CLIP_ID_PATTERN.test(clipId));
+  }
 
   let created = 0;
   let skipped = 0;
   const imported = [];
 
-  for (const file of files) {
-    const clipId = file.replace(/\.mp4$/i, '');
-    if (!CLIP_ID_PATTERN.test(clipId)) {
-      skipped += 1;
-      continue;
-    }
-
+  for (const clipId of clipIds.sort()) {
     const existing = await VideoAssignment.findOne({ clipId });
     if (existing) {
       skipped += 1;
@@ -54,7 +45,13 @@ async function importClipsFromDir(dataDir = getVideoDataDir()) {
     imported.push({ clipId, id: assignment._id });
   }
 
-  return { created, skipped, total: files.length, imported, dataDir };
+  return {
+    created,
+    skipped,
+    total: clipIds.length,
+    imported,
+    dataDir: isVpsStorageEnabled() ? process.env.VPS_VIDEO_DIR : dataDir,
+  };
 }
 
 module.exports = { importClipsFromDir, getVideoDataDir, buildVideoUrl };

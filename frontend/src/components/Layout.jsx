@@ -86,6 +86,12 @@ export default function Layout() {
                 Knowledge Test
               </NavLink>
               <NavLink
+                to="/labeling-test"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Labeling test
+              </NavLink>
+              <NavLink
                 to="/assignments"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
@@ -96,6 +102,12 @@ export default function Layout() {
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
                 Earnings
+              </NavLink>
+              <NavLink
+                to="/profile"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Profile
               </NavLink>
             </>
           )}

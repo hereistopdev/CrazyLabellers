@@ -4,7 +4,8 @@ const VideoAssignment = require('../models/VideoAssignment');
 const PaymentSettings = require('../models/PaymentSettings');
 const { auth, requireRole } = require('../middleware/auth');
 const { isReviewer } = require('../config/roles');
-const { calculateEarnings, DEFAULT_RATE_PER_POINT } = require('../config/payments');
+const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
+const { upsertLabellerReview } = require('../services/labellerProfile');
 const { loadReferenceForClip } = require('../services/referenceAnnotations');
 const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
 
@@ -35,6 +36,7 @@ function buildReviewPayload(submission, assignment, variant = 'post') {
   return {
     submission,
     assignment,
+    autoScore: submission.autoScore,
     reference: {
       hasReference: reference.hasReference,
       events: reference.events,
@@ -54,7 +56,7 @@ router.get('/submissions', auth, requireReviewerRole, async (req, res) => {
 
     const submissions = await LabelSubmission.find(filter)
       .populate('userId', 'name email status')
-      .populate('assignmentId', 'title videoUrl clipId')
+      .populate('assignmentId', 'title videoUrl clipId taskPrice challengeNote')
       .sort({ updatedAt: -1 });
 
     return res.json(submissions);
@@ -152,7 +154,7 @@ router.patch('/submissions/:id/validate', auth, requireReviewerRole, async (req,
 
 router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker'), async (req, res) => {
   try {
-    const { status, reviewerNotes, reviewPoints } = req.body;
+    const { status, reviewerNotes, reviewPoints, rating, reviewComment, aspects } = req.body;
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'Status must be approved or rejected' });
@@ -163,11 +165,17 @@ router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker'), a
       settings = await PaymentSettings.create({ ratePerPoint: DEFAULT_RATE_PER_POINT });
     }
 
-    const points =
+    const submissionDoc = await LabelSubmission.findById(req.params.id);
+    if (!submissionDoc) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const assignment = await VideoAssignment.findById(submissionDoc.assignmentId);
+    const points = status === 'approved' ? clampReviewPoints(parseInt(reviewPoints, 10) || 0) : 0;
+    const earnings =
       status === 'approved'
-        ? Math.max(0, Math.min(100, parseInt(reviewPoints, 10) || 0))
+        ? calculateTaskEarnings(points, assignment?.taskPrice, settings.ratePerPoint)
         : 0;
-    const earnings = status === 'approved' ? calculateEarnings(points, settings.ratePerPoint) : 0;
 
     const submission = await LabelSubmission.findByIdAndUpdate(
       req.params.id,
@@ -184,17 +192,30 @@ router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker'), a
       .populate('userId', 'name email')
       .populate('reviewedBy', 'name email');
 
-    if (!submission) {
-      return res.status(404).json({ message: 'Submission not found' });
-    }
-
     if (submission.assignmentId) {
       await VideoAssignment.findByIdAndUpdate(submission.assignmentId, {
         status: status === 'approved' ? 'approved' : 'rejected',
       });
     }
 
-    const assignment = await VideoAssignment.findById(submission.assignmentId);
+    if (status === 'approved' && rating != null) {
+      const starRating = Math.max(1, Math.min(5, parseInt(rating, 10) || 0));
+      if (starRating >= 1) {
+        await upsertLabellerReview({
+          labellerId: submission.userId._id || submission.userId,
+          submissionId: submission._id,
+          reviewerId: req.user._id,
+          rating: starRating,
+          comment: reviewComment || reviewerNotes || '',
+          aspects: aspects || undefined,
+          assignmentTitle: assignment?.title || '',
+          taskPrice: assignment?.taskPrice,
+          reviewPoints: points,
+          earnings,
+        });
+      }
+    }
+
     return res.json(buildReviewPayload(submission, assignment));
   } catch (error) {
     return res.status(400).json({ message: error.message });

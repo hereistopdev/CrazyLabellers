@@ -2,6 +2,7 @@ const User = require('../models/User');
 const VideoAssignment = require('../models/VideoAssignment');
 const { terminologies, testQuestions, sampleAssignments } = require('./data');
 const { syncTerminology, syncTestQuestions } = require('./syncContent');
+const { setupPretestClips } = require('../services/pretestSetup');
 
 async function runSeed({ force = false } = {}) {
   if (force) {
@@ -44,6 +45,13 @@ async function runSeed({ force = false } = {}) {
     });
   }
 
+  let pretestSetup = null;
+  try {
+    pretestSetup = await setupPretestClips({ pretestCount: 5 });
+  } catch (error) {
+    console.warn('Pretest clip setup skipped:', error.message);
+  }
+
   return {
     skipped: false,
     terminology: terminologies.length,
@@ -51,6 +59,7 @@ async function runSeed({ force = false } = {}) {
     assignments: await VideoAssignment.countDocuments(),
     adminEmail,
     checkerEmail,
+    pretestSetup,
   };
 }
 

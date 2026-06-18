@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
+import StarRating from '../components/StarRating';
 import { LABELLER_STATUSES } from '../utils/roles';
 
 const EMPTY_FORM = { name: '', email: '', password: '', status: 'pending' };
@@ -300,6 +302,9 @@ export default function ManageLabellers() {
                 <div>
                   <h3>{detail.labeller.name}</h3>
                   <p className="detail-email">{detail.labeller.email}</p>
+                  <Link to={`/profile/${detail.labeller._id}`} className="btn btn-secondary btn-sm">
+                    View work profile
+                  </Link>
                 </div>
                 <button
                   type="button"
@@ -311,6 +316,15 @@ export default function ManageLabellers() {
               </div>
 
               <div className="detail-stats">
+                <div>
+                  <StarRating value={Math.round(detail.labeller.avgRating || 0)} readOnly size="sm" />
+                  <strong>{detail.labeller.avgRating || '—'}</strong>
+                  <span>{detail.labeller.reviewCount || 0} reviews</span>
+                </div>
+                <div>
+                  <strong>{detail.labeller.jobsCompleted || 0}</strong>
+                  <span>Jobs done</span>
+                </div>
                 <div>
                   <strong>{detail.labeller.bestTestScore}%</strong>
                   <span>Best score</span>

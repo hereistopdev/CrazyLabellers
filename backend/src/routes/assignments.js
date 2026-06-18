@@ -3,21 +3,51 @@ const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
 const { isLabeller } = require('../config/roles');
+const {
+  gradeSubmissionAgainstReference,
+  recordLabelingTestAttempt,
+  canAccessPretest,
+  canAccessProduction,
+} = require('../services/grading');
 
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
+    const kind = req.query.kind;
+
     if (isLabeller(req.user)) {
       if (req.user.status !== 'passed_test' && req.user.status !== 'approved') {
         return res.status(403).json({
           message: 'You must pass the knowledge test before accessing labeling assignments',
         });
       }
-      filter = {
-        $or: [{ assignedTo: req.user._id }, { status: 'available' }],
-      };
+
+      if (kind === 'pretest') {
+        if (!canAccessPretest(req.user)) {
+          return res.status(403).json({ message: 'Knowledge test required first' });
+        }
+        filter = {
+          kind: 'pretest',
+          $or: [{ assignedTo: req.user._id }, { status: 'available' }],
+        };
+      } else {
+        if (!canAccessProduction(req.user)) {
+          return res.status(403).json({
+            message:
+              'Pass the labeling pre-test with 80/100 or higher before accessing real tasks',
+          });
+        }
+        filter = {
+          $and: [
+            { $or: [{ kind: 'production' }, { kind: { $exists: false } }] },
+            { $or: [{ assignedTo: req.user._id }, { status: 'available' }] },
+          ],
+        };
+      }
+    } else if (kind) {
+      filter.kind = kind;
     }
 
     const assignments = await VideoAssignment.find(filter)
@@ -38,6 +68,18 @@ router.get('/:id', auth, async (req, res) => {
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
+
+    if (isLabeller(req.user)) {
+      if (assignment.kind === 'pretest' && !canAccessPretest(req.user)) {
+        return res.status(403).json({ message: 'Knowledge test required first' });
+      }
+      if (assignment.kind === 'production' && !canAccessProduction(req.user)) {
+        return res.status(403).json({
+          message: 'Pass the labeling pre-test (80/100+) before real tasks',
+        });
+      }
+    }
+
     return res.json(assignment);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -63,6 +105,16 @@ router.post('/:id/claim', auth, async (req, res) => {
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
+
+    if (assignment.kind === 'pretest' && !canAccessPretest(req.user)) {
+      return res.status(403).json({ message: 'Knowledge test required first' });
+    }
+    if (assignment.kind === 'production' && !canAccessProduction(req.user)) {
+      return res.status(403).json({
+        message: 'Pass the labeling pre-test (80/100+) before claiming real tasks',
+      });
+    }
+
     if (assignment.status !== 'available') {
       return res.status(400).json({ message: 'Assignment is not available' });
     }
@@ -169,15 +221,58 @@ router.put('/:id/labels', auth, async (req, res) => {
       { upsert: true, new: true, runValidators: true }
     );
 
+    let grading = null;
+
     if (status === 'submitted') {
       assignment.status = 'submitted';
       await assignment.save();
+
+      try {
+        const { scoreResult } = await gradeSubmissionAgainstReference(submission, assignment);
+        grading = {
+          autoScore: scoreResult.totalScore,
+          passed: scoreResult.passed,
+          passThreshold: scoreResult.passThreshold,
+          breakdown: scoreResult.breakdown,
+          matchedCount: scoreResult.matchedCount,
+          missingCount: scoreResult.missingCount,
+          extraCount: scoreResult.extraCount,
+          referenceEventCount: scoreResult.comparison.summary.totalReference,
+          pointsPerEvent: scoreResult.pointsPerEvent,
+        };
+
+        if (assignment.kind === 'pretest') {
+          const { user } = await recordLabelingTestAttempt(
+            req.user._id,
+            assignment._id,
+            submission,
+            scoreResult
+          );
+          grading.user = {
+            bestLabelingTestScore: user.bestLabelingTestScore,
+            labelingTestPassed: user.labelingTestPassed,
+            canAccessProduction: canAccessProduction(user),
+          };
+
+          if (!scoreResult.passed) {
+            assignment.status = 'available';
+            assignment.assignedTo = null;
+            await assignment.save();
+          }
+        } else if (scoreResult.passed && !submission.reviewPoints) {
+          submission.reviewPoints = scoreResult.totalScore;
+          await submission.save();
+          grading.suggestedReviewPoints = scoreResult.totalScore;
+        }
+      } catch (gradeError) {
+        grading = { error: gradeError.message };
+      }
     } else if (assignment.status === 'assigned') {
       assignment.status = 'in_progress';
       await assignment.save();
     }
 
-    return res.json(submission);
+    return res.json({ submission, grading });
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }

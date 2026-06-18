@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
+import StarRating from '../components/StarRating';
 
 export default function Earnings() {
   const [data, setData] = useState(null);
@@ -25,9 +27,12 @@ export default function Earnings() {
       <div className="page-header">
         <h1>My Earnings</h1>
         <p>
-          You earn money based on admin review points for each approved labeling task. Rate:{' '}
-          {formatMoney(data.settings.ratePerPoint, currency)} per point.
+          You earn based on task price and review quality. Each task pays up to its set price at 100
+          review points.
         </p>
+        <Link to="/profile" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
+          View my work profile
+        </Link>
       </div>
 
       <div className="stat-grid">
@@ -69,12 +74,20 @@ export default function Earnings() {
                     {t.status === 'submitted' ? 'pending review' : t.status}
                   </span>
                   <span>{t.eventsCount} events</span>
+                  {t.taskPrice != null && <span>Up to {formatMoney(t.taskPrice, currency)}</span>}
                   {t.reviewPoints != null && <span>{t.reviewPoints} review pts</span>}
                   {t.earnings > 0 && (
                     <span className="earnings-cell">{formatMoney(t.earnings, currency)}</span>
                   )}
+                  {t.rating != null && (
+                    <span>
+                      <StarRating value={t.rating} readOnly size="sm" />
+                    </span>
+                  )}
                 </div>
-                {t.reviewerNotes && <p className="finance-task-notes">{t.reviewerNotes}</p>}
+                {(t.reviewComment || t.reviewerNotes) && (
+                  <p className="finance-task-notes">{t.reviewComment || t.reviewerNotes}</p>
+                )}
               </li>
             ))}
           </ul>

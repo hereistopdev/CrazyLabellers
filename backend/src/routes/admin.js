@@ -9,9 +9,11 @@ const VideoAssignment = require('../models/VideoAssignment');
 const { auth, requireRole } = require('../middleware/auth');
 const { LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
-const { calculateEarnings, DEFAULT_RATE_PER_POINT } = require('../config/payments');
+const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice } = require('../config/payments');
+const { upsertLabellerReview, getLabellerStats } = require('../services/labellerProfile');
 const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
 const { importClipsFromDir } = require('../services/clipImport');
+const { isRemoteVideoStorage, storeVideoFile, getStorageStatus } = require('../services/videoStorage');
 const {
   ensureVideoDataDir,
   resolveClipId,
@@ -20,15 +22,21 @@ const {
 } = require('../services/videoFiles');
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination(_req, _file, cb) {
-      cb(null, ensureVideoDataDir());
-    },
-    filename(_req, file, cb) {
-      const clipId = resolveClipId(file.originalname);
-      cb(null, `${clipId}.mp4`);
-    },
-  }),
+  storage: (() => {
+    const { isVpsStorageEnabled } = require('../services/vpsStorage');
+    if (isVpsStorageEnabled()) {
+      return multer.memoryStorage();
+    }
+    return multer.diskStorage({
+      destination(_req, _file, cb) {
+        cb(null, ensureVideoDataDir());
+      },
+      filename(_req, file, cb) {
+        const clipId = resolveClipId(file.originalname);
+        cb(null, `${clipId}.mp4`);
+      },
+    });
+  })(),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'video/mp4' || file.originalname.toLowerCase().endsWith('.mp4')) {
@@ -156,17 +164,18 @@ router.get('/labellers/:id', auth, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Labeller not found' });
     }
 
-    const [testResults, submissions, assignmentsClaimed] = await Promise.all([
+    const [testResults, submissions, assignmentsClaimed, profileStats] = await Promise.all([
       TestResult.find({ userId: labeller._id }).sort({ createdAt: -1 }).limit(10),
       LabelSubmission.find({ userId: labeller._id })
-        .populate('assignmentId', 'title status')
+        .populate('assignmentId', 'title status taskPrice')
         .sort({ updatedAt: -1 })
         .limit(20),
       VideoAssignment.countDocuments({ assignedTo: labeller._id }),
+      getLabellerStats(labeller._id),
     ]);
 
     return res.json({
-      labeller,
+      labeller: { ...labeller.toObject(), ...profileStats },
       testResults,
       submissions,
       assignmentsClaimed,
@@ -300,7 +309,7 @@ router.get('/submissions', auth, requireRole('admin'), async (_req, res) => {
 
 router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { status, reviewerNotes, reviewPoints } = req.body;
+    const { status, reviewerNotes, reviewPoints, rating, reviewComment, aspects } = req.body;
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'Status must be approved or rejected' });
@@ -311,11 +320,17 @@ router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, 
       settings = await PaymentSettings.create({ ratePerPoint: DEFAULT_RATE_PER_POINT });
     }
 
-    const points =
+    const submissionDoc = await LabelSubmission.findById(req.params.id);
+    if (!submissionDoc) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const assignment = await VideoAssignment.findById(submissionDoc.assignmentId);
+    const points = status === 'approved' ? clampReviewPoints(parseInt(reviewPoints, 10) || 0) : 0;
+    const earnings =
       status === 'approved'
-        ? Math.max(0, Math.min(100, parseInt(reviewPoints, 10) || 0))
+        ? calculateTaskEarnings(points, assignment?.taskPrice, settings.ratePerPoint)
         : 0;
-    const earnings = status === 'approved' ? calculateEarnings(points, settings.ratePerPoint) : 0;
 
     const submission = await LabelSubmission.findByIdAndUpdate(
       req.params.id,
@@ -330,16 +345,30 @@ router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, 
       { new: true }
     )
       .populate('userId', 'name email')
-      .populate('assignmentId', 'title');
-
-    if (!submission) {
-      return res.status(404).json({ message: 'Submission not found' });
-    }
+      .populate('reviewedBy', 'name email');
 
     if (submission.assignmentId) {
-      await VideoAssignment.findByIdAndUpdate(submission.assignmentId._id || submission.assignmentId, {
+      await VideoAssignment.findByIdAndUpdate(submission.assignmentId, {
         status: status === 'approved' ? 'approved' : 'rejected',
       });
+    }
+
+    if (status === 'approved' && rating != null) {
+      const starRating = Math.max(1, Math.min(5, parseInt(rating, 10) || 0));
+      if (starRating >= 1) {
+        await upsertLabellerReview({
+          labellerId: submission.userId._id || submission.userId,
+          submissionId: submission._id,
+          reviewerId: req.user._id,
+          rating: starRating,
+          comment: reviewComment || reviewerNotes || '',
+          aspects: aspects || undefined,
+          assignmentTitle: assignment?.title || '',
+          taskPrice: assignment?.taskPrice,
+          reviewPoints: points,
+          earnings,
+        });
+      }
     }
 
     return res.json(submission);
@@ -359,14 +388,74 @@ router.get('/assignments', auth, requireRole('admin'), async (_req, res) => {
   }
 });
 
+router.patch('/assignments/:id/price', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { taskPrice, challengeNote } = req.body;
+    const update = {};
+
+    if (taskPrice !== undefined) {
+      update.taskPrice = validateTaskPrice(taskPrice);
+    }
+    if (challengeNote !== undefined) {
+      update.challengeNote = String(challengeNote).trim();
+    }
+
+    const assignment = await VideoAssignment.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+    }).populate('assignedTo', 'name email status');
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    return res.json(assignment);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.patch('/assignments/bulk-price', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { assignmentIds, taskPrice, challengeNote } = req.body;
+    if (!Array.isArray(assignmentIds) || assignmentIds.length === 0) {
+      return res.status(400).json({ message: 'assignmentIds array is required' });
+    }
+
+    const update = {};
+    if (taskPrice !== undefined) {
+      update.taskPrice = validateTaskPrice(taskPrice);
+    }
+    if (challengeNote !== undefined) {
+      update.challengeNote = String(challengeNote).trim();
+    }
+
+    const result = await VideoAssignment.updateMany({ _id: { $in: assignmentIds } }, update);
+    return res.json({ modified: result.modifiedCount, taskPrice: update.taskPrice });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/storage-status', auth, requireRole('admin'), async (_req, res) => {
+  try {
+    const status = await getStorageStatus();
+    return res.json(status);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
 router.post('/videos', auth, requireRole('admin'), upload.single('video'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No video file uploaded' });
     }
 
-    const clipId = path.basename(req.file.filename, '.mp4');
+    const clipId = resolveClipId(req.file.originalname || req.file.filename);
     const durationSeconds = parseInt(req.body.durationSeconds, 10) || 30;
+    const taskPrice = req.body.taskPrice != null ? validateTaskPrice(req.body.taskPrice) : undefined;
+
+    await storeVideoFile(clipId, req.file);
 
     const assignment = await createVideoAssignment({
       clipId,
@@ -374,9 +463,14 @@ router.post('/videos', auth, requireRole('admin'), upload.single('video'), async
       description: req.body.description?.trim() || '',
       gameTime: req.body.gameTime?.trim() || '1 - 00:00',
       durationSeconds,
+      taskPrice,
+      challengeNote: req.body.challengeNote?.trim() || '',
     });
 
-    return res.status(201).json(assignment);
+    return res.status(201).json({
+      ...assignment.toObject(),
+      storage: isRemoteVideoStorage() ? 'vps' : 'local',
+    });
   } catch (error) {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);

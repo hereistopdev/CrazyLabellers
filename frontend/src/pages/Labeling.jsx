@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 import {
   applyFrameOffset,
   formatOffset,
@@ -10,6 +11,7 @@ import {
 } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import EventPickerModal from '../components/EventPickerModal';
+import LabelingScoreModal from '../components/LabelingScoreModal';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
@@ -22,6 +24,7 @@ function formatTime(seconds) {
 
 export default function Labeling() {
   const { id } = useParams();
+  const { refreshUser } = useAuth();
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const [assignment, setAssignment] = useState(null);
@@ -35,6 +38,7 @@ export default function Labeling() {
   const [playMode, setPlayMode] = useState('paused');
   const [magnifyEnabled, setMagnifyEnabled] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
+  const [gradingResult, setGradingResult] = useState(null);
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
@@ -197,10 +201,24 @@ export default function Labeling() {
       setSaving(true);
       setError('');
       try {
-        await api.saveLabels(id, { events, status });
-        setMessage(status === 'submitted' ? 'Submitted for review!' : 'Draft saved');
+        const data = await api.saveLabels(id, { events, status });
+        if (status === 'submitted' && data.grading && !data.grading.error) {
+          setGradingResult(data.grading);
+          if (assignment?.kind === 'pretest') {
+            await refreshUser();
+          }
+          setMessage(
+            data.grading.passed
+              ? `Pre-test passed — ${data.grading.autoScore}/100`
+              : `Submitted — auto score ${data.grading.autoScore}/100`
+          );
+        } else if (status === 'submitted') {
+          setMessage('Submitted for review!');
+        } else {
+          setMessage('Draft saved');
+        }
         if (status === 'submitted') {
-          setTimeout(() => setMessage(''), 3000);
+          setTimeout(() => setMessage(''), 4000);
         }
       } catch (err) {
         setError(err.message);
@@ -208,7 +226,7 @@ export default function Labeling() {
         setSaving(false);
       }
     },
-    [id, events]
+    [id, events, assignment?.kind, refreshUser]
   );
 
   useEffect(() => {
@@ -307,9 +325,18 @@ export default function Labeling() {
         <p>{assignment?.description}</p>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           Clip frame rate: <strong>{fps} fps</strong> — step ±1 or ±5 frames; frame play holds each frame for 0.5s.
+          {assignment?.kind === 'pretest' && (
+            <>
+              {' '}
+              · <strong>Labeling pre-test</strong> — scored automatically against reference data.
+            </>
+          )}
         </p>
-        <Link to="/assignments" style={{ fontSize: '0.88rem' }}>
-          ← Back to assignments
+        <Link
+          to={assignment?.kind === 'pretest' ? '/labeling-test' : '/assignments'}
+          style={{ fontSize: '0.88rem' }}
+        >
+          ← Back to {assignment?.kind === 'pretest' ? 'labeling test' : 'assignments'}
         </Link>
       </div>
 
@@ -487,6 +514,14 @@ export default function Labeling() {
         onSelect={markEvent}
         onClose={() => setShowEventPicker(false)}
       />
+
+      {gradingResult && (
+        <LabelingScoreModal
+          grading={gradingResult}
+          assignmentTitle={assignment?.title}
+          onClose={() => setGradingResult(null)}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,9 @@ const crypto = require('crypto');
 const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
 const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
-const { getVideoDataDir, buildVideoUrl } = require('./clipImport');
+const { validateTaskPrice } = require('../config/payments');
+const { getVideoDataDir, buildVideoUrl } = require('./videoStorage');
+const { removeStoredVideoFile } = require('./videoStorage');
 
 function ensureVideoDataDir() {
   const dir = getVideoDataDir();
@@ -31,6 +33,8 @@ async function createVideoAssignment({
   gameTime,
   durationSeconds,
   videoUrl,
+  taskPrice,
+  challengeNote,
 }) {
   const existing = await VideoAssignment.findOne({ clipId });
   if (existing) {
@@ -45,6 +49,8 @@ async function createVideoAssignment({
     gameTime: gameTime || '1 - 00:00',
     durationSeconds: durationSeconds || 30,
     fps: 25,
+    taskPrice: taskPrice != null ? validateTaskPrice(taskPrice) : 1,
+    challengeNote: challengeNote || '',
     status: 'available',
   });
 }
@@ -60,10 +66,13 @@ async function removeVideoAssignment(assignmentId, { deleteFile = true } = {}) {
 
   let fileDeleted = false;
   if (deleteFile && assignment.clipId) {
-    const filePath = getClipFilePath(assignment.clipId);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      fileDeleted = true;
+    fileDeleted = await removeStoredVideoFile(assignment.clipId);
+    if (!fileDeleted) {
+      const filePath = getClipFilePath(assignment.clipId);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        fileDeleted = true;
+      }
     }
   }
 

@@ -2389,6 +2389,66 @@ tbody tr:hover {
   gap: 0.4rem;
 }
 
+.labeling-score-modal {
+  max-width: 520px;
+}
+
+.labeling-score-total {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 0.75rem 0;
+}
+
+.labeling-score-total.passed .labeling-score-value {
+  color: #86efac;
+}
+
+.labeling-score-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.labeling-score-max {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.labeling-score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.labeling-score-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+}
+
+.labeling-score-row .type {
+  color: #fff;
+  font-weight: 600;
+}
+
+.labeling-score-row .meta {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
 @media (max-width: 900px) {
   .review-frame-compare {
     grid-template-columns: 1fr;
@@ -2546,6 +2606,203 @@ tbody tr:hover {
 
 @media (max-width: 900px) {
   .finance-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.star-rating {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.star-rating-sm .star-btn {
+  font-size: 0.95rem;
+}
+
+.star-btn.filled {
+  color: #fbbf24;
+}
+
+.star-rating-readonly .star-btn {
+  cursor: default;
+}
+
+.price-input,
+.challenge-input {
+  width: 100%;
+  min-width: 70px;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.task-price-badge {
+  color: #86efac;
+  font-weight: 600;
+}
+
+.profile-hero {
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-hero-main {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22c55e, #15803d);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.profile-email,
+.profile-meta {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.profile-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.profile-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.profile-stat strong {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.profile-aspects {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.profile-section {
+  padding: 1rem;
+}
+
+.profile-section h3 {
+  margin-bottom: 0.75rem;
+}
+
+.profile-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.profile-review-list,
+.profile-work-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-review-item,
+.profile-work-item {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+.profile-review-header,
+.profile-work-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-review-date {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.profile-review-by,
+.profile-review-aspects,
+.profile-work-comment,
+.profile-work-challenge {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.profile-review-comment {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.review-rating-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.review-aspects {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.review-aspect-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+@media (max-width: 900px) {
+  .profile-grid {
     grid-template-columns: 1fr;
   }
 }

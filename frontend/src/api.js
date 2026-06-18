@@ -99,7 +99,16 @@ export const api = {
   submitTest: (answers) =>
     request('/tests/submit', { method: 'POST', body: JSON.stringify({ answers }) }),
   getTestResults: () => request('/tests/results'),
-  getAssignments: () => request('/assignments'),
+  getAssignments: (kind) =>
+    request(kind ? `/assignments?kind=${kind}` : '/assignments'),
+  getLabelingTestStatus: () => request('/labeling-test/status'),
+  getLabelingTestAssignments: () => request('/labeling-test/assignments'),
+  getLabelingTestResults: () => request('/labeling-test/results'),
+  setupPretestClips: (pretestCount) =>
+    request('/labeling-test/setup-clips', {
+      method: 'POST',
+      body: JSON.stringify({ pretestCount }),
+    }),
   getAssignment: (id) => request(`/assignments/${id}`),
   claimAssignment: (id) => request(`/assignments/${id}/claim`, { method: 'POST' }),
   getLabels: (id) => request(`/assignments/${id}/labels`),
@@ -127,6 +136,7 @@ export const api = {
       body: JSON.stringify({ assignmentId }),
     }),
   getAdminAssignments: () => request('/admin/assignments'),
+  getStorageStatus: () => request('/admin/storage-status'),
   uploadVideo: (formData) => uploadRequest('/admin/videos', formData),
   deleteVideo: (id, deleteFile = true) =>
     request(`/admin/videos/${id}?deleteFile=${deleteFile}`, { method: 'DELETE' }),
@@ -158,4 +168,10 @@ export const api = {
   getFinanceLabeller: (id) => request(`/admin/finance/labellers/${id}`),
   getFinanceLabellers: () => request('/admin/finance/labellers'),
   getMyEarnings: () => request('/earnings/me'),
+  getMyProfile: () => request('/labellers/me/profile'),
+  getLabellerProfile: (id) => request(`/labellers/${id}/profile`),
+  updateAssignmentPrice: (id, body) =>
+    request(`/admin/assignments/${id}/price`, { method: 'PATCH', body: JSON.stringify(body) }),
+  bulkUpdateAssignmentPrice: (body) =>
+    request('/admin/assignments/bulk-price', { method: 'PATCH', body: JSON.stringify(body) }),
 };
