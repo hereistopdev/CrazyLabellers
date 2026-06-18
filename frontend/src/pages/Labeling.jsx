@@ -61,15 +61,52 @@ export default function Labeling() {
   const lastEvent = events.length > 0 ? events[events.length - 1] : null;
 
   useEffect(() => {
-    Promise.all([api.getAssignment(id), api.getEvents(), api.getLabels(id)])
-      .then(([assign, types, labels]) => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError('');
+      setAssignment(null);
+      setEvents([]);
+
+      try {
+        let assign;
+        try {
+          assign = await api.getAssignment(id);
+        } catch (assignErr) {
+          if (labellerMode) {
+            assign = await api.getTutorialAssignment(id);
+          } else {
+            throw assignErr;
+          }
+        }
+
+        if (cancelled) return;
+
+        const [types, labels] = await Promise.all([
+          api.getEvents(),
+          assign.kind === 'tutorial' && labellerMode
+            ? Promise.resolve({ events: [] })
+            : api.getLabels(id).catch(() => ({ events: [] })),
+        ]);
+
+        if (cancelled) return;
+
         setAssignment(assign);
         setEventTypes(types);
         setEvents(labels.events || []);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [id]);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, labellerMode]);
 
   useEffect(() => {
     if (!labellerMode || assignment?.kind !== 'tutorial') {
@@ -416,7 +453,18 @@ export default function Labeling() {
   const showReference = adminMode && reference?.hasReference;
 
   if (loading) return <div className="loading">Loading labeler...</div>;
-  if (error && !assignment) return <div className="alert alert-error">{error}</div>;
+  if (error && !assignment) {
+    return (
+      <div>
+        <div className="alert alert-error">{error}</div>
+        {labellerMode && (
+          <Link to="/tutorials" className="btn btn-secondary btn-sm">
+            Back to tutorials
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   const backTo = adminMode
     ? '/admin/videos'

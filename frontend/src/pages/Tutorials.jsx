@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { formatMoney } from '../utils/money';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
+import { labelerPath } from '../utils/labelerAccess';
 
 export default function Tutorials() {
   const { refreshUser } = useAuth();
@@ -84,11 +85,13 @@ export default function Tutorials() {
         </div>
       )}
 
-      {assignments.length === 0 ? (
+      {assignments.filter((a) => a.kind === 'tutorial' || !a.kind).length === 0 ? (
         <div className="empty-state">No tutorial clips configured yet. Ask an admin to mark videos as Tutorial.</div>
       ) : (
         <div className="task-list">
-          {assignments.map((a, index) => {
+          {assignments
+            .filter((a) => a.kind === 'tutorial' || !a.kind)
+            .map((a, index) => {
             const subtitle = assignmentSubtitle(a);
             const stepCount = a.tutorialSteps?.length || 0;
 
@@ -110,7 +113,7 @@ export default function Tutorials() {
                   </p>
                 </div>
                 <div className="task-list-actions">
-                  <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
+                  <Link to={labelerPath(String(a._id))} className="btn btn-primary btn-sm">
                     {a.tutorialCompleted ? 'Review again' : 'Open tutorial'}
                   </Link>
                 </div>

@@ -43,7 +43,10 @@ async function refreshTutorialCompletion(userId) {
 }
 
 function canAccessTutorial(user) {
-  return user.status === 'passed_test' || user.status === 'approved';
+  if (user.status === 'approved' || user.status === 'passed_test') {
+    return true;
+  }
+  return (user.bestTestScore ?? 0) >= 80;
 }
 
 function canAccessPretest(user) {

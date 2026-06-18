@@ -148,14 +148,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="label/:id"
-          element={
-            <ProtectedRoute labelerAccess>
-              <Labeling />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="label/:id" element={<Labeling />} />
         <Route
           path="review"
           element={

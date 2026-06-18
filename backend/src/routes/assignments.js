@@ -85,13 +85,19 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     if (isLabeller(req.user)) {
-      if (assignment.kind === 'tutorial' && !canAccessTutorial(req.user)) {
-        return res.status(403).json({ message: 'Pass the knowledge test first' });
+      const kind = assignment.kind || 'production';
+
+      if (kind === 'tutorial') {
+        if (!canAccessTutorial(req.user)) {
+          return res.status(403).json({ message: 'Pass the knowledge test first' });
+        }
+        return res.json(assignment);
       }
-      if (assignment.kind === 'pretest' && !canAccessPretest(req.user)) {
+
+      if (kind === 'pretest' && !canAccessPretest(req.user)) {
         return res.status(403).json({ message: 'Complete tutorials before pre-test' });
       }
-      if (assignment.kind === 'production' && !canAccessProduction(req.user)) {
+      if (kind === 'production' && !canAccessProduction(req.user)) {
         return res.status(403).json({
           message: 'Pass the labeling pre-test (80/100+) before real tasks',
         });

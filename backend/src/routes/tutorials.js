@@ -63,6 +63,26 @@ router.get('/assignments', auth, async (req, res) => {
   }
 });
 
+router.get('/assignments/:id', auth, async (req, res) => {
+  try {
+    if (!isLabeller(req.user)) {
+      return res.status(403).json({ message: 'Labellers only' });
+    }
+    if (!canAccessTutorial(req.user)) {
+      return res.status(403).json({ message: 'Pass the knowledge test first' });
+    }
+
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment || assignment.kind !== 'tutorial') {
+      return res.status(404).json({ message: 'Tutorial not found' });
+    }
+
+    return res.json(assignment);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
 router.post('/assignments/:id/complete', auth, async (req, res) => {
   try {
     if (!isLabeller(req.user)) {

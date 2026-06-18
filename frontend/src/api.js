@@ -106,6 +106,7 @@ export const api = {
   getLabelingTestResults: () => request('/labeling-test/results'),
   getTutorialStatus: () => request('/tutorials/status'),
   getTutorialAssignments: () => request('/tutorials/assignments'),
+  getTutorialAssignment: (id) => request(`/tutorials/assignments/${id}`),
   completeTutorial: (id) =>
     request(`/tutorials/assignments/${id}/complete`, { method: 'POST' }),
   getTaskGroups: () => request('/admin/tasks/groups'),
