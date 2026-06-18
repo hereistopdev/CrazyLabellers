@@ -6,7 +6,7 @@ const { auth, requireRole } = require('../middleware/auth');
 const { isReviewer } = require('../config/roles');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
 const { upsertLabellerReview } = require('../services/labellerProfile');
-const { loadReferenceForClip } = require('../services/referenceAnnotations');
+const { loadReferenceForClip } = require('../services/referenceStorage');
 const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
 
 const router = express.Router();
@@ -18,36 +18,93 @@ function requireReviewerRole(req, res, next) {
   return next();
 }
 
-function buildReviewPayload(submission, assignment, variant = 'post') {
+async function buildReviewPayload(submission, assignment, variant = 'post', { preview = false } = {}) {
   const reference = assignment?.clipId
-    ? loadReferenceForClip(assignment.clipId, variant)
+    ? await loadReferenceForClip(assignment.clipId, variant)
     : { hasReference: false, events: [] };
 
+  const submissionEvents = submission?.events || [];
   const comparison = reference.hasReference
-    ? compareAnnotations(submission.events, reference.events)
+    ? compareAnnotations(submissionEvents, reference.events)
     : null;
 
   const eventRows = buildEventReviewRows(
-    submission.events,
+    submissionEvents,
     comparison,
-    submission.eventValidations
+    submission?.eventValidations || []
   );
 
   return {
+    preview,
     submission,
     assignment,
-    autoScore: submission.autoScore,
+    autoScore: submission?.autoScore,
     reference: {
       hasReference: reference.hasReference,
       events: reference.events,
       variant: reference.variant,
       annotationCount: reference.annotationCount || 0,
+      source: reference.source,
     },
     comparison,
     eventRows,
     missingReferenceEvents: comparison?.missingInSubmission || [],
   };
 }
+
+router.get('/assignments', auth, requireReviewerRole, async (_req, res) => {
+  try {
+    const assignments = await VideoAssignment.find({ clipId: { $exists: true, $ne: null } })
+      .populate('assignedTo', 'name email')
+      .sort({ createdAt: -1 });
+
+    const clipIds = assignments.map((a) => a.clipId).filter(Boolean);
+    const references = await Promise.all(
+      clipIds.map(async (clipId) => ({
+        clipId,
+        hasReference: (await loadReferenceForClip(clipId)).hasReference,
+      }))
+    );
+    const refMap = new Map(references.map((r) => [r.clipId, r.hasReference]));
+
+    const submissionCounts = await LabelSubmission.aggregate([
+      { $match: { assignmentId: { $in: assignments.map((a) => a._id) } } },
+      { $group: { _id: '$assignmentId', count: { $sum: 1 } } },
+    ]);
+    const subMap = new Map(submissionCounts.map((s) => [String(s._id), s.count]));
+
+    return res.json(
+      assignments.map((a) => ({
+        ...a.toObject(),
+        hasReference: refMap.get(a.clipId) || false,
+        submissionCount: subMap.get(String(a._id)) || 0,
+      }))
+    );
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/assignments/:id/preview', auth, requireReviewerRole, async (req, res) => {
+  try {
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const emptySubmission = {
+      events: [],
+      eventValidations: [],
+      status: 'preview',
+      userId: null,
+    };
+
+    return res.json(await buildReviewPayload(emptySubmission, assignment, variant, { preview: true }));
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
 
 router.get('/submissions', auth, requireReviewerRole, async (req, res) => {
   try {
@@ -81,7 +138,7 @@ router.get('/submissions/:id', auth, requireReviewerRole, async (req, res) => {
     }
 
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
-    return res.json(buildReviewPayload(submission, assignment, variant));
+    return res.json(await buildReviewPayload(submission, assignment, variant));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -116,7 +173,10 @@ router.patch('/submissions/:id/validate', auth, requireReviewerRole, async (req,
     };
 
     if (autoFromComparison && assignment?.clipId) {
-      const reference = loadReferenceForClip(assignment.clipId, variant === 'raw' ? 'raw' : 'post');
+      const reference = await loadReferenceForClip(
+        assignment.clipId,
+        variant === 'raw' ? 'raw' : 'post'
+      );
       if (reference.hasReference) {
         const comparison = compareAnnotations(submission.events, reference.events);
         const matchedIndexes = new Set(
@@ -145,7 +205,11 @@ router.patch('/submissions/:id/validate', auth, requireReviewerRole, async (req,
     );
     await submission.save();
 
-    const payload = buildReviewPayload(submission, assignment, variant === 'raw' ? 'raw' : 'post');
+    const payload = await buildReviewPayload(
+      submission,
+      assignment,
+      variant === 'raw' ? 'raw' : 'post'
+    );
     return res.json(payload);
   } catch (error) {
     return res.status(400).json({ message: error.message });
@@ -216,7 +280,7 @@ router.patch('/submissions/:id/review', auth, requireRole('admin', 'checker'), a
       }
     }
 
-    return res.json(buildReviewPayload(submission, assignment));
+    return res.json(await buildReviewPayload(submission, assignment));
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }

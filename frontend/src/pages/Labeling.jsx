@@ -12,7 +12,9 @@ import {
 import FrameMagnifier from '../components/FrameMagnifier';
 import EventPickerModal from '../components/EventPickerModal';
 import LabelingScoreModal from '../components/LabelingScoreModal';
+import TutorialPanel from '../components/TutorialPanel';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
+import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -220,7 +222,10 @@ export default function Labeling() {
       setError('');
       try {
         const data = await api.saveLabels(id, { events, status });
-        if (status === 'submitted' && data.grading && !data.grading.error) {
+        if (status === 'submitted' && data.tutorial?.completed) {
+          await refreshUser();
+          setMessage('Tutorial completed! Continue to the next tutorial or pre-test.');
+        } else if (status === 'submitted' && data.grading && !data.grading.error) {
           setGradingResult(data.grading);
           if (assignment?.kind === 'pretest') {
             await refreshUser();
@@ -343,6 +348,9 @@ export default function Labeling() {
         <p>{assignment?.description}</p>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           Clip frame rate: <strong>{fps} fps</strong> — step ±1 or ±5 frames; frame play holds each frame for 0.5s.
+          {assignment?.kind === 'tutorial' && (
+            <> · <strong>Tutorial</strong> — follow frame explanations, then submit when done.</>
+          )}
           {assignment?.kind === 'pretest' && (
             <>
               {' '}
@@ -351,10 +359,21 @@ export default function Labeling() {
           )}
         </p>
         <Link
-          to={assignment?.kind === 'pretest' ? '/labeling-test' : '/assignments'}
+          to={
+            assignment?.kind === 'tutorial'
+              ? '/tutorials'
+              : assignment?.kind === 'pretest'
+                ? '/labeling-test'
+                : '/assignments'
+          }
           style={{ fontSize: '0.88rem' }}
         >
-          ← Back to {assignment?.kind === 'pretest' ? 'labeling test' : 'assignments'}
+          ← Back to{' '}
+          {assignment?.kind === 'tutorial'
+            ? 'tutorials'
+            : assignment?.kind === 'pretest'
+              ? 'labeling test'
+              : 'assignments'}
         </Link>
       </div>
 
@@ -374,7 +393,7 @@ export default function Labeling() {
           </div>
         </aside>
 
-        <div className="labeling-layout">
+        <div className={`labeling-layout${assignment?.kind === 'tutorial' ? ' labeling-layout--tutorial' : ''}`}>
         <div className="video-panel">
           <FrameMagnifier
             videoRef={videoRef}
@@ -445,6 +464,15 @@ export default function Labeling() {
             </div>
           </div>
         </div>
+
+        {assignment?.kind === 'tutorial' && (
+          <TutorialPanel
+            assignment={assignment}
+            currentTime={currentTime}
+            fps={fps}
+            onJumpToStep={handleScrub}
+          />
+        )}
 
         <div className="events-panel">
           <h3>Add event</h3>

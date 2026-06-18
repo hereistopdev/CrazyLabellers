@@ -9,6 +9,10 @@ const {
   canAccessPretest,
   canAccessProduction,
 } = require('../services/grading');
+const {
+  canAccessTutorial,
+  refreshTutorialCompletion,
+} = require('../services/tutorialProgress');
 
 const router = express.Router();
 
@@ -24,9 +28,19 @@ router.get('/', auth, async (req, res) => {
         });
       }
 
-      if (kind === 'pretest') {
+      if (kind === 'tutorial') {
+        if (!canAccessTutorial(req.user)) {
+          return res.status(403).json({ message: 'Pass the knowledge test first' });
+        }
+        filter = {
+          kind: 'tutorial',
+          $or: [{ assignedTo: req.user._id }, { status: 'available' }],
+        };
+      } else if (kind === 'pretest') {
         if (!canAccessPretest(req.user)) {
-          return res.status(403).json({ message: 'Knowledge test required first' });
+          return res.status(403).json({
+            message: 'Complete all tutorial tasks before the labeling pre-test',
+          });
         }
         filter = {
           kind: 'pretest',
@@ -52,7 +66,8 @@ router.get('/', auth, async (req, res) => {
 
     const assignments = await VideoAssignment.find(filter)
       .populate('assignedTo', 'name email')
-      .sort({ createdAt: -1 });
+      .populate('groupId', 'name description sortOrder')
+      .sort({ sortOrder: 1, createdAt: -1 });
     return res.json(assignments);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -70,8 +85,11 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     if (isLabeller(req.user)) {
+      if (assignment.kind === 'tutorial' && !canAccessTutorial(req.user)) {
+        return res.status(403).json({ message: 'Pass the knowledge test first' });
+      }
       if (assignment.kind === 'pretest' && !canAccessPretest(req.user)) {
-        return res.status(403).json({ message: 'Knowledge test required first' });
+        return res.status(403).json({ message: 'Complete tutorials before pre-test' });
       }
       if (assignment.kind === 'production' && !canAccessProduction(req.user)) {
         return res.status(403).json({
@@ -106,8 +124,11 @@ router.post('/:id/claim', auth, async (req, res) => {
       return res.status(404).json({ message: 'Assignment not found' });
     }
 
+    if (assignment.kind === 'tutorial' && !canAccessTutorial(req.user)) {
+      return res.status(403).json({ message: 'Pass the knowledge test first' });
+    }
     if (assignment.kind === 'pretest' && !canAccessPretest(req.user)) {
-      return res.status(403).json({ message: 'Knowledge test required first' });
+      return res.status(403).json({ message: 'Complete all tutorial tasks first' });
     }
     if (assignment.kind === 'production' && !canAccessProduction(req.user)) {
       return res.status(403).json({
@@ -224,6 +245,19 @@ router.put('/:id/labels', auth, async (req, res) => {
     let grading = null;
 
     if (status === 'submitted') {
+      if (assignment.kind === 'tutorial') {
+        submission.status = 'approved';
+        await submission.save();
+        assignment.status = 'available';
+        assignment.assignedTo = null;
+        await assignment.save();
+        const { user, progress } = await refreshTutorialCompletion(req.user._id);
+        return res.json({
+          submission,
+          tutorial: { completed: true, progress, tutorialsCompleted: user.tutorialsCompleted },
+        });
+      }
+
       assignment.status = 'submitted';
       await assignment.save();
 

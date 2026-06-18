@@ -8,6 +8,8 @@ import { isEditableTarget } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings } from '../utils/money';
 import StarRating from '../components/StarRating';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
+import {
+  buildSortedEventFrames,
   findNextEventFrame,
   findPrevEventFrame,
   getFrameNumber,
@@ -24,7 +26,8 @@ function formatTime(seconds) {
 }
 
 export default function ReviewSubmission() {
-  const { submissionId } = useParams();
+  const { submissionId, assignmentId } = useParams();
+  const isPreview = Boolean(assignmentId);
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const skippedEventFramesRef = useRef(new Set());
@@ -117,17 +120,24 @@ export default function ReviewSubmission() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.getReviewSubmission(submissionId), api.getFinanceSettings()])
+    const dataPromise = isPreview
+      ? api.getReviewPreview(assignmentId)
+      : api.getReviewSubmission(submissionId);
+    const settingsPromise = isPreview ? Promise.resolve(null) : api.getFinanceSettings();
+
+    Promise.all([dataPromise, settingsPromise])
       .then(([data, settings]) => {
         setReviewData(data);
-        setReviewPoints(data.submission?.reviewPoints || 80);
-        setReviewerNotes(data.submission?.reviewerNotes || '');
-        setRatePerPoint(settings.ratePerPoint);
-        setCurrency(settings.currency || 'USD');
+        if (!isPreview) {
+          setReviewPoints(data.submission?.reviewPoints || 80);
+          setReviewerNotes(data.submission?.reviewerNotes || '');
+          setRatePerPoint(settings.ratePerPoint);
+          setCurrency(settings.currency || 'USD');
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [submissionId]);
+  }, [submissionId, assignmentId, isPreview]);
 
   useEffect(load, [load]);
 
@@ -438,14 +448,27 @@ export default function ReviewSubmission() {
     <div className="labeling-page review-page">
       <div className="page-header">
         <h1>{assignment?.title}</h1>
-        <p>
-          Labeller:{' '}
-          <Link to={`/profile/${submission?.userId?._id || submission?.userId}`}>
-            <strong>{submission?.userId?.name}</strong>
-          </Link>{' '}
-          · {submission?.events?.length || 0} events · Validated {validatedCount}/{eventRows.length} ·
-          Status: <strong>{submission?.status}</strong>
-        </p>
+        {isPreview ? (
+          <p>
+            <strong>Preview mode</strong> — watch video and reference annotations before any labeller
+            submits work. Assignment status: <strong>{assignment?.status}</strong>
+            {reference?.hasReference && (
+              <>
+                {' '}
+                · Reference: {reference.annotationCount} events
+              </>
+            )}
+          </p>
+        ) : (
+          <p>
+            Labeller:{' '}
+            <Link to={`/profile/${submission?.userId?._id || submission?.userId}`}>
+              <strong>{submission?.userId?.name}</strong>
+            </Link>{' '}
+            · {submission?.events?.length || 0} events · Validated {validatedCount}/{eventRows.length}{' '}
+            · Status: <strong>{submission?.status}</strong>
+          </p>
+        )}
         {assignment?.taskPrice != null && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Task price: up to {formatMoney(assignment.taskPrice)}
@@ -598,8 +621,9 @@ export default function ReviewSubmission() {
             submissionEvents={submission?.events || []}
             referenceEvents={reference?.hasReference ? reference.events : []}
             eventRows={eventRows}
-            labellerName={submission?.userId?.name || 'Submitter'}
+            labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
             hasReference={reference?.hasReference}
+            previewMode={isPreview}
             saving={saving}
             onSeek={handleScrub}
             onValidateEvent={validateEvent}
@@ -607,7 +631,7 @@ export default function ReviewSubmission() {
             onAutoValidate={autoValidateFromComparison}
           />
 
-          {submission?.status === 'submitted' && (
+          {!isPreview && submission?.status === 'submitted' && (
             <div className="review-final-bar">
               <div className="review-final-score">
                 <label>Points</label>

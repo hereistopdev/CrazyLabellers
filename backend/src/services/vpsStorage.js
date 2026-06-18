@@ -120,6 +120,7 @@ async function testVpsConnection() {
 module.exports = {
   isVpsStorageEnabled,
   getVpsVideoDir,
+  withSftp,
   uploadVideoToVps,
   deleteVideoFromVps,
   listVpsClipIds,

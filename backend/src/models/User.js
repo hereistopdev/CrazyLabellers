@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema(
     bestLabelingTestScore: { type: Number, default: 0 },
     labelingTestAttempts: { type: Number, default: 0 },
     labelingTestPassed: { type: Boolean, default: false },
+    tutorialsCompleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

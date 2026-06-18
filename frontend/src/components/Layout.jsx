@@ -29,6 +29,12 @@ export default function Layout() {
           {admin ? (
             <>
               <NavLink
+                to="/admin/tasks"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Tasks
+              </NavLink>
+              <NavLink
                 to="/admin/videos"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
@@ -84,6 +90,12 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/test" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                 Knowledge Test
+              </NavLink>
+              <NavLink
+                to="/tutorials"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                Tutorials
               </NavLink>
               <NavLink
                 to="/labeling-test"

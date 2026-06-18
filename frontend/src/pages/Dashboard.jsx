@@ -25,7 +25,8 @@ export default function Dashboard() {
   }
 
   const passedKnowledge = user?.bestTestScore >= 80;
-  const canPretest = user?.status === 'passed_test' || user?.status === 'approved';
+  const tutorialsDone = Boolean(user?.tutorialsCompleted);
+  const canPretest = passedKnowledge && tutorialsDone;
   const passedLabeling =
     user?.labelingTestPassed || (user?.bestLabelingTestScore ?? 0) >= 80 || user?.status === 'approved';
   const canProduction = canPretest && passedLabeling;
@@ -35,8 +36,8 @@ export default function Dashboard() {
       <div className="page-header">
         <h1>Hello, {user?.name}</h1>
         <p>
-          Learn terminology, pass the knowledge test, complete a labeling pre-test scored against
-          reference clips, then unlock real labeling tasks.
+          Learn terminology, pass the knowledge test, complete guided tutorials, then label 3
+          pre-test clips before unlocking real paid tasks.
         </p>
       </div>
 
@@ -46,10 +47,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      {passedKnowledge && !passedLabeling && (
+      {passedKnowledge && !tutorialsDone && (
         <div className="alert alert-info">
-          Knowledge test passed. Complete the labeling pre-test and score at least 80/100 to unlock
-          real tasks.
+          Knowledge test passed. Complete all labeling tutorials (with frame explanations) to unlock
+          the pre-test.
+        </div>
+      )}
+
+      {canPretest && !passedLabeling && (
+        <div className="alert alert-info">
+          Tutorials complete. Label 3 pre-test clips and score at least 80/100 to unlock real tasks.
         </div>
       )}
 
@@ -89,9 +96,34 @@ export default function Dashboard() {
 
         <div className="step-card">
           <div className="step-number">3</div>
+          <h3>Labeling Tutorials</h3>
+          <p>
+            Guided examples with frame-by-frame explanations of why each event belongs on that
+            frame.
+          </p>
+          <div className="actions-row">
+            {passedKnowledge ? (
+              <Link to="/tutorials" className="btn btn-primary btn-sm">
+                {tutorialsDone ? 'Review tutorials' : 'Start tutorials'}
+              </Link>
+            ) : (
+              <button type="button" className="btn btn-secondary btn-sm" disabled>
+                Locked — pass knowledge test first
+              </button>
+            )}
+          </div>
+          {passedKnowledge && (
+            <p style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              {tutorialsDone ? 'All tutorials completed' : 'Required before pre-test'}
+            </p>
+          )}
+        </div>
+
+        <div className="step-card">
+          <div className="step-number">4</div>
           <h3>Labeling Pre-test</h3>
           <p>
-            Label reference clips. Auto score out of 100 — 80+ required. Each reference event
+            Label 3 reference clips. Auto score out of 100 — 80+ required. Each reference event
             counts equally; frame accuracy gives 100, 90, 80… per event.
           </p>
           <div className="actions-row">
@@ -101,7 +133,7 @@ export default function Dashboard() {
               </Link>
             ) : (
               <button type="button" className="btn btn-secondary btn-sm" disabled>
-                Locked — pass knowledge test first
+                {passedKnowledge ? 'Locked — complete tutorials first' : 'Locked — pass knowledge test first'}
               </button>
             )}
           </div>
@@ -113,9 +145,9 @@ export default function Dashboard() {
         </div>
 
         <div className="step-card">
-          <div className="step-number">4</div>
+          <div className="step-number">5</div>
           <h3>Real Labeling Tasks</h3>
-          <p>Production clips after both tests are passed.</p>
+          <p>Production clips grouped by match after both tests are passed.</p>
           <div className="actions-row">
             {canProduction ? (
               <Link to="/assignments" className="btn btn-primary btn-sm">
@@ -130,7 +162,7 @@ export default function Dashboard() {
         </div>
 
         <div className="step-card">
-          <div className="step-number">5</div>
+          <div className="step-number">6</div>
           <h3>My Earnings</h3>
           <p>Track review points and payment earned for approved tasks.</p>
           <div className="actions-row">

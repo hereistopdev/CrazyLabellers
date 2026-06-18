@@ -25,9 +25,11 @@ router.get('/status', auth, async (req, res) => {
 
     return res.json({
       passThreshold: PASS_THRESHOLD,
+      pretestCount: 3,
       bestScore: req.user.bestLabelingTestScore || 0,
       attempts: req.user.labelingTestAttempts || 0,
       passed: Boolean(req.user.labelingTestPassed || req.user.bestLabelingTestScore >= PASS_THRESHOLD),
+      tutorialsCompleted: Boolean(req.user.tutorialsCompleted),
       canAccessPretest: canAccessPretest(req.user),
       canAccessProduction: canAccessProduction(req.user),
       latestResult: latest,
@@ -43,9 +45,11 @@ router.get('/assignments', auth, async (req, res) => {
       return res.status(403).json({ message: 'Labellers only' });
     }
     if (!canAccessPretest(req.user)) {
-      return res.status(403).json({
-        message: 'Pass the knowledge test (80%+) before taking the labeling test',
-      });
+      const msg =
+        req.user.status !== 'passed_test' && req.user.status !== 'approved'
+          ? 'Pass the knowledge test (80%+) before taking the labeling test'
+          : 'Complete all tutorial tasks before the labeling pre-test';
+      return res.status(403).json({ message: msg });
     }
 
     const assignments = await VideoAssignment.find({

@@ -15,6 +15,8 @@ import ManageVideos from './pages/ManageVideos';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Earnings from './pages/Earnings';
 import LabelingTest from './pages/LabelingTest';
+import Tutorials from './pages/Tutorials';
+import ManageTasks from './pages/ManageTasks';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewSubmission from './pages/ReviewSubmission';
 import LabellerProfile from './pages/LabellerProfile';
@@ -112,6 +114,14 @@ export default function App() {
           }
         />
         <Route
+          path="tutorials"
+          element={
+            <ProtectedRoute labellerOnly>
+              <Tutorials />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="labeling-test"
           element={
             <ProtectedRoute labellerOnly>
@@ -144,6 +154,14 @@ export default function App() {
           }
         />
         <Route
+          path="review/assignment/:assignmentId"
+          element={
+            <ProtectedRoute reviewerOnly>
+              <ReviewSubmission />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="review/:submissionId"
           element={
             <ProtectedRoute reviewerOnly>
@@ -156,6 +174,14 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/tasks"
+          element={
+            <ProtectedRoute adminOnly>
+              <ManageTasks />
             </ProtectedRoute>
           }
         />

@@ -14,6 +14,7 @@ const { upsertLabellerReview, getLabellerStats } = require('../services/labeller
 const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
 const { importClipsFromDir } = require('../services/clipImport');
 const { isRemoteVideoStorage, storeVideoFile, getStorageStatus } = require('../services/videoStorage');
+const { saveReferenceForClip, deleteReferenceForClip, hasReferenceForClip } = require('../services/referenceStorage');
 const {
   ensureVideoDataDir,
   resolveClipId,
@@ -21,29 +22,23 @@ const {
   removeVideoAssignment,
 } = require('../services/videoFiles');
 
-const upload = multer({
-  storage: (() => {
-    const { isVpsStorageEnabled } = require('../services/vpsStorage');
-    if (isVpsStorageEnabled()) {
-      return multer.memoryStorage();
-    }
-    return multer.diskStorage({
-      destination(_req, _file, cb) {
-        cb(null, ensureVideoDataDir());
-      },
-      filename(_req, file, cb) {
-        const clipId = resolveClipId(file.originalname);
-        cb(null, `${clipId}.mp4`);
-      },
-    });
-  })(),
+const uploadVideoWithReference = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
+}).fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'reference', maxCount: 1 },
+]);
+
+const uploadReferenceOnly = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
-    if (file.mimetype === 'video/mp4' || file.originalname.toLowerCase().endsWith('.mp4')) {
+    if (file.mimetype === 'application/json' || file.originalname.toLowerCase().endsWith('.json')) {
       cb(null, true);
       return;
     }
-    cb(new Error('Only .mp4 video files are allowed'));
+    cb(new Error('Only .json reference files are allowed'));
   },
 });
 
@@ -382,7 +377,17 @@ router.get('/assignments', auth, requireRole('admin'), async (_req, res) => {
     const assignments = await VideoAssignment.find()
       .populate('assignedTo', 'name email status')
       .sort({ createdAt: -1 });
-    return res.json(assignments);
+
+    const enriched = await Promise.all(
+      assignments.map(async (assignment) => ({
+        ...assignment.toObject(),
+        hasReference: assignment.clipId
+          ? await hasReferenceForClip(assignment.clipId)
+          : false,
+      }))
+    );
+
+    return res.json(enriched);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -445,17 +450,27 @@ router.get('/storage-status', auth, requireRole('admin'), async (_req, res) => {
   }
 });
 
-router.post('/videos', auth, requireRole('admin'), upload.single('video'), async (req, res) => {
+router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, async (req, res) => {
   try {
-    if (!req.file) {
+    const videoFile = req.files?.video?.[0];
+    const referenceFile = req.files?.reference?.[0];
+
+    if (!videoFile) {
       return res.status(400).json({ message: 'No video file uploaded' });
     }
 
-    const clipId = resolveClipId(req.file.originalname || req.file.filename);
+    if (
+      !videoFile.mimetype?.includes('mp4') &&
+      !videoFile.originalname.toLowerCase().endsWith('.mp4')
+    ) {
+      return res.status(400).json({ message: 'Only .mp4 video files are allowed' });
+    }
+
+    const clipId = resolveClipId(videoFile.originalname);
     const durationSeconds = parseInt(req.body.durationSeconds, 10) || 30;
     const taskPrice = req.body.taskPrice != null ? validateTaskPrice(req.body.taskPrice) : undefined;
 
-    await storeVideoFile(clipId, req.file);
+    await storeVideoFile(clipId, videoFile);
 
     const assignment = await createVideoAssignment({
       clipId,
@@ -467,17 +482,57 @@ router.post('/videos', auth, requireRole('admin'), upload.single('video'), async
       challengeNote: req.body.challengeNote?.trim() || '',
     });
 
+    let referenceSaved = false;
+    if (referenceFile) {
+      const rawJson = JSON.parse(referenceFile.buffer.toString('utf8'));
+      await saveReferenceForClip(clipId, rawJson, {
+        sourceFilename: referenceFile.originalname,
+      });
+      referenceSaved = true;
+    }
+
     return res.status(201).json({
       ...assignment.toObject(),
       storage: isRemoteVideoStorage() ? 'vps' : 'local',
+      hasReference: referenceSaved,
     });
   } catch (error) {
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     return res.status(400).json({ message: error.message });
   }
 });
+
+router.post(
+  '/assignments/:id/reference',
+  auth,
+  requireRole('admin'),
+  uploadReferenceOnly.single('reference'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No reference JSON file uploaded' });
+      }
+
+      const assignment = await VideoAssignment.findById(req.params.id);
+      if (!assignment?.clipId) {
+        return res.status(404).json({ message: 'Assignment not found or has no clip ID' });
+      }
+
+      const rawJson = JSON.parse(req.file.buffer.toString('utf8'));
+      const saved = await saveReferenceForClip(assignment.clipId, rawJson, {
+        sourceFilename: req.file.originalname,
+      });
+
+      return res.json({
+        message: 'Reference annotation saved',
+        clipId: assignment.clipId,
+        annotationCount: saved.annotationCount,
+        hasReference: true,
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  }
+);
 
 router.delete('/videos/:id', auth, requireRole('admin'), async (req, res) => {
   try {

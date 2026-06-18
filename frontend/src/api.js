@@ -104,6 +104,23 @@ export const api = {
   getLabelingTestStatus: () => request('/labeling-test/status'),
   getLabelingTestAssignments: () => request('/labeling-test/assignments'),
   getLabelingTestResults: () => request('/labeling-test/results'),
+  getTutorialStatus: () => request('/tutorials/status'),
+  getTutorialAssignments: () => request('/tutorials/assignments'),
+  getTaskGroups: () => request('/admin/tasks/groups'),
+  createTaskGroup: (body) =>
+    request('/admin/tasks/groups', { method: 'POST', body: JSON.stringify(body) }),
+  updateTaskGroup: (id, body) =>
+    request(`/admin/tasks/groups/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteTaskGroup: (id) => request(`/admin/tasks/groups/${id}`, { method: 'DELETE' }),
+  getAdminTasks: (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.kind) qs.set('kind', params.kind);
+    if (params.groupId) qs.set('groupId', params.groupId);
+    const query = qs.toString();
+    return request(`/admin/tasks${query ? `?${query}` : ''}`);
+  },
+  updateAdminTask: (id, body) =>
+    request(`/admin/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   setupPretestClips: (pretestCount) =>
     request('/labeling-test/setup-clips', {
       method: 'POST',
@@ -138,6 +155,8 @@ export const api = {
   getAdminAssignments: () => request('/admin/assignments'),
   getStorageStatus: () => request('/admin/storage-status'),
   uploadVideo: (formData) => uploadRequest('/admin/videos', formData),
+  uploadAssignmentReference: (assignmentId, formData) =>
+    uploadRequest(`/admin/assignments/${assignmentId}/reference`, formData),
   deleteVideo: (id, deleteFile = true) =>
     request(`/admin/videos/${id}?deleteFile=${deleteFile}`, { method: 'DELETE' }),
   importClips: () => request('/admin/import-clips', { method: 'POST' }),
@@ -149,6 +168,9 @@ export const api = {
     }),
   getReviewSubmissions: (status = 'submitted') =>
     request(`/review/submissions?status=${status}`),
+  getReviewAssignments: () => request('/review/assignments'),
+  getReviewPreview: (assignmentId, variant = 'post') =>
+    request(`/review/assignments/${assignmentId}/preview?variant=${variant}`),
   getReviewSubmission: (id, variant = 'post') =>
     request(`/review/submissions/${id}?variant=${variant}`),
   validateSubmissionEvents: (id, body) =>

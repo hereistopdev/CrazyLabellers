@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
 import { readVideoDurationFromFile } from '../utils/videoDuration';
+import { formatTimestamp } from '../utils/formatTimestamp';
 
 const MIN_PRICE = 0.3;
 const MAX_PRICE = 2;
@@ -24,6 +25,7 @@ export default function ManageVideos() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [file, setFile] = useState(null);
+  const [referenceFile, setReferenceFile] = useState(null);
   const [meta, setMeta] = useState({
     title: '',
     description: '',
@@ -79,9 +81,11 @@ export default function ManageVideos() {
       formData.append('durationSeconds', String(durationSeconds));
       formData.append('taskPrice', String(meta.taskPrice));
       if (meta.challengeNote) formData.append('challengeNote', meta.challengeNote);
+      if (referenceFile) formData.append('reference', referenceFile);
 
       const result = await api.uploadVideo(formData);
       setFile(null);
+      setReferenceFile(null);
       setMeta({
         title: '',
         description: '',
@@ -92,8 +96,8 @@ export default function ManageVideos() {
       });
       setMessage(
         result.storage === 'vps'
-          ? 'Video uploaded to VPS and added to the app'
-          : 'Video added successfully'
+          ? `Video uploaded to VPS${result.hasReference ? ' with reference JSON' : ''}`
+          : `Video added${result.hasReference ? ' with reference JSON' : ''}`
       );
       load();
       setTimeout(() => setMessage(''), 3000);
@@ -176,6 +180,24 @@ export default function ManageVideos() {
     }
   };
 
+  const uploadReference = async (video, refFile) => {
+    if (!refFile) return;
+    setSavingPrice(video._id);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('reference', refFile);
+      await api.uploadAssignmentReference(video._id, formData);
+      setMessage('Reference JSON saved');
+      load();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingPrice(null);
+    }
+  };
+
   const toggleSelect = (id) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -230,6 +252,17 @@ export default function ManageVideos() {
             />
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
               Clips must be 25 fps. Filename can be the clip ID (30 hex chars). Otherwise a new ID is generated automatically.
+            </p>
+          </div>
+          <div className="form-group">
+            <label>Reference JSON (optional)</label>
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={(e) => setReferenceFile(e.target.files?.[0] || null)}
+            />
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+              Optional prior work / gold-standard annotation file ({'{clipId}'}_post.json format).
             </p>
           </div>
           <div className="form-group">
@@ -348,8 +381,12 @@ export default function ManageVideos() {
                 <th>Title</th>
                 <th>Price</th>
                 <th>Challenge</th>
+                <th>Kind</th>
                 <th>Status</th>
+                <th>Ref</th>
                 <th>Assigned to</th>
+                <th>Created</th>
+                <th>Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -395,20 +432,45 @@ export default function ManageVideos() {
                       disabled={savingPrice === video._id}
                     />
                   </td>
+                  <td>{video.kind || 'production'}</td>
                   <td>
                     <span className={`status-badge status-${video.status}`}>
                       {STATUS_LABELS[video.status] || video.status}
                     </span>
                   </td>
+                  <td>{video.hasReference ? 'Yes' : '—'}</td>
                   <td>{video.assignedTo?.name || '—'}</td>
+                  <td>{formatTimestamp(video.createdAt)}</td>
+                  <td>{formatTimestamp(video.updatedAt)}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={() => removeVideo(video)}
-                    >
-                      Remove
-                    </button>
+                    <div className="actions-row" style={{ flexWrap: 'wrap', gap: '0.35rem' }}>
+                      <Link
+                        to={`/review/assignment/${video._id}`}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Preview
+                      </Link>
+                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                        {video.hasReference ? 'Replace JSON' : 'Add JSON'}
+                        <input
+                          type="file"
+                          accept="application/json,.json"
+                          hidden
+                          onChange={(e) => {
+                            const ref = e.target.files?.[0];
+                            if (ref) uploadReference(video, ref);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => removeVideo(video)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

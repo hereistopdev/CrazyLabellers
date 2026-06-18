@@ -36,6 +36,7 @@ router.post('/register', async (req, res) => {
         bestTestScore: user.bestTestScore,
       bestLabelingTestScore: user.bestLabelingTestScore,
       labelingTestPassed: user.labelingTestPassed,
+      tutorialsCompleted: user.tutorialsCompleted,
       labelingTestAttempts: user.labelingTestAttempts,
       },
     });
@@ -70,6 +71,7 @@ router.post('/login', async (req, res) => {
         bestTestScore: user.bestTestScore,
       bestLabelingTestScore: user.bestLabelingTestScore,
       labelingTestPassed: user.labelingTestPassed,
+      tutorialsCompleted: user.tutorialsCompleted,
       labelingTestAttempts: user.labelingTestAttempts,
       },
     });

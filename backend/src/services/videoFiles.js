@@ -74,6 +74,7 @@ async function removeVideoAssignment(assignmentId, { deleteFile = true } = {}) {
         fileDeleted = true;
       }
     }
+    await require('./referenceStorage').deleteReferenceForClip(assignment.clipId);
   }
 
   return { assignment, fileDeleted };

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parseReferenceAnnotation } = require('../utils/parseReferenceAnnotation');
-const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
+const { CLIP_ID_PATTERN, getExportFilename } = require('../utils/exportAnnotation');
 const { ensureVideoDataDir } = require('./videoFiles');
 
 function getAnnotationsDir() {
@@ -17,15 +17,15 @@ function getReferenceFilePath(clipId, variant = 'post') {
     throw new Error('Invalid clip ID');
   }
 
-  const filename = variant === 'post' ? `${clipId}_post.json` : `${clipId}.json`;
+  const filename = getExportFilename(clipId, variant);
   return path.join(getAnnotationsDir(), filename);
 }
 
-function loadReferenceForClip(clipId, variant = 'post') {
+function loadReferenceFromFile(clipId, variant = 'post') {
   const filePath = getReferenceFilePath(clipId, variant);
 
   if (!fs.existsSync(filePath)) {
-    return { hasReference: false, events: [], variant, filePath };
+    return { hasReference: false, events: [], variant, filePath, source: 'file' };
   }
 
   const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -36,12 +36,19 @@ function loadReferenceForClip(clipId, variant = 'post') {
     events,
     variant,
     filePath,
+    source: 'file',
     annotationCount: events.length,
   };
+}
+
+/** @deprecated use referenceStorage.loadReferenceForClip (async) */
+function loadReferenceForClip(clipId, variant = 'post') {
+  return loadReferenceFromFile(clipId, variant);
 }
 
 module.exports = {
   getAnnotationsDir,
   getReferenceFilePath,
+  loadReferenceFromFile,
   loadReferenceForClip,
 };

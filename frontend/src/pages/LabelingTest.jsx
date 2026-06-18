@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { formatTimestamp } from '../utils/formatTimestamp';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -50,23 +51,36 @@ export default function LabelingTest() {
 
   const passed = status?.passed;
   const canProduction = status?.canAccessProduction;
+  const tutorialsDone = status?.tutorialsCompleted;
+  const canAccess = status?.canAccessPretest;
 
   return (
     <div>
       <div className="page-header">
         <h1>Labeling pre-test</h1>
         <p>
-          Label practice clips and get an automatic score against reference annotations.
-          Score <strong>80/100 or higher</strong> to unlock real labeling tasks.
+          Label <strong>3 practice clips</strong> and get an automatic score against reference
+          annotations. Score <strong>80/100 or higher</strong> to unlock real labeling tasks.
         </p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
 
+      {!tutorialsDone && (
+        <div className="alert alert-info">
+          Complete all labeling tutorials first.{' '}
+          <Link to="/tutorials">Go to tutorials</Link>
+        </div>
+      )}
+
       <div className="stat-grid" style={{ marginBottom: '1.25rem' }}>
         <div className="stat-card">
           <div className="value">{status?.bestScore ?? 0}</div>
           <div className="label">Best score / 100</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{status?.pretestCount ?? 3}</div>
+          <div className="label">Pre-test clips</div>
         </div>
         <div className="stat-card">
           <div className="value">{status?.attempts ?? 0}</div>
@@ -88,10 +102,12 @@ export default function LabelingTest() {
           )}
         </div>
       ) : (
-        <div className="alert alert-info">
-          Each reference event is worth an equal share of 100 points. Frame accuracy per event:
-          0 frames = 100, 1 = 90, 2 = 80, and so on. Missing or wrong events score 0.
-        </div>
+        canAccess && (
+          <div className="alert alert-info">
+            Each reference event is worth an equal share of 100 points. Frame accuracy per event:
+            0 frames = 100, 1 = 90, 2 = 80, and so on. Missing or wrong events score 0.
+          </div>
+        )
       )}
 
       {status?.latestResult && (
@@ -101,11 +117,19 @@ export default function LabelingTest() {
             {status.latestResult.assignmentId?.title} — score{' '}
             <strong>{status.latestResult.score}/100</strong>
             {status.latestResult.passed ? ' (passed)' : ' (not passed)'}
+            {' · '}
+            {formatTimestamp(status.latestResult.createdAt)}
           </p>
         </div>
       )}
 
-      {assignments.length === 0 ? (
+      {!canAccess ? (
+        <div className="empty-state">
+          {tutorialsDone
+            ? 'Pass the knowledge test (80%+) to access pre-test clips.'
+            : 'Complete tutorials to unlock pre-test clips.'}
+        </div>
+      ) : assignments.length === 0 ? (
         <div className="empty-state">No labeling test clips available yet.</div>
       ) : (
         <div className="card-grid">
@@ -126,6 +150,9 @@ export default function LabelingTest() {
                   <span className="status-badge status-passed_test">Pre-test</span>
                   {' · '}
                   {STATUS_LABELS[a.status] || a.status}
+                </p>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Updated {formatTimestamp(a.updatedAt)}
                 </p>
                 <div className="actions-row">
                   {canClaim && (

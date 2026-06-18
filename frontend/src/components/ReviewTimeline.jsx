@@ -80,6 +80,7 @@ export default function ReviewTimeline({
   onValidateEvent,
   saving = false,
   hasReference = false,
+  previewMode = false,
   onValidateAll,
   onAutoValidate,
 }) {
@@ -146,7 +147,10 @@ export default function ReviewTimeline({
   return (
     <div className="review-timeline">
       <div className="review-timeline-header">
-        <span className="review-timeline-title">Validation timeline</span>
+        <span className="review-timeline-title">
+          {previewMode ? 'Reference timeline' : 'Validation timeline'}
+        </span>
+        {!previewMode && (
         <div className="review-timeline-toolbar">
           <button
             type="button"
@@ -175,6 +179,7 @@ export default function ReviewTimeline({
             </button>
           )}
         </div>
+        )}
         <span className="review-timeline-current">
           Frame {Math.round(currentTime * fps)} · {formatTime(currentTime)}
         </span>
@@ -282,7 +287,7 @@ export default function ReviewTimeline({
             )}
           </div>
 
-          {primarySubmission && (
+          {primarySubmission && !previewMode && (
             <div className="review-frame-actions">
               <button
                 type="button"

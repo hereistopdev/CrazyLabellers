@@ -1,14 +1,18 @@
 const LabelingTestResult = require('../models/LabelingTestResult');
 const User = require('../models/User');
-const { loadReferenceForClip } = require('./referenceAnnotations');
+const { loadReferenceForClip } = require('./referenceStorage');
 const { computeLabelingScore, PASS_THRESHOLD } = require('../utils/labelingScore');
+const {
+  canAccessPretest,
+  canAccessProduction,
+} = require('./tutorialProgress');
 
 async function gradeSubmissionAgainstReference(submission, assignment) {
   if (!assignment?.clipId) {
     throw new Error('Assignment has no clipId for auto scoring');
   }
 
-  const reference = loadReferenceForClip(assignment.clipId, 'post');
+  const reference = await loadReferenceForClip(assignment.clipId, 'post');
   if (!reference.hasReference) {
     throw new Error('No reference annotations found for this clip');
   }
@@ -52,18 +56,6 @@ async function recordLabelingTestAttempt(userId, assignmentId, submission, score
   await user.save();
 
   return { result, user };
-}
-
-function canAccessPretest(user) {
-  return user.status === 'passed_test' || user.status === 'approved';
-}
-
-function canAccessProduction(user) {
-  if (user.status === 'approved') return true;
-  return (
-    user.status === 'passed_test' &&
-    (user.labelingTestPassed || user.bestLabelingTestScore >= PASS_THRESHOLD)
-  );
 }
 
 module.exports = {

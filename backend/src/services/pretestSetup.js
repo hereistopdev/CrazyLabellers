@@ -2,27 +2,33 @@ const fs = require('fs');
 const path = require('path');
 const VideoAssignment = require('../models/VideoAssignment');
 const { CLIP_ID_PATTERN } = require('../utils/exportAnnotation');
-const { loadReferenceForClip } = require('./referenceAnnotations');
+const { loadReferenceForClip } = require('./referenceStorage');
 const { getVideoDataDir, buildVideoUrl, listStoredClipIds } = require('./videoStorage');
 
-const DEFAULT_PRETEST_COUNT = 5;
+const DEFAULT_PRETEST_COUNT = 3;
 
-function listClipsWithReference(dataDir = getVideoDataDir()) {
-  if (!fs.existsSync(dataDir)) {
-    return [];
+async function listClipsWithReference(dataDir = getVideoDataDir()) {
+  let clipIds;
+  if (fs.existsSync(dataDir)) {
+    clipIds = fs
+      .readdirSync(dataDir)
+      .filter((name) => name.toLowerCase().endsWith('.mp4'))
+      .map((name) => name.replace(/\.mp4$/i, ''))
+      .filter((clipId) => CLIP_ID_PATTERN.test(clipId));
+  } else {
+    clipIds = await listStoredClipIds();
   }
 
-  return fs
-    .readdirSync(dataDir)
-    .filter((name) => name.toLowerCase().endsWith('.mp4'))
-    .map((name) => name.replace(/\.mp4$/i, ''))
-    .filter((clipId) => CLIP_ID_PATTERN.test(clipId))
-    .filter((clipId) => loadReferenceForClip(clipId).hasReference)
-    .sort();
+  const withReference = [];
+  for (const clipId of clipIds) {
+    const ref = await loadReferenceForClip(clipId);
+    if (ref.hasReference) withReference.push(clipId);
+  }
+  return withReference.sort();
 }
 
 async function setupPretestClips({ pretestCount = DEFAULT_PRETEST_COUNT, dataDir } = {}) {
-  const clipIds = listClipsWithReference(dataDir);
+  const clipIds = await listClipsWithReference(dataDir);
   const pretestClipIds = new Set(clipIds.slice(0, pretestCount));
 
   let pretestMarked = 0;

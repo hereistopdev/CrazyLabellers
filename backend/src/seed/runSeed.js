@@ -47,7 +47,7 @@ async function runSeed({ force = false } = {}) {
 
   let pretestSetup = null;
   try {
-    pretestSetup = await setupPretestClips({ pretestCount: 5 });
+    pretestSetup = await setupPretestClips({ pretestCount: 3 });
   } catch (error) {
     console.warn('Pretest clip setup skipped:', error.message);
   }
