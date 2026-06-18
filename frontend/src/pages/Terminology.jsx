@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import EventFlowDiagrams from '../components/EventFlowDiagrams';
+import { frameOffsetSummary } from '../config/frameOffsets';
 
 export default function Terminology() {
   const [terms, setTerms] = useState([]);
@@ -26,8 +28,12 @@ export default function Terminology() {
         <h1>Event Terminology Guide</h1>
         <p>
           Official event definitions for labeling. Study these carefully before the knowledge test
-          and while labeling clips. All videos are <strong>25 fps</strong>. Frame offsets: default{' '}
-          <strong>−2</strong>, Pass/Shot <strong>−3</strong>, Goal/Ball Out of Play <strong>+1</strong>.
+          and while labeling clips. All videos are <strong>25 fps</strong>. Frame offsets:{' '}
+          <strong>{frameOffsetSummary}</strong>.
+          {' '}
+          <Link to="/faq" style={{ fontSize: '0.88rem' }}>
+            Frequent Q&amp;A →
+          </Link>
         </p>
       </div>
 

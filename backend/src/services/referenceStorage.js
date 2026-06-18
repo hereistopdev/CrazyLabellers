@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const ClipReference = require('../models/ClipReference');
 const { parseReferenceAnnotation } = require('../utils/parseReferenceAnnotation');
-const { getExportFilename, isValidClipId } = require('../utils/exportAnnotation');
+const { exportAnnotation, getExportFilename, isValidClipId } = require('../utils/exportAnnotation');
+const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { isSafeClipId } = require('../utils/clipId');
 const { getAnnotationsDir } = require('./referenceAnnotations');
 const { isVpsStorageEnabled, withSftp } = require('./vpsStorage');
@@ -44,6 +45,20 @@ async function writeReferenceToVps(clipId, rawJson, variant = 'post') {
   });
 
   return true;
+}
+
+async function saveReferenceEventsForClip(
+  clipId,
+  events,
+  { variant = 'post', gameTime = '1 - 00:00', sourceFilename = 'review-edit' } = {}
+) {
+  const normalized = normalizeLabelEvents(events);
+  if (normalized.length === 0) {
+    throw new Error('Reference must have at least one event');
+  }
+
+  const rawJson = exportAnnotation(normalized, { gameTime, variant });
+  return saveReferenceForClip(clipId, rawJson, { variant, sourceFilename });
 }
 
 async function saveReferenceForClip(clipId, rawJson, { variant = 'post', sourceFilename = '' } = {}) {
@@ -118,6 +133,7 @@ async function loadReferenceForClip(clipId, variant = 'post') {
 }
 
 module.exports = {
+  saveReferenceEventsForClip,
   saveReferenceForClip,
   deleteReferenceForClip,
   hasReferenceForClip,

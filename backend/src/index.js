@@ -18,6 +18,7 @@ const labelingTestRoutes = require('./routes/labelingTest');
 const labellerRoutes = require('./routes/labellers');
 const tutorialRoutes = require('./routes/tutorials');
 const taskAdminRoutes = require('./routes/taskAdmin');
+const helpRoutes = require('./routes/help');
 const { EVENT_TYPES } = require('./config/events');
 
 const app = express();
@@ -71,6 +72,7 @@ app.use('/api/labeling-test', labelingTestRoutes);
 app.use('/api/labellers', labellerRoutes);
 app.use('/api/tutorials', tutorialRoutes);
 app.use('/api/admin/tasks', taskAdminRoutes);
+app.use('/api/help', helpRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

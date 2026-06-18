@@ -75,9 +75,20 @@ export const sequenceFlows = [
     title: 'Foul & Stoppage',
     subtitle: 'Infringement and restart',
     steps: [
-      { event: 'Foul', note: 'Referee stops play — not offside/advantage' },
+      { event: 'Foul', note: 'Infringement at +1 frame' },
+      { event: 'Referee', note: 'Whistle confirms foul — optional if shown', optional: true },
       { event: 'Ball Out of Play', note: 'Often follows', optional: true },
       { event: 'Substitution', note: 'During stoppage in play', optional: true },
+    ],
+  },
+  {
+    id: 'non-gameplay',
+    title: 'Non-main-board footage',
+    subtitle: 'Replays, crowd, or sideline non-player exchanges',
+    steps: [
+      { event: 'Highlight Start', note: 'Clip leaves main live match board' },
+      { event: 'Highlight End', note: 'Main board action resumes' },
+      { event: 'Invalid', note: 'Ball to/from non-players at touchline', optional: true },
     ],
   },
 ];
@@ -165,34 +176,41 @@ export const decisionTrees = [
 
 export const timingRules = [
   {
-    rule: 'Default offset: −2 frames',
-    events: ['Most events'],
-    detail: 'For all events not listed below, mark 2 frames before the action.',
-    offset: -2,
+    rule: '0 frames — contact / visible action',
+    events: [
+      'Pass',
+      'Tackle',
+      'Clearance',
+      'Block',
+      'Aerial Duel',
+      'Shot',
+      'Substitution',
+      'Highlight Start',
+      'Highlight End',
+      'Referee',
+      'Invalid',
+    ],
+    detail: 'Mark at the contact or visible action frame.',
+    offset: 0,
   },
   {
-    rule: 'Pass: −3 frames',
-    events: ['Pass'],
-    detail: 'Mark 3 frames before the ball leaves the passer.',
-    offset: -3,
+    rule: '−1 frame — slightly before moment',
+    events: ['Pass Received', 'Recovery', 'Interception', 'Ball Out of Play', 'Save', 'Goal'],
+    detail: 'Mark one frame before the moment (control gained, ball out, save, goal line).',
+    offset: -1,
   },
   {
-    rule: 'Shot: −3 frames',
-    events: ['Shot'],
-    detail: 'Mark 3 frames before shooting contact.',
-    offset: -3,
-  },
-  {
-    rule: 'Ball Out of Play: +1 frame',
-    events: ['Ball Out of Play'],
-    detail: 'Mark 1 frame after the ball goes out of play.',
+    rule: '+1 frame — slightly after moment',
+    events: ['Take on', 'Foul'],
+    detail: 'Mark one frame after the take-on beat or foul contact.',
     offset: 1,
   },
   {
-    rule: 'Goal: +1 frame',
-    events: ['Goal'],
-    detail: 'Mark 1 frame after the whole ball crosses the goal line. Always pair with Shot.',
-    offset: 1,
+    rule: 'Immediate follow-up (0 frames)',
+    events: ['Pass', 'Shot', 'Clearance', 'Take on'],
+    detail:
+      'After Pass Received, Recovery, or Interception with no pause — second event at contact (0), not the normal offset.',
+    offset: 0,
   },
   {
     rule: 'Never same frame',
@@ -219,7 +237,16 @@ export const eventCategories = [
   },
   {
     name: 'Set Play',
-    events: ['Aerial Duel', 'Ball Out of Play', 'Substitution', 'Foul'],
+    events: [
+      'Aerial Duel',
+      'Ball Out of Play',
+      'Substitution',
+      'Foul',
+      'Referee',
+      'Highlight Start',
+      'Highlight End',
+      'Invalid',
+    ],
     color: '#a78bfa',
   },
 ];

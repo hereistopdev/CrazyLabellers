@@ -2,14 +2,16 @@ const express = require('express');
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
 const PaymentSettings = require('../models/PaymentSettings');
-const { auth } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 const { isReviewer, canAccessReview } = require('../config/roles');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
 const { upsertLabellerReview } = require('../services/labellerProfile');
 const { processApprovalBadges } = require('../services/labellerBadges');
-const { loadReferenceForClip } = require('../services/referenceStorage');
+const { loadReferenceForClip, saveReferenceEventsForClip } = require('../services/referenceStorage');
 const { compareAnnotations } = require('../utils/compareAnnotations');
 const { buildScoreReviewPayload } = require('../services/scoreReview');
+const { gradeSubmissionAgainstReference } = require('../services/grading');
+const { EVENT_TYPES } = require('../config/events');
 
 const router = express.Router();
 
@@ -127,6 +129,69 @@ router.get('/submissions/:id', auth, requireReviewerRole, async (req, res) => {
     return res.json(await buildReviewPayload(submission, assignment, variant));
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/assignments/:id/reference', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { events, submissionId, variant = 'post' } = req.body;
+    if (!Array.isArray(events)) {
+      return res.status(400).json({ message: 'events must be an array' });
+    }
+
+    for (const event of events) {
+      if (!EVENT_TYPES.includes(event.eventType)) {
+        return res.status(400).json({ message: `Invalid event type: ${event.eventType}` });
+      }
+      if (!Number.isFinite(event.frameTime)) {
+        return res.status(400).json({ message: 'Each event must have a numeric frameTime' });
+      }
+    }
+
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment?.clipId) {
+      return res.status(404).json({ message: 'Assignment not found or has no clip ID' });
+    }
+
+    const refVariant = variant === 'raw' ? 'raw' : 'post';
+    await saveReferenceEventsForClip(assignment.clipId, events, {
+      variant: refVariant,
+      gameTime: assignment.gameTime || '1 - 00:00',
+      sourceFilename: 'admin-review-edit',
+    });
+
+    const refVariantForPayload = refVariant;
+    let submission = null;
+
+    if (submissionId) {
+      submission = await LabelSubmission.findById(submissionId)
+        .populate('userId', 'name email status')
+        .populate('reviewedBy', 'name email');
+      if (submission) {
+        await gradeSubmissionAgainstReference(submission, assignment);
+      }
+    }
+
+    if (submission) {
+      return res.json(
+        await buildReviewPayload(submission, assignment, refVariantForPayload, { ensureScore: false })
+      );
+    }
+
+    const emptySubmission = {
+      events: [],
+      eventValidations: [],
+      status: 'preview',
+      userId: null,
+    };
+    return res.json(
+      await buildReviewPayload(emptySubmission, assignment, refVariantForPayload, {
+        preview: true,
+        ensureScore: false,
+      })
+    );
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
   }
 });
 

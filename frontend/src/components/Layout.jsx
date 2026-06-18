@@ -104,6 +104,9 @@ export default function Layout() {
               <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
                 Terminology
               </NavLink>
+              <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
+                Frequent Q&amp;A
+              </NavLink>
             </>
           ) : (
             <>
@@ -122,6 +125,9 @@ export default function Layout() {
               <NavLink to="/assignments" className={navClass} onClick={() => setMenuOpen(false)}>
                 Labeling
               </NavLink>
+              <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
+                Frequent Q&amp;A
+              </NavLink>
               <NavLink to="/earnings" className={navClass} onClick={() => setMenuOpen(false)}>
                 Earnings
               </NavLink>
@@ -132,9 +138,14 @@ export default function Layout() {
           )}
 
           {admin && (
-            <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
-              Terminology
-            </NavLink>
+            <>
+              <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
+                Terminology
+              </NavLink>
+              <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
+                Frequent Q&amp;A
+              </NavLink>
+            </>
           )}
 
           <div className="nav-user">

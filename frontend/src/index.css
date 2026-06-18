@@ -4827,3 +4827,470 @@ a.video-label-link.btn:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Page header with top-right actions (labeling help button) */
+.page-header--with-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.page-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.labeling-chatbot-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.labeling-chatbot-trigger:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.labeling-chatbot-trigger-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* Labeling chatbot slide-over panel */
+.labeling-chatbot-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 1200;
+}
+
+.labeling-chatbot-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.labeling-chatbot-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(420px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1201;
+}
+
+.labeling-chatbot-panel.open {
+  transform: translateX(0);
+}
+
+.labeling-chatbot-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.1rem 1.15rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.labeling-chatbot-header h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.2rem;
+}
+
+.labeling-chatbot-header p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.labeling-chatbot-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.labeling-chatbot-close {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.labeling-chatbot-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.labeling-chatbot-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.labeling-chatbot-welcome {
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  font-size: 0.9rem;
+}
+
+.labeling-chatbot-welcome-hint {
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.labeling-chatbot-faq-link {
+  display: inline-block;
+  margin-top: 0.65rem;
+  font-size: 0.85rem;
+}
+
+.labeling-chatbot-message {
+  max-width: 95%;
+}
+
+.labeling-chatbot-message-user {
+  align-self: flex-end;
+}
+
+.labeling-chatbot-message-assistant {
+  align-self: flex-start;
+}
+
+.labeling-chatbot-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.labeling-chatbot-message-body {
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.labeling-chatbot-message-user .labeling-chatbot-message-body {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.labeling-chatbot-message-assistant .labeling-chatbot-message-body {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.labeling-chatbot-answer-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #86efac;
+}
+
+.labeling-chatbot-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.5rem 0;
+}
+
+.labeling-chatbot-options-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.labeling-chatbot-option-btn {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.labeling-chatbot-option-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.labeling-chatbot-saved {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.labeling-chatbot-error {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.labeling-chatbot-input-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  padding: 0.85rem 1.15rem 1.1rem;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.labeling-chatbot-input-bar textarea {
+  flex: 1;
+  resize: none;
+  min-height: 2.75rem;
+}
+
+/* Frequent Q&A page */
+.faq-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.faq-search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.faq-toolbar select {
+  min-width: 160px;
+}
+
+.faq-admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.faq-count {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.faq-item {
+  padding: 0;
+  overflow: hidden;
+}
+
+.faq-item--unpublished {
+  opacity: 0.75;
+  border-style: dashed;
+}
+
+.faq-item-header {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.faq-item-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.faq-item-header h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.faq-item-question {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.faq-item-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.faq-event-chip {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.faq-item-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.faq-item-body {
+  padding: 0 1.15rem 1.15rem;
+  border-top: 1px solid var(--border);
+}
+
+.faq-clarifications {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.faq-clarifications h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.faq-clarifications ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.88rem;
+}
+
+.faq-clarification-answer {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--accent);
+}
+
+.faq-answer {
+  margin-top: 1rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.faq-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.faq-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.faq-unpublished-badge {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.faq-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.faq-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.faq-edit-published {
+  flex-direction: row !important;
+  align-items: center;
+}
+
+.faq-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.faq-empty {
+  text-align: center;
+  padding: 2rem;
+}
+
+@media (max-width: 640px) {
+  .page-header--with-actions {
+    flex-direction: column;
+  }
+
+  .labeling-chatbot-trigger {
+    align-self: flex-end;
+  }
+
+  .faq-item-header {
+    flex-direction: column;
+  }
+
+  .faq-item-meta {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

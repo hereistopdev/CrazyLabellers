@@ -23,6 +23,7 @@ import ManageTasks from './pages/ManageTasks';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewSubmission from './pages/ReviewSubmission';
 import LabellerProfile from './pages/LabellerProfile';
+import FrequentQA from './pages/FrequentQA';
 
 function ProtectedRoute({
   children,
@@ -131,6 +132,7 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="terminology" element={<Terminology />} />
+        <Route path="faq" element={<FrequentQA />} />
         <Route
           path="test"
           element={

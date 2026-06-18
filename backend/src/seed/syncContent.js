@@ -3,7 +3,7 @@ const TestQuestion = require('../models/TestQuestion');
 const { terminologies } = require('./terminologyData');
 const { testQuestions } = require('./data');
 
-const DEPRECATED_EVENT_TYPES = ['Highlight Start', 'Highlight End'];
+const DEPRECATED_EVENT_TYPES = [];
 
 async function syncTerminology() {
   for (const term of terminologies) {

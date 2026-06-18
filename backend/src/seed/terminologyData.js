@@ -25,6 +25,14 @@ const OFFICIAL_DEFINITIONS = {
     'Occurs when a player breaks the laws of the game through unfair play or actions such as tripping, pushing, or handling the ball, resulting in a free kick or penalty for the opposing team. Excluding offside events and advantages. Referee needs to stop play.',
   Goal:
     'To be awarded, the ball must pass completely over the goal line in the area between the posts and beneath the crossbar. Always comes with a shot event at the same time.',
+  'Highlight Start':
+    'Mark when the clip enters footage that is not part of the main match board — e.g. replays, crowd shots, tunnel walk, or other non-live-action segments that should be excluded from main gameplay labeling.',
+  'Highlight End':
+    'Mark when non-main-board footage ends and live match action resumes on the main game board.',
+  Referee:
+    'Mark when the referee blows the whistle to confirm a foul and stop play. Use after the Foul event when the infringement is confirmed by the official whistle (not for advantage or offside).',
+  Invalid:
+    'Mark when a player receives or throws/kicks the ball to or from someone who is not an on-pitch player — e.g. ball to/from coaching staff, ball boy, or other non-player personnel at the touchline.',
 };
 
 const terminologies = [
@@ -143,10 +151,14 @@ const terminologies = [
     definition: OFFICIAL_DEFINITIONS.Foul,
     criteria: [
       'Unfair play: tripping, pushing, handling, etc.',
-      'Referee stops play for free kick or penalty',
+      'Mark at the infringement (+1 frame)',
+      'Pair with Referee when the whistle confirms the foul',
       'Excludes offside and advantage situations',
     ],
-    commonMistakes: ['Marking when whistle blows instead of infringement', 'Labeling offside as foul'],
+    commonMistakes: [
+      'Marking when whistle blows instead of at infringement — use Referee for the whistle',
+      'Labeling offside as foul',
+    ],
   },
   {
     eventType: 'Goal',
@@ -158,6 +170,60 @@ const terminologies = [
       'Always label Shot at the same time as Goal',
     ],
     commonMistakes: ['Marking only Goal without Shot', 'Marking celebration instead of ball crossing line'],
+  },
+  {
+    eventType: 'Highlight Start',
+    title: 'Highlight Start',
+    order: 16,
+    definition: OFFICIAL_DEFINITIONS['Highlight Start'],
+    criteria: [
+      'Footage is not main live match board action',
+      'Replays, crowd, tunnel, or other non-gameplay segments',
+    ],
+    commonMistakes: [
+      'Marking during normal in-play action',
+      'Using instead of Ball Out of Play when the ball simply leaves the pitch',
+    ],
+  },
+  {
+    eventType: 'Highlight End',
+    title: 'Highlight End',
+    order: 17,
+    definition: OFFICIAL_DEFINITIONS['Highlight End'],
+    criteria: ['Non-main-board segment ends', 'Live match action on the main board resumes'],
+    commonMistakes: [
+      'Marking when play resumes after a normal stoppage',
+      'Pairing without a matching Highlight Start',
+    ],
+  },
+  {
+    eventType: 'Referee',
+    title: 'Referee',
+    order: 18,
+    definition: OFFICIAL_DEFINITIONS.Referee,
+    criteria: [
+      'Referee whistle confirms a foul',
+      'Play is stopped for the infringement',
+      'Not used for advantage or offside',
+    ],
+    commonMistakes: [
+      'Marking Referee instead of Foul at the contact frame',
+      'Marking for every whistle including restarts without a foul',
+    ],
+  },
+  {
+    eventType: 'Invalid',
+    title: 'Invalid',
+    order: 19,
+    definition: OFFICIAL_DEFINITIONS.Invalid,
+    criteria: [
+      'Ball goes to or from a non-player (staff, ball crew, etc.)',
+      'Exchange is at the touchline or sideline with non-participants',
+    ],
+    commonMistakes: [
+      'Labeling a normal throw-in to a teammate as Invalid',
+      'Confusing with Ball Out of Play when the ball leaves the field',
+    ],
   },
 ];
 

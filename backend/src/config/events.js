@@ -14,6 +14,10 @@ const EVENT_TYPES = [
   'Save',
   'Foul',
   'Goal',
+  'Highlight Start',
+  'Highlight End',
+  'Referee',
+  'Invalid',
 ];
 
 module.exports = { EVENT_TYPES };

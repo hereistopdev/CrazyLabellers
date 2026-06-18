@@ -197,6 +197,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  updateReviewReference: (assignmentId, body) =>
+    request(`/review/assignments/${assignmentId}/reference`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   getValidators: () => request('/admin/validators'),
   createValidator: (body) =>
     request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),
@@ -231,4 +236,19 @@ export const api = {
     request(`/admin/assignments/${id}/price`, { method: 'PATCH', body: JSON.stringify(body) }),
   bulkUpdateAssignmentPrice: (body) =>
     request('/admin/assignments/bulk-price', { method: 'PATCH', body: JSON.stringify(body) }),
+  sendHelpChat: (body) =>
+    request('/help/chat', { method: 'POST', body: JSON.stringify(body) }),
+  getHelpConversation: (id) => request(`/help/conversations/${id}`),
+  getFrequentQA: ({ search, eventType, all } = {}) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (eventType) params.set('eventType', eventType);
+    if (all) params.set('all', 'true');
+    const qs = params.toString();
+    return request(`/help/faq${qs ? `?${qs}` : ''}`);
+  },
+  getFrequentQAEntry: (id) => request(`/help/faq/${id}`),
+  updateFrequentQA: (id, body) =>
+    request(`/help/faq/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteFrequentQA: (id) => request(`/help/faq/${id}`, { method: 'DELETE' }),
 };

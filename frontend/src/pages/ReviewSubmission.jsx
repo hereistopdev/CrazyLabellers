@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { FPS } from '../config/frameOffsets';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../utils/roles';
+import { FPS, applyFrameOffset, getImmediateFollowUpRule, resolveFrameOffset } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
+import EventPickerModal from '../components/EventPickerModal';
 import { isEditableTarget } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
 import StarRating from '../components/StarRating';
@@ -27,6 +30,8 @@ function formatTime(seconds) {
 
 export default function ReviewSubmission() {
   const { submissionId, assignmentId } = useParams();
+  const { user } = useAuth();
+  const adminMode = isAdmin(user);
   const isPreview = Boolean(assignmentId);
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
@@ -52,6 +57,11 @@ export default function ReviewSubmission() {
   const [ratePerPoint, setRatePerPoint] = useState(0.1);
   const [currency, setCurrency] = useState('USD');
   const [mediaDuration, setMediaDuration] = useState(null);
+  const [eventTypes, setEventTypes] = useState([]);
+  const [editableReferenceEvents, setEditableReferenceEvents] = useState([]);
+  const [referenceDirty, setReferenceDirty] = useState(false);
+  const [showReferenceEventPicker, setShowReferenceEventPicker] = useState(false);
+  const [savingReference, setSavingReference] = useState(false);
 
   const assignment = reviewData?.assignment;
   const submission = reviewData?.submission;
@@ -66,7 +76,16 @@ export default function ReviewSubmission() {
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
   const submissionEvents = submission?.events || [];
-  const referenceEvents = reference?.hasReference ? reference.events : [];
+  const referenceEvents = adminMode
+    ? editableReferenceEvents
+    : reference?.hasReference
+      ? reference.events
+      : [];
+
+  const lastReferenceEvent = useMemo(() => {
+    if (!referenceEvents.length) return null;
+    return [...referenceEvents].sort((a, b) => a.frameTime - b.frameTime).at(-1);
+  }, [referenceEvents]);
 
   const eventFrames = useMemo(
     () => buildSortedEventFrames(submissionEvents, referenceEvents, fps),
@@ -148,6 +167,18 @@ export default function ReviewSubmission() {
   }, [submissionId, assignmentId, isPreview]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!adminMode) return;
+    api.getEvents().then(setEventTypes).catch(() => setEventTypes([]));
+  }, [adminMode]);
+
+  useEffect(() => {
+    if (!adminMode) return;
+    const events = reviewData?.reference?.events || [];
+    setEditableReferenceEvents(events);
+    setReferenceDirty(false);
+  }, [adminMode, reviewData?.reference?.events, reviewData?.reference?.annotationCount, assignment?._id]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -359,6 +390,104 @@ export default function ReviewSubmission() {
     }
   };
 
+  const openReferenceEventPicker = useCallback(() => {
+    pauseAll();
+    setShowReferenceEventPicker(true);
+  }, [pauseAll]);
+
+  const addReferenceEvent = useCallback(
+    (eventType) => {
+      pauseAll();
+      const playheadTime = videoRef.current?.currentTime ?? currentTime;
+      const followUpRule = lastReferenceEvent
+        ? getImmediateFollowUpRule(lastReferenceEvent.eventType, eventType)
+        : null;
+      const useFollowUp = Boolean(followUpRule);
+      const options = {
+        immediateFollowUp: useFollowUp,
+        afterEvent: useFollowUp ? lastReferenceEvent?.eventType : null,
+      };
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+      const offset = resolveFrameOffset(eventType, options);
+
+      const newEvents = [
+        ...editableReferenceEvents,
+        {
+          eventType,
+          frameTime: adjustedTime,
+          playheadTime: parseFloat(playheadTime.toFixed(3)),
+          frameOffset: offset,
+          immediateFollowUp: useFollowUp,
+          afterEvent: useFollowUp ? lastReferenceEvent?.eventType : undefined,
+        },
+      ].sort((a, b) => a.frameTime - b.frameTime);
+
+      setEditableReferenceEvents(newEvents);
+      setReferenceDirty(true);
+      setShowReferenceEventPicker(false);
+      setMessage(`Added reference ${eventType} at ${formatTime(adjustedTime)} (unsaved)`);
+      setTimeout(() => setMessage(''), 2500);
+    },
+    [pauseAll, currentTime, lastReferenceEvent, editableReferenceEvents]
+  );
+
+  const deleteReferenceEventAtFrame = useCallback(() => {
+    const frame = Math.round(currentTime * fps);
+    const next = editableReferenceEvents.filter(
+      (event) => Math.round(event.frameTime * fps) !== frame
+    );
+    if (next.length === editableReferenceEvents.length) return;
+    setEditableReferenceEvents(next);
+    setReferenceDirty(true);
+    setMessage('Removed reference event on this frame (unsaved)');
+    setTimeout(() => setMessage(''), 2000);
+  }, [currentTime, fps, editableReferenceEvents]);
+
+  const nudgeReferenceEventAtFrame = useCallback(
+    (frameDelta) => {
+      const frame = Math.round(currentTime * fps);
+      let changed = false;
+      const next = editableReferenceEvents
+        .map((event) => {
+          if (Math.round(event.frameTime * fps) !== frame) return event;
+          changed = true;
+          return {
+            ...event,
+            frameTime: Math.max(0, event.frameTime + frameDelta * frameDuration),
+          };
+        })
+        .sort((a, b) => a.frameTime - b.frameTime);
+      if (!changed) return;
+      setEditableReferenceEvents(next);
+      setReferenceDirty(true);
+    },
+    [currentTime, fps, editableReferenceEvents, frameDuration]
+  );
+
+  const saveReferenceEvents = async () => {
+    if (!assignment?._id) return;
+    setSavingReference(true);
+    setError('');
+    try {
+      const data = await api.updateReviewReference(assignment._id, {
+        events: editableReferenceEvents,
+        submissionId: isPreview ? undefined : submissionId,
+      });
+      setReviewData(data);
+      setEditableReferenceEvents(data.reference?.events || editableReferenceEvents);
+      setReferenceDirty(false);
+      if (!isPreview && data.submission?.autoScore != null) {
+        setReviewPoints(data.submission.reviewPoints || data.submission.autoScore);
+      }
+      setMessage('Reference annotations saved');
+      setTimeout(() => setMessage(''), 2500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingReference(false);
+    }
+  };
+
   const submitReview = async (status) => {
     setSaving(true);
     setError('');
@@ -507,9 +636,26 @@ export default function ReviewSubmission() {
         )}
         {reference?.hasReference && comparison?.summary && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Reference: {reference.annotationCount} events · Matched {comparison.summary.matchedCount} ·
+            Reference: {referenceEvents.length || reference.annotationCount} events · Matched {comparison.summary.matchedCount} ·
             Missing {comparison.summary.missingCount} · Extra {comparison.summary.extraCount}
             {comparison.summary.accuracy != null && ` · Accuracy ${comparison.summary.accuracy}%`}
+            {adminMode && referenceDirty && (
+              <>
+                {' '}
+                · <strong>Unsaved reference edits</strong>
+              </>
+            )}
+          </p>
+        )}
+        {adminMode && !reference?.hasReference && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            No reference yet — add events on the timeline and save.
+            {referenceDirty && (
+              <>
+                {' '}
+                · <strong>Unsaved reference edits</strong>
+              </>
+            )}
           </p>
         )}
         <Link to="/review" style={{ fontSize: '0.88rem' }}>
@@ -529,7 +675,7 @@ export default function ReviewSubmission() {
             enabled={magnifyEnabled}
             onEnabledChange={setMagnifyEnabled}
             submissionEvents={submission?.events || []}
-            referenceEvents={reference?.hasReference ? reference.events : []}
+            referenceEvents={referenceEvents}
             fps={fps}
           >
             <video
@@ -644,12 +790,18 @@ export default function ReviewSubmission() {
             maxTime={maxTime}
             fps={fps}
             submissionEvents={submission?.events || []}
-            referenceEvents={reference?.hasReference ? reference.events : []}
+            referenceEvents={referenceEvents}
             eventRows={eventRows}
             labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
-            hasReference={reference?.hasReference}
+            hasReference={reference?.hasReference || (adminMode && referenceEvents.length > 0)}
             previewMode={isPreview}
-            saving={saving}
+            saving={saving || savingReference}
+            canEditReference={adminMode}
+            referenceDirty={referenceDirty}
+            onAddReferenceEvent={openReferenceEventPicker}
+            onDeleteReferenceEvent={deleteReferenceEventAtFrame}
+            onNudgeReferenceEvent={nudgeReferenceEventAtFrame}
+            onSaveReference={saveReferenceEvents}
             onSeek={handleScrub}
             onValidateEvent={validateEvent}
             onValidateAll={validateAll}
@@ -754,6 +906,17 @@ export default function ReviewSubmission() {
           )}
         </div>
       </div>
+
+      {adminMode && (
+        <EventPickerModal
+          open={showReferenceEventPicker}
+          eventTypes={eventTypes}
+          lastEvent={lastReferenceEvent}
+          currentTime={currentTime}
+          onSelect={addReferenceEvent}
+          onClose={() => setShowReferenceEventPicker(false)}
+        />
+      )}
     </div>
   );
 }

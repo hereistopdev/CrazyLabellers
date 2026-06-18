@@ -83,6 +83,12 @@ export default function ReviewTimeline({
   previewMode = false,
   onValidateAll,
   onAutoValidate,
+  canEditReference = false,
+  referenceDirty = false,
+  onAddReferenceEvent,
+  onDeleteReferenceEvent,
+  onNudgeReferenceEvent,
+  onSaveReference,
 }) {
   const playheadPercent = toPercent(currentTime, maxTime);
 
@@ -179,6 +185,26 @@ export default function ReviewTimeline({
             </button>
           )}
         </div>
+        )}
+        {canEditReference && (
+          <div className="review-timeline-toolbar review-timeline-toolbar-reference">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onAddReferenceEvent}
+              disabled={saving}
+            >
+              Add ref event
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={onSaveReference}
+              disabled={saving || !referenceDirty}
+            >
+              Save reference
+            </button>
+          </div>
         )}
         <span className="review-timeline-current">
           Frame {Math.round(currentTime * fps)} · {formatTime(currentTime)}
@@ -284,6 +310,46 @@ export default function ReviewTimeline({
               </>
             ) : (
               <span className="review-frame-empty">No reference event</span>
+            )}
+            {canEditReference && (
+              <div className="review-frame-actions review-frame-actions-reference">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={onAddReferenceEvent}
+                  disabled={saving}
+                >
+                  Add
+                </button>
+                {referenceOnFrame[0] && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNudgeReferenceEvent?.(-1)}
+                      disabled={saving}
+                    >
+                      −1f
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNudgeReferenceEvent?.(1)}
+                      disabled={saving}
+                    >
+                      +1f
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={onDeleteReferenceEvent}
+                      disabled={saving}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
 

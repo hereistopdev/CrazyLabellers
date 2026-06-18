@@ -9,6 +9,7 @@ import {
   FPS,
   getImmediateFollowUpRule,
   resolveFrameOffset,
+  frameOffsetSummary,
 } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import TutorialEventOverlay from '../components/TutorialEventOverlay';
@@ -17,6 +18,7 @@ import TutorialPanel from '../components/TutorialPanel';
 import TutorialEditorPanel from '../components/TutorialEditorPanel';
 import ReviewTimeline from '../components/ReviewTimeline';
 import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
+import LabelingChatbot from '../components/LabelingChatbot';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
 import { displayAssignmentTitle } from '../utils/displayTitle';
@@ -48,6 +50,7 @@ export default function Labeling() {
   const [playMode, setPlayMode] = useState('paused');
   const [magnifyEnabled, setMagnifyEnabled] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [mediaDuration, setMediaDuration] = useState(null);
   const [reference, setReference] = useState(null);
   const [tutorialDone, setTutorialDone] = useState(false);
@@ -495,7 +498,8 @@ export default function Labeling() {
 
   return (
     <div className="labeling-page">
-      <div className="page-header">
+      <div className="page-header page-header--with-actions">
+        <div className="page-header-main">
         <h1>{displayAssignmentTitle(assignment)}</h1>
         <p>{assignment?.description}</p>
         {adminMode && (
@@ -530,6 +534,21 @@ export default function Labeling() {
         <Link to={backTo} style={{ fontSize: '0.88rem' }}>
           ← Back to {backLabel}
         </Link>
+        </div>
+        {(labellerMode || adminMode) && (
+          <button
+            type="button"
+            className="labeling-chatbot-trigger"
+            onClick={() => setChatOpen(true)}
+            aria-label="Open labeling help assistant"
+            title="Ask the labeling assistant"
+          >
+            <span className="labeling-chatbot-trigger-icon" aria-hidden>
+              💬
+            </span>
+            <span className="labeling-chatbot-trigger-label">Help</span>
+          </button>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -702,7 +721,7 @@ export default function Labeling() {
 
           <h3>Add event</h3>
           <p className="offset-hint">
-            Default: <strong>−2</strong> · Pass/Shot: <strong>−3</strong> · Goal/Ball Out: <strong>+1</strong>
+            {frameOffsetSummary}
             · Immediate follow-up: <strong>0</strong> at touch
           </p>
           <div className="mark-panel">
@@ -796,6 +815,16 @@ export default function Labeling() {
         onSelect={markEvent}
         onClose={() => setShowEventPicker(false)}
       />
+
+      {(labellerMode || adminMode) && (
+        <LabelingChatbot
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          assignment={assignment}
+          lastEventType={lastEvent}
+          fps={fps}
+        />
+      )}
 
     </div>
   );

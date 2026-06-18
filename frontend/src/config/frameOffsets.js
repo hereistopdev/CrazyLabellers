@@ -1,12 +1,29 @@
 export const FPS = 25;
 
+/** Frame offset from playhead when marking (frames). */
 export const FRAME_OFFSETS = {
-  default: -2,
-  Pass: -3,
-  'Ball Out of Play': 1,
-  Shot: -3,
-  Goal: 1,
+  Pass: 0,
+  Tackle: 0,
+  Clearance: 0,
+  Block: 0,
+  'Aerial Duel': 0,
+  Shot: 0,
+  Substitution: 0,
+  'Highlight Start': 0,
+  'Highlight End': 0,
+  Referee: 0,
+  Invalid: 0,
+  'Pass Received': -1,
+  Recovery: -1,
+  Interception: -1,
+  'Ball Out of Play': -1,
+  Save: -1,
+  Goal: -1,
+  'Take on': 1,
+  Foul: 1,
 };
+
+export const FRAME_OFFSET_DEFAULT = 0;
 
 /** Second event in a quick sequence — mark at contact frame (0 offset). */
 export const IMMEDIATE_FOLLOW_UP_OFFSET = 0;
@@ -20,71 +37,71 @@ export const immediateFollowUpRules = [
     id: 'receive-pass',
     after: 'Pass Received',
     event: 'Pass',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Receive → immediate pass',
     detail:
-      'Player receives and plays a one-touch pass. Pass Received at −2 frames; Pass at the touch frame (0).',
+      'Player receives and plays a one-touch pass. Pass Received at −1 frame; Pass at the touch frame (0).',
   },
   {
     id: 'receive-shot',
     after: 'Pass Received',
     event: 'Shot',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Receive → immediate shot',
     detail:
-      'One-touch shot after receiving. Pass Received at −2 frames; Shot at contact frame (0), not −3.',
+      'One-touch shot after receiving. Pass Received at −1 frame; Shot at contact frame (0).',
   },
   {
     id: 'receive-takeon',
     after: 'Pass Received',
     event: 'Take on',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Receive → immediate take on',
     detail:
-      'Receiver takes first touch straight at a defender. Pass Received at −2; Take on at first touch (0).',
+      'Receiver takes first touch straight at a defender. Pass Received at −1; Take on at first touch (0), not +1.',
   },
   {
     id: 'recovery-pass',
     after: 'Recovery',
     event: 'Pass',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Recovery → immediate pass',
     detail:
-      'Player picks up loose ball and passes without settling. Recovery at −2; Pass at contact (0).',
+      'Player picks up loose ball and passes without settling. Recovery at −1; Pass at contact (0).',
   },
   {
     id: 'interception-pass',
     after: 'Interception',
     event: 'Pass',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Interception → immediate pass',
     detail:
-      'Cut-out followed by instant outlet pass. Interception at −2; Pass at contact (0).',
+      'Cut-out followed by instant outlet pass. Interception at −1; Pass at contact (0).',
   },
   {
     id: 'recovery-clearance',
     after: 'Recovery',
     event: 'Clearance',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Recovery → immediate clearance',
     detail:
-      'Loose ball cleared on first touch. Recovery at −2; Clearance at contact (0).',
+      'Loose ball cleared on first touch. Recovery at −1; Clearance at contact (0).',
   },
   {
     id: 'interception-shot',
     after: 'Interception',
     event: 'Shot',
-    firstOffset: -2,
+    firstOffset: -1,
     secondOffset: 0,
     title: 'Interception → immediate shot',
     detail:
-      'Win ball and shoot in one motion. Interception at −2; Shot at contact (0).',
+      'Win ball and shoot in one motion. Interception at −1; Shot at contact (0).',
   },
 ];
 
@@ -93,7 +110,10 @@ const followUpLookup = new Map(
 );
 
 export function getFrameOffset(eventType) {
-  return FRAME_OFFSETS[eventType] ?? FRAME_OFFSETS.default;
+  if (Object.prototype.hasOwnProperty.call(FRAME_OFFSETS, eventType)) {
+    return FRAME_OFFSETS[eventType];
+  }
+  return FRAME_OFFSET_DEFAULT;
 }
 
 export function getImmediateFollowUpRule(afterEvent, eventType) {
@@ -132,30 +152,24 @@ export function formatOffset(offset) {
 
 export const frameOffsetRules = [
   {
-    event: 'Default (all other events)',
-    offset: -2,
-    detail: 'Mark 2 frames before the visible moment.',
+    event: '0 frames — contact / visible action',
+    offset: 0,
+    detail:
+      'Pass, Tackle, Clearance, Block, Aerial Duel, Shot, Substitution, Highlight Start, Highlight End, Referee, Invalid',
   },
   {
-    event: 'Pass',
-    offset: -3,
-    detail: 'Mark 3 frames before the ball leaves the passer.',
-    exception: 'Use 0 frames if immediate one-touch pass after Pass Received (see below).',
+    event: '−1 frame — slightly before moment',
+    offset: -1,
+    detail: 'Pass Received, Recovery, Interception, Ball Out of Play, Save, Goal',
   },
   {
-    event: 'Shot',
-    offset: -3,
-    detail: 'Mark 3 frames before contact with the ball.',
-    exception: 'Use 0 frames if one-touch shot right after Pass Received or Interception.',
-  },
-  {
-    event: 'Ball Out of Play',
+    event: '+1 frame — slightly after moment',
     offset: 1,
-    detail: 'Mark 1 frame after the whole ball crosses the line.',
-  },
-  {
-    event: 'Goal',
-    offset: 1,
-    detail: 'Mark 1 frame after the whole ball crosses the goal line.',
+    detail: 'Take on, Foul',
+    exception:
+      'Immediate follow-up after Pass Received / Recovery / Interception uses 0 for the second event (Pass, Shot, Clearance, Take on).',
   },
 ];
+
+export const frameOffsetSummary =
+  '0f: Pass, Tackle, Clearance, Block, Aerial Duel, Shot · −1f: Pass Received, Recovery, Interception, Ball Out of Play, Save, Goal · +1f: Take on, Foul';
