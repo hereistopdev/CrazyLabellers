@@ -27,7 +27,7 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-badge">Labeller Portal</div>
+        <div className="auth-badge">Shrinik</div>
         <h1>Sign in</h1>
         <p className="subtitle">
           Labellers sign in here to access terminology, tests, and labeling work. Admins use the

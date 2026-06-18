@@ -5,6 +5,7 @@ const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
 const { validateTaskPrice } = require('../config/payments');
 const { hasReferenceForClip } = require('../services/referenceStorage');
+const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
 
 const router = express.Router();
 
@@ -116,37 +117,34 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
       status,
     } = req.body;
 
-    const update = {};
-    if (title !== undefined) update.title = String(title).trim();
-    if (description !== undefined) update.description = String(description);
-    if (kind !== undefined) {
-      if (!['tutorial', 'pretest', 'production'].includes(kind)) {
-        return res.status(400).json({ message: 'Invalid task kind' });
-      }
-      update.kind = kind;
-    }
-    if (sortOrder !== undefined) update.sortOrder = parseInt(sortOrder, 10) || 0;
-    if (groupId !== undefined) update.groupId = groupId || null;
-    if (taskPrice !== undefined) update.taskPrice = validateTaskPrice(taskPrice);
-    if (challengeNote !== undefined) update.challengeNote = String(challengeNote);
-    if (gameTime !== undefined) update.gameTime = String(gameTime);
-    if (durationSeconds !== undefined) update.durationSeconds = parseInt(durationSeconds, 10) || 30;
-    if (tutorialIntro !== undefined) update.tutorialIntro = String(tutorialIntro);
-    if (tutorialSteps !== undefined) {
-      update.tutorialSteps = tutorialSteps.map((step) => ({
-        frameTime: Number(step.frameTime) || 0,
-        eventType: String(step.eventType ?? '').trim(),
-        title: String(step.title ?? '').trim(),
-        explanation: String(step.explanation ?? '').trim(),
-      }));
-    }
-    if (status !== undefined) update.status = status;
-
-    const task = await VideoAssignment.findByIdAndUpdate(req.params.id, update, { new: true })
+    const task = await VideoAssignment.findById(req.params.id)
       .populate('groupId', 'name')
       .populate('assignedTo', 'name email');
 
     if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    if (title !== undefined) task.title = String(title).trim();
+    if (description !== undefined) task.description = String(description);
+    if (kind !== undefined) {
+      if (!['tutorial', 'pretest', 'production'].includes(kind)) {
+        return res.status(400).json({ message: 'Invalid task kind' });
+      }
+      task.kind = kind;
+    }
+    if (sortOrder !== undefined) task.sortOrder = parseInt(sortOrder, 10) || 0;
+    if (groupId !== undefined) task.groupId = groupId || null;
+    if (taskPrice !== undefined) task.taskPrice = validateTaskPrice(taskPrice);
+    if (challengeNote !== undefined) task.challengeNote = String(challengeNote);
+    if (gameTime !== undefined) task.gameTime = String(gameTime);
+    if (durationSeconds !== undefined) task.durationSeconds = parseInt(durationSeconds, 10) || 30;
+    if (tutorialIntro !== undefined) task.tutorialIntro = String(tutorialIntro);
+    if (tutorialSteps !== undefined) {
+      task.tutorialSteps = normalizeTutorialSteps(tutorialSteps);
+      task.markModified('tutorialSteps');
+    }
+    if (status !== undefined) task.status = status;
+
+    await task.save();
     return res.json(task);
   } catch (error) {
     return res.status(400).json({ message: error.message });

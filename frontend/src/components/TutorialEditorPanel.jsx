@@ -1,19 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { FPS } from '../config/frameOffsets';
-
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(2);
-  return `${m}:${s.padStart(5, '0')}`;
-}
+import { formatTutorialTime, getActiveTutorialStep } from '../utils/tutorialFormat';
 
 const EMPTY_STEP = { frameTime: 0, eventType: '', title: '', explanation: '' };
 
 export default function TutorialEditorPanel({
   assignment,
   currentTime,
-  fps = FPS,
+  fps,
   eventTypes = [],
   onJumpToStep,
   onSaved,
@@ -30,6 +24,8 @@ export default function TutorialEditorPanel({
   }, [assignment?._id, assignment?.tutorialIntro, assignment?.tutorialSteps]);
 
   const currentFrame = Math.round(currentTime * fps);
+  const activeStep = getActiveTutorialStep(steps, currentTime, fps);
+  const activeIndex = activeStep ? steps.indexOf(activeStep) : -1;
 
   const updateStep = (index, field, value) => {
     setSteps((prev) => {
@@ -55,7 +51,7 @@ export default function TutorialEditorPanel({
     setSaving(true);
     setError('');
     try {
-      const payload = {
+      const updated = await api.updateAdminTask(assignment._id, {
         kind: 'tutorial',
         tutorialIntro: intro.trim(),
         tutorialSteps: steps.map((s) => ({
@@ -64,8 +60,7 @@ export default function TutorialEditorPanel({
           title: String(s.title || '').trim(),
           explanation: String(s.explanation || '').trim(),
         })),
-      };
-      const updated = await api.updateAdminTask(assignment._id, payload);
+      });
       onSaved?.(updated);
       setMessage('Tutorial explanations saved');
       setTimeout(() => setMessage(''), 2500);
@@ -76,106 +71,117 @@ export default function TutorialEditorPanel({
     }
   };
 
-  const activeStep = steps.find(
-    (step) => Math.abs(Math.round(step.frameTime * fps) - currentFrame) <= 1
-  );
-
   return (
-    <div className="tutorial-panel tutorial-editor-panel card">
-      <div className="tutorial-editor-header">
-        <h3>Edit tutorial explanations</h3>
-        <span className="tutorial-editor-badge">Admin</span>
-      </div>
-      <p className="tutorial-editor-hint">
-        Pause on a frame, then add or edit steps. Labellers see these explanations in this panel
-        while labeling.
+    <aside className="tutorial-panel-pro tutorial-panel-pro--editor">
+      <header className="tutorial-panel-pro-header">
+        <div>
+          <span className="tutorial-panel-eyebrow">Admin · Tutorial authoring</span>
+          <h3>Frame explanations</h3>
+        </div>
+        <span className="tutorial-panel-count">{steps.length} steps</span>
+      </header>
+
+      <p className="tutorial-editor-lead">
+        Pause on the target frame, add a step, then describe why the event belongs there. Fields
+        can be filled in gradually.
       </p>
 
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-success">{message}</div>}
 
-      <label className="tutorial-editor-field">
-        Intro (shown above the step list)
+      <label className="tutorial-editor-intro-field">
+        <span>Overview for labellers</span>
         <textarea
           rows={2}
           value={intro}
           onChange={(e) => setIntro(e.target.value)}
-          placeholder="What should the labeller look for in this clip?"
+          placeholder="Brief context before they start labeling this clip…"
         />
       </label>
 
-      {activeStep && (
-        <div className="tutorial-active-step">
-          <span className="tutorial-active-label">Preview at current frame</span>
-          <strong>{activeStep.eventType || '—'}</strong>
-          {activeStep.title && <span className="tutorial-step-title">{activeStep.title}</span>}
-          <p>{activeStep.explanation || 'No explanation text yet.'}</p>
-        </div>
-      )}
-
-      <div className="tutorial-editor-actions">
+      <div className="tutorial-editor-toolbar">
         <button type="button" className="btn btn-secondary btn-sm" onClick={addAtCurrentFrame}>
-          Add step at {formatTime(currentTime)} (frame {currentFrame})
+          + Add step at frame {currentFrame}
         </button>
+        <span className="tutorial-editor-time">{formatTutorialTime(currentTime)}</span>
       </div>
 
-      <ol className="tutorial-steps-list tutorial-steps-editor-list">
+      {activeStep && activeIndex >= 0 && (
+        <section className="tutorial-spotlight tutorial-spotlight--editor">
+          <span className="tutorial-spotlight-label">Editing near current frame</span>
+          <p className="tutorial-spotlight-text">
+            Step {activeIndex + 1} · {activeStep.eventType || 'No event yet'}
+          </p>
+        </section>
+      )}
+
+      <div className="tutorial-step-track tutorial-step-track--editor">
         {steps.length === 0 ? (
-          <li className="tutorial-empty">No steps yet — add one at the current frame.</li>
+          <div className="tutorial-panel-empty">
+            <p>No steps yet. Scrub to a frame and click “Add step”.</p>
+          </div>
         ) : (
           steps.map((step, index) => {
             const frame = Math.round(step.frameTime * fps);
             const isActive = Math.abs(frame - currentFrame) <= 1;
             return (
-              <li key={step._id || `step-${index}`} className={isActive ? 'active' : ''}>
-                <div className="tutorial-step-editor-fields">
-                  <label>
-                    Time (s)
-                    <input
-                      type="number"
-                      step="0.04"
-                      value={step.frameTime}
-                      onChange={(e) => updateStep(index, 'frameTime', e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Event
-                    <input
-                      list={`tutorial-events-${index}`}
-                      value={step.eventType}
-                      onChange={(e) => updateStep(index, 'eventType', e.target.value)}
-                      placeholder="Pass, Shot..."
-                    />
-                    <datalist id={`tutorial-events-${index}`}>
-                      {eventTypes.map((t) => (
-                        <option key={t} value={t} />
-                      ))}
-                    </datalist>
-                  </label>
-                  <label>
-                    Title
-                    <input
-                      value={step.title || ''}
-                      onChange={(e) => updateStep(index, 'title', e.target.value)}
-                      placeholder="Short label"
-                    />
-                  </label>
-                  <label className="tutorial-editor-field-full">
-                    Why this frame?
-                    <textarea
-                      rows={2}
-                      value={step.explanation || ''}
-                      onChange={(e) => updateStep(index, 'explanation', e.target.value)}
-                      placeholder="Explain what the labeller should see here..."
-                    />
-                  </label>
-                  <div className="tutorial-step-editor-buttons">
+              <article
+                key={step._id || `step-${index}`}
+                className={`tutorial-step-card tutorial-step-card--editor${isActive ? ' active' : ''}`}
+              >
+                <div className="tutorial-step-card-rail">
+                  <span className="tutorial-step-index">{index + 1}</span>
+                </div>
+                <div className="tutorial-step-card-body tutorial-step-card-body--editor">
+                  <div className="tutorial-editor-grid">
+                    <label>
+                      <span>Time (s)</span>
+                      <input
+                        type="number"
+                        step="0.04"
+                        value={step.frameTime}
+                        onChange={(e) => updateStep(index, 'frameTime', e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Event type</span>
+                      <input
+                        list={`tutorial-events-${index}`}
+                        value={step.eventType}
+                        onChange={(e) => updateStep(index, 'eventType', e.target.value)}
+                        placeholder="Optional"
+                      />
+                      <datalist id={`tutorial-events-${index}`}>
+                        {eventTypes.map((t) => (
+                          <option key={t} value={t} />
+                        ))}
+                      </datalist>
+                    </label>
+                    <label className="tutorial-editor-grid-full">
+                      <span>Short title</span>
+                      <input
+                        value={step.title || ''}
+                        onChange={(e) => updateStep(index, 'title', e.target.value)}
+                        placeholder="Optional headline"
+                      />
+                    </label>
+                    <label className="tutorial-editor-grid-full">
+                      <span>Why this frame?</span>
+                      <textarea
+                        rows={3}
+                        value={step.explanation || ''}
+                        onChange={(e) => updateStep(index, 'explanation', e.target.value)}
+                        placeholder="Describe what the labeller should see and why the event is marked here…"
+                      />
+                    </label>
+                  </div>
+                  <div className="tutorial-step-editor-actions">
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => onJumpToStep?.(Number(step.frameTime) || 0)}
                     >
-                      Go to frame
+                      Go to frame {frame}
                     </button>
                     <button
                       type="button"
@@ -186,15 +192,17 @@ export default function TutorialEditorPanel({
                     </button>
                   </div>
                 </div>
-              </li>
+              </article>
             );
           })
         )}
-      </ol>
+      </div>
 
-      <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
-        {saving ? 'Saving...' : 'Save tutorial explanations'}
-      </button>
-    </div>
+      <footer className="tutorial-editor-footer">
+        <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save tutorial explanations'}
+        </button>
+      </footer>
+    </aside>
   );
 }

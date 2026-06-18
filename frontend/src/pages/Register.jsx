@@ -28,7 +28,7 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-badge">Labeller Registration</div>
+        <div className="auth-badge">Shrinik</div>
         <h1>Create labeller account</h1>
         <p className="subtitle">
           Sign up to become a football video labeller. After registering, study the terminology,

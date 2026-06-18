@@ -18,7 +18,7 @@ export default function Layout() {
       <nav className="navbar">
         <NavLink to="/" className="navbar-brand">
           <span className="brand-icon">⚽</span>
-          Football Labeling
+          Shrinik
         </NavLink>
 
         <div className="nav-links">

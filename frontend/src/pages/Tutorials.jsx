@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
+import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
 
 export default function Tutorials() {
   const { refreshUser } = useAuth();
@@ -81,22 +82,30 @@ export default function Tutorials() {
       {assignments.length === 0 ? (
         <div className="empty-state">No tutorial clips configured yet.</div>
       ) : (
-        <div className="card-grid">
-          {assignments.map((a) => {
+        <div className="task-list">
+          {assignments.map((a, index) => {
             const canOpen = a.assignedTo && ['assigned', 'in_progress'].includes(a.status);
             const canClaim = a.status === 'available' && !a.tutorialCompleted;
+            const subtitle = assignmentSubtitle(a);
 
             return (
-              <div key={a._id} className="card">
-                <h3>{a.title}</h3>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>{a.description}</p>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  {a.tutorialSteps?.length || 0} explained steps · Updated {formatTimestamp(a.updatedAt)}
-                </p>
-                {a.tutorialCompleted && (
-                  <span className="status-badge status-approved">Completed</span>
-                )}
-                <div className="actions-row" style={{ marginTop: '0.75rem' }}>
+              <div key={a._id} className="task-list-item card">
+                <div className="task-list-body">
+                  <div className="task-list-title-row">
+                    <h3>{displayAssignmentTitle(a, index)}</h3>
+                    {a.tutorialCompleted && (
+                      <span className="status-badge status-approved">Completed</span>
+                    )}
+                  </div>
+                  {subtitle && (
+                    <p className="task-list-subtitle">{subtitle}</p>
+                  )}
+                  <p className="task-list-meta">
+                    {a.tutorialSteps?.length || 0} explained steps · Updated{' '}
+                    {formatTimestamp(a.updatedAt)}
+                  </p>
+                </div>
+                <div className="task-list-actions">
                   {canClaim && (
                     <button
                       type="button"

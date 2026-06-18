@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
+import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -132,29 +133,29 @@ export default function LabelingTest() {
       ) : assignments.length === 0 ? (
         <div className="empty-state">No labeling test clips available yet.</div>
       ) : (
-        <div className="card-grid">
-          {assignments.map((a) => {
+        <div className="task-list">
+          {assignments.map((a, index) => {
             const isMine =
               a.assignedTo?._id === user?.id || a.assignedTo === user?.id;
             const canOpen = isMine && ['assigned', 'in_progress'].includes(a.status);
             const canClaim = a.status === 'available';
+            const subtitle = assignmentSubtitle(a);
 
             return (
-              <div key={a._id} className="card">
-                <h3 style={{ marginBottom: '0.35rem' }}>{a.title}</h3>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                  {a.description}
-                </p>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  Duration: {a.durationSeconds || 30}s ·{' '}
-                  <span className="status-badge status-passed_test">Pre-test</span>
-                  {' · '}
-                  {STATUS_LABELS[a.status] || a.status}
-                </p>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Updated {formatTimestamp(a.updatedAt)}
-                </p>
-                <div className="actions-row">
+              <div key={a._id} className="task-list-item card">
+                <div className="task-list-body">
+                  <h3>{displayAssignmentTitle({ ...a, kind: 'pretest' }, index)}</h3>
+                  {subtitle && <p className="task-list-subtitle">{subtitle}</p>}
+                  <p className="task-list-meta">
+                    Duration: {a.durationSeconds || 30}s ·{' '}
+                    <span className="status-badge status-passed_test">Pre-test</span>
+                    {' · '}
+                    {STATUS_LABELS[a.status] || a.status}
+                    {' · '}
+                    Updated {formatTimestamp(a.updatedAt)}
+                  </p>
+                </div>
+                <div className="task-list-actions">
                   {canClaim && (
                     <button
                       type="button"

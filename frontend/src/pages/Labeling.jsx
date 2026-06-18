@@ -15,8 +15,11 @@ import EventPickerModal from '../components/EventPickerModal';
 import LabelingScoreModal from '../components/LabelingScoreModal';
 import TutorialPanel from '../components/TutorialPanel';
 import TutorialEditorPanel from '../components/TutorialEditorPanel';
+import ReviewTimeline from '../components/ReviewTimeline';
+import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
+import { displayAssignmentTitle } from '../utils/displayTitle';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -46,6 +49,7 @@ export default function Labeling() {
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [gradingResult, setGradingResult] = useState(null);
   const [mediaDuration, setMediaDuration] = useState(null);
+  const [reference, setReference] = useState(null);
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
@@ -65,6 +69,18 @@ export default function Labeling() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!adminMode || !id) {
+      setReference(null);
+      return;
+    }
+
+    api
+      .getReviewPreview(id)
+      .then((data) => setReference(data.reference || null))
+      .catch(() => setReference(null));
+  }, [adminMode, id]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -345,6 +361,8 @@ export default function Labeling() {
   const isTutorial = assignment?.kind === 'tutorial';
   const showTutorialEditor = adminMode && isTutorial;
   const showTutorialGuide = !adminMode && isTutorial;
+  const referenceEvents = reference?.hasReference ? reference.events : [];
+  const showReference = adminMode && reference?.hasReference;
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) return <div className="alert alert-error">{error}</div>;
@@ -368,12 +386,19 @@ export default function Labeling() {
   return (
     <div className="labeling-page">
       <div className="page-header">
-        <h1>{assignment?.title}</h1>
+        <h1>{displayAssignmentTitle(assignment)}</h1>
         <p>{assignment?.description}</p>
         {adminMode && (
           <p style={{ fontSize: '0.85rem', color: 'var(--accent)' }}>
             Admin preview
             {isTutorial ? ' — edit tutorial explanations in the panel beside the video.' : ''}
+            {showReference && (
+              <>
+                {' '}
+                · Reference JSON loaded ({reference.annotationCount} events) — shown on video and
+                timeline
+              </>
+            )}
           </p>
         )}
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -418,6 +443,7 @@ export default function Labeling() {
             enabled={magnifyEnabled}
             onEnabledChange={setMagnifyEnabled}
             submissionEvents={events}
+            referenceEvents={showReference ? referenceEvents : []}
             fps={fps}
           >
             <video
@@ -479,6 +505,20 @@ export default function Labeling() {
               </button>
             </div>
           </div>
+
+          {showReference && (
+            <ReviewTimeline
+              currentTime={currentTime}
+              maxTime={maxTime}
+              fps={fps}
+              submissionEvents={events}
+              referenceEvents={referenceEvents}
+              labellerName="Draft labels"
+              hasReference
+              previewMode
+              onSeek={handleScrub}
+            />
+          )}
         </div>
 
         {showTutorialEditor && (
@@ -502,6 +542,16 @@ export default function Labeling() {
         )}
 
         <div className="events-panel">
+          {showReference && (
+            <ReferenceEventsPanel
+              referenceEvents={referenceEvents}
+              currentTime={currentTime}
+              fps={fps}
+              annotationCount={reference.annotationCount}
+              onSeek={handleScrub}
+            />
+          )}
+
           <h3>Add event</h3>
           <p className="offset-hint">
             Default: <strong>−2</strong> · Pass/Shot: <strong>−3</strong> · Goal/Ball Out: <strong>+1</strong>

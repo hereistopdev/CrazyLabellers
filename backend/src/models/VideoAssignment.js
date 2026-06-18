@@ -10,6 +10,12 @@ const tutorialStepSchema = new mongoose.Schema(
   { _id: true }
 );
 
+tutorialStepSchema.pre('validate', function coerceOptionalFields() {
+  if (this.eventType == null) this.eventType = '';
+  if (this.title == null) this.title = '';
+  if (this.explanation == null) this.explanation = '';
+});
+
 const videoAssignmentSchema = new mongoose.Schema(
   {
     clipId: { type: String, unique: true, sparse: true },

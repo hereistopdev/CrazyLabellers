@@ -1,66 +1,91 @@
-import { FPS } from '../config/frameOffsets';
+import { formatTutorialTime, getActiveTutorialStep } from '../utils/tutorialFormat';
 
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(2);
-  return `${m}:${s.padStart(5, '0')}`;
-}
-
-export default function TutorialPanel({ assignment, currentTime, fps = FPS, onJumpToStep }) {
+export default function TutorialPanel({ assignment, currentTime, fps, onJumpToStep }) {
   const steps = assignment?.tutorialSteps || [];
-  const currentFrame = Math.round(currentTime * fps);
-
-  const activeStep = steps.find(
-    (step) => Math.abs(Math.round(step.frameTime * fps) - currentFrame) <= 1
-  );
+  const activeStep = getActiveTutorialStep(steps, currentTime, fps);
 
   if (!steps.length && !assignment?.tutorialIntro) {
     return (
-      <div className="tutorial-panel card">
-        <h3>Tutorial</h3>
-        <p className="tutorial-empty">No step explanations configured for this clip yet.</p>
-      </div>
+      <aside className="tutorial-panel-pro">
+        <header className="tutorial-panel-pro-header">
+          <div>
+            <span className="tutorial-panel-eyebrow">Guided labeling</span>
+            <h3>Tutorial guide</h3>
+          </div>
+        </header>
+        <div className="tutorial-panel-empty">
+          <p>No frame explanations have been added for this clip yet.</p>
+        </div>
+      </aside>
     );
   }
 
   return (
-    <div className="tutorial-panel card">
-      <h3>Tutorial guide</h3>
+    <aside className="tutorial-panel-pro">
+      <header className="tutorial-panel-pro-header">
+        <div>
+          <span className="tutorial-panel-eyebrow">Guided labeling</span>
+          <h3>Tutorial guide</h3>
+        </div>
+        <span className="tutorial-panel-count">{steps.length} steps</span>
+      </header>
+
       {assignment?.tutorialIntro && (
-        <p className="tutorial-intro">{assignment.tutorialIntro}</p>
+        <div className="tutorial-panel-intro">{assignment.tutorialIntro}</div>
       )}
 
       {activeStep && (
-        <div className="tutorial-active-step">
-          <span className="tutorial-active-label">At this frame</span>
-          <strong>{activeStep.eventType}</strong>
-          {activeStep.title && <span className="tutorial-step-title">{activeStep.title}</span>}
-          <p>{activeStep.explanation}</p>
-        </div>
+        <section className="tutorial-spotlight" aria-label="Current frame explanation">
+          <span className="tutorial-spotlight-label">At this frame</span>
+          <div className="tutorial-spotlight-meta">
+            {activeStep.eventType ? (
+              <span className="tutorial-event-pill">{activeStep.eventType}</span>
+            ) : (
+              <span className="tutorial-event-pill tutorial-event-pill-muted">Event pending</span>
+            )}
+            {activeStep.title && <span className="tutorial-spotlight-title">{activeStep.title}</span>}
+          </div>
+          <p className="tutorial-spotlight-text">
+            {activeStep.explanation?.trim() || 'Explanation will appear here once configured.'}
+          </p>
+        </section>
       )}
 
-      <ol className="tutorial-steps-list">
-        {steps.map((step) => {
+      <div className="tutorial-step-track">
+        {steps.map((step, index) => {
           const frame = Math.round(step.frameTime * fps);
-          const isActive = Math.abs(frame - currentFrame) <= 1;
+          const isActive = Math.abs(frame - Math.round(currentTime * fps)) <= 1;
           return (
-            <li key={step._id || `${step.frameTime}-${step.eventType}`} className={isActive ? 'active' : ''}>
-              <button
-                type="button"
-                className="tutorial-step-btn"
-                onClick={() => onJumpToStep?.(step.frameTime)}
-              >
-                <span className="tutorial-step-time">
-                  Frame {frame} · {formatTime(step.frameTime)}
-                </span>
-                <strong>{step.eventType}</strong>
-                {step.title && <span className="tutorial-step-title">{step.title}</span>}
-              </button>
-              <p className="tutorial-step-explanation">{step.explanation}</p>
-            </li>
+            <article
+              key={step._id || `${step.frameTime}-${index}`}
+              className={`tutorial-step-card${isActive ? ' active' : ''}`}
+            >
+              <div className="tutorial-step-card-rail">
+                <span className="tutorial-step-index">{index + 1}</span>
+                {index < steps.length - 1 && <span className="tutorial-step-line" aria-hidden />}
+              </div>
+              <div className="tutorial-step-card-body">
+                <button
+                  type="button"
+                  className="tutorial-step-jump"
+                  onClick={() => onJumpToStep?.(step.frameTime)}
+                >
+                  <span className="tutorial-step-frame">
+                    Frame {frame} · {formatTutorialTime(step.frameTime)}
+                  </span>
+                  {step.eventType ? (
+                    <span className="tutorial-event-pill">{step.eventType}</span>
+                  ) : null}
+                  {step.title && <span className="tutorial-step-card-title">{step.title}</span>}
+                </button>
+                {step.explanation?.trim() && (
+                  <p className="tutorial-step-card-text">{step.explanation}</p>
+                )}
+              </div>
+            </article>
           );
         })}
-      </ol>
-    </div>
+      </div>
+    </aside>
   );
 }
