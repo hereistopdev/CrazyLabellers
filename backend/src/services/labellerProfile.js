@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const LabelSubmission = require('../models/LabelSubmission');
 const LabellerReview = require('../models/LabellerReview');
+const { summarizePaymentAddresses } = require('../utils/paymentAddresses');
 
 async function getLabellerStats(labellerId) {
   const [reviews, approvedCount] = await Promise.all([
@@ -68,13 +69,17 @@ async function upsertLabellerReview({
   );
 }
 
-async function buildLabellerProfile(labellerId) {
+async function buildLabellerProfile(labellerId, { viewer } = {}) {
   const labeller = await User.findById(labellerId).select(
-    'name email role status createdAt bestTestScore bestLabelingTestScore labelingTestPassed'
+    'name email role status createdAt bestTestScore bestLabelingTestScore labelingTestPassed paymentAddresses paymentAddressesUpdatedAt'
   );
   if (!labeller || !['labeller', 'freelancer'].includes(labeller.role)) {
     return null;
   }
+
+  const canSeePaymentAddresses =
+    viewer &&
+    (String(viewer._id) === String(labellerId) || viewer.role === 'admin');
 
   const stats = await getLabellerStats(labellerId);
 
@@ -105,6 +110,12 @@ async function buildLabellerProfile(labellerId) {
       bestTestScore: labeller.bestTestScore,
       bestLabelingTestScore: labeller.bestLabelingTestScore,
       labelingTestPassed: labeller.labelingTestPassed,
+      ...(canSeePaymentAddresses
+        ? {
+            paymentAddresses: summarizePaymentAddresses(labeller.paymentAddresses),
+            paymentAddressesUpdatedAt: labeller.paymentAddressesUpdatedAt,
+          }
+        : {}),
       ...stats,
     },
     reviews: reviews.map((r) => ({

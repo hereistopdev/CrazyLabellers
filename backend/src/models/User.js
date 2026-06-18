@@ -28,6 +28,12 @@ const userSchema = new mongoose.Schema(
       tutorials: { type: Boolean, default: false },
       labelingTest: { type: Boolean, default: false },
     },
+    paymentAddresses: {
+      trc20: { type: String, trim: true, default: '' },
+      erc20: { type: String, trim: true, default: '' },
+      bep20: { type: String, trim: true, default: '' },
+    },
+    paymentAddressesUpdatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

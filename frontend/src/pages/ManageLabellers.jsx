@@ -6,6 +6,14 @@ import { LABELLER_STATUSES } from '../utils/roles';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
+import { PaymentAddressesDisplay } from '../components/PaymentAddressesSection';
+
+function payoutNetworksLabel(paymentAddresses) {
+  if (!paymentAddresses) return 'None';
+  const networks = ['trc20', 'erc20', 'bep20'].filter((key) => paymentAddresses[key]?.trim());
+  if (!networks.length) return 'None';
+  return networks.map((network) => network.toUpperCase()).join(', ');
+}
 
 const EMPTY_FORM = { name: '', email: '', password: '', status: 'pending' };
 
@@ -283,19 +291,20 @@ export default function ManageLabellers() {
                 <th>Onboarding</th>
                 <th>Status</th>
                 <th>Score</th>
+                <th>Payout</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {labellers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
                     No labellers yet. Add one manually or share the register page.
                   </td>
                 </tr>
               ) : labellerTable.totalCount === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
                     No labellers match your search
                   </td>
                 </tr>
@@ -319,6 +328,17 @@ export default function ManageLabellers() {
                       </span>
                     </td>
                     <td>{l.bestTestScore}%</td>
+                    <td>
+                      <span
+                        className={`status-badge ${
+                          payoutNetworksLabel(l.paymentAddresses) === 'None'
+                            ? 'status-pending'
+                            : 'status-approved'
+                        }`}
+                      >
+                        {payoutNetworksLabel(l.paymentAddresses)}
+                      </span>
+                    </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {(l.status === 'pending' || l.status === 'passed_test') && (
                         <button
@@ -429,6 +449,13 @@ export default function ManageLabellers() {
                   <strong>{detail.assignmentsClaimed}</strong>
                   <span>Assignments</span>
                 </div>
+              </div>
+
+              <div className="payment-addresses-admin card" style={{ marginTop: '1.25rem', padding: '1rem' }}>
+                <PaymentAddressesDisplay
+                  paymentAddresses={detail.labeller.paymentAddresses}
+                  updatedAt={detail.labeller.paymentAddressesUpdatedAt}
+                />
               </div>
 
               <div className="detail-actions">

@@ -5,6 +5,7 @@ const PaymentSettings = require('../models/PaymentSettings');
 const { auth, requireRole } = require('../middleware/auth');
 const { LABELLER_ROLES } = require('../config/roles');
 const { calculateEarnings, DEFAULT_RATE_PER_POINT } = require('../config/payments');
+const { summarizePaymentAddresses } = require('../utils/paymentAddresses');
 
 const router = express.Router();
 
@@ -82,7 +83,9 @@ router.get('/dashboard', auth, requireRole('admin'), async (_req, res) => {
     const summary = totals[0] || { totalPaid: 0, totalPoints: 0, tasksReviewed: 0 };
 
     const labellerIds = labellerStats.map((s) => s._id);
-    const labellers = await User.find({ _id: { $in: labellerIds } }).select('name email status');
+    const labellers = await User.find({ _id: { $in: labellerIds } }).select(
+      'name email status paymentAddresses paymentAddressesUpdatedAt'
+    );
 
     const earningsByLabeller = labellerStats
       .map((stat) => {
@@ -92,6 +95,8 @@ router.get('/dashboard', auth, requireRole('admin'), async (_req, res) => {
           name: labeller?.name || 'Unknown',
           email: labeller?.email,
           status: labeller?.status,
+          paymentAddresses: summarizePaymentAddresses(labeller?.paymentAddresses),
+          paymentAddressesUpdatedAt: labeller?.paymentAddressesUpdatedAt || null,
           totalEarnings: Math.round(stat.totalEarnings * 100) / 100,
           totalPoints: stat.totalPoints,
           tasksCompleted: stat.tasksCompleted,
@@ -116,7 +121,9 @@ router.get('/dashboard', auth, requireRole('admin'), async (_req, res) => {
 
 router.get('/labellers', auth, requireRole('admin'), async (_req, res) => {
   try {
-    const labellers = await User.find({ role: { $in: LABELLER_ROLES } }).select('-password');
+    const labellers = await User.find({ role: { $in: LABELLER_ROLES } }).select(
+      '-password paymentAddresses paymentAddressesUpdatedAt'
+    );
     const stats = await aggregateLabellerEarnings();
 
     const result = labellers.map((l) => {
@@ -126,6 +133,8 @@ router.get('/labellers', auth, requireRole('admin'), async (_req, res) => {
         name: l.name,
         email: l.email,
         status: l.status,
+        paymentAddresses: summarizePaymentAddresses(l.paymentAddresses),
+        paymentAddressesUpdatedAt: l.paymentAddressesUpdatedAt || null,
         totalEarnings: stat ? Math.round(stat.totalEarnings * 100) / 100 : 0,
         totalPoints: stat?.totalPoints || 0,
         tasksCompleted: stat?.tasksCompleted || 0,
@@ -162,7 +171,10 @@ router.get('/labellers/:id', auth, requireRole('admin'), async (req, res) => {
     const totalPoints = approved.reduce((sum, s) => sum + (s.reviewPoints || 0), 0);
 
     return res.json({
-      labeller,
+      labeller: {
+        ...labeller.toObject(),
+        paymentAddresses: summarizePaymentAddresses(labeller.paymentAddresses),
+      },
       summary: {
         totalEarnings: Math.round(totalEarnings * 100) / 100,
         totalPoints,

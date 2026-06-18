@@ -218,6 +218,12 @@ export const api = {
   getFinanceLabeller: (id) => request(`/admin/finance/labellers/${id}`),
   getFinanceLabellers: () => request('/admin/finance/labellers'),
   getMyEarnings: () => request('/earnings/me'),
+  getMyPaymentAddresses: () => request('/labellers/me/payment-addresses'),
+  updateMyPaymentAddresses: (body) =>
+    request('/labellers/me/payment-addresses', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   getMyProfile: () => request('/labellers/me/profile'),
   getLabellerProfile: (id) => request(`/labellers/${id}/profile`),
   updateAssignmentPrice: (id, body) =>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
 import StarRating from '../components/StarRating';
+import PaymentAddressesForm from '../components/PaymentAddressesSection';
 
 export default function Earnings() {
   const [data, setData] = useState(null);
@@ -59,6 +60,10 @@ export default function Earnings() {
           {data.summary.pendingReview} task(s) submitted and awaiting admin review.
         </div>
       )}
+
+      <div style={{ marginBottom: '1.5rem' }}>
+        <PaymentAddressesForm />
+      </div>
 
       <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem' }}>Task history</h2>
       <div className="card">

@@ -5,6 +5,15 @@ import { formatMoney } from '../utils/money';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
+import { PaymentAddressesDisplay } from '../components/PaymentAddressesSection';
+
+function payoutNetworksLabel(paymentAddresses) {
+  if (!paymentAddresses) return 'None';
+  if (paymentAddresses.networksLabel) return paymentAddresses.networksLabel;
+  const networks = ['trc20', 'erc20', 'bep20'].filter((key) => paymentAddresses[key]?.trim());
+  if (!networks.length) return 'None';
+  return networks.map((network) => network.toUpperCase()).join(', ');
+}
 
 export default function FinanceDashboard() {
   const [data, setData] = useState(null);
@@ -142,18 +151,19 @@ export default function FinanceDashboard() {
                 <th>Avg points</th>
                 <th>Total points</th>
                 <th>Earnings</th>
+                <th>Payout</th>
               </tr>
             </thead>
             <tbody>
               {(data?.earningsByLabeller || []).length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
                     No reviewed tasks yet
                   </td>
                 </tr>
               ) : earningsTable.totalCount === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
                     No labellers match your search
                   </td>
                 </tr>
@@ -174,6 +184,17 @@ export default function FinanceDashboard() {
                     <td>{l.avgPoints}</td>
                     <td>{l.totalPoints}</td>
                     <td className="earnings-cell">{formatMoney(l.totalEarnings, currency)}</td>
+                    <td>
+                      <span
+                        className={`status-badge ${
+                          payoutNetworksLabel(l.paymentAddresses) === 'None'
+                            ? 'status-pending'
+                            : 'status-approved'
+                        }`}
+                      >
+                        {payoutNetworksLabel(l.paymentAddresses)}
+                      </span>
+                    </td>
                   </tr>
                 ))
               )}
@@ -209,6 +230,12 @@ export default function FinanceDashboard() {
                   <strong>{selectedLabeller.summary.avgPoints}</strong>
                   <span>Avg points</span>
                 </div>
+              </div>
+              <div className="payment-addresses-admin" style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+                <PaymentAddressesDisplay
+                  paymentAddresses={selectedLabeller.labeller.paymentAddresses}
+                  updatedAt={selectedLabeller.labeller.paymentAddressesUpdatedAt}
+                />
               </div>
               <h4>Per-task breakdown</h4>
               <ul className="finance-task-list">

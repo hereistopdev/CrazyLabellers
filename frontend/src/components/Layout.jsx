@@ -1,18 +1,32 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdmin, isValidator, canAccessReview, roleLabel } from '../utils/roles';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const admin = isAdmin(user);
   const validator = isValidator(user);
   const validatorApproved = validator && canAccessReview(user);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.body.classList.toggle('nav-open', menuOpen);
+    return () => document.body.classList.remove('nav-open');
+  }, [menuOpen]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  const navClass = ({ isActive }) => `nav-link${isActive ? ' active' : ''}`;
 
   return (
     <div className="app-shell">
@@ -22,122 +36,103 @@ export default function Layout() {
           Shrinik
         </NavLink>
 
-        <div className="nav-links">
-          <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+        <button
+          type="button"
+          className={`nav-toggle${menuOpen ? ' nav-toggle--open' : ''}`}
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span className="nav-toggle-bar" />
+          <span className="nav-toggle-bar" />
+          <span className="nav-toggle-bar" />
+        </button>
+
+        {menuOpen && (
+          <button
+            type="button"
+            className="nav-backdrop"
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+          />
+        )}
+
+        <div className={`nav-links${menuOpen ? ' open' : ''}`}>
+          <NavLink to="/" end className={navClass} onClick={() => setMenuOpen(false)}>
             Dashboard
           </NavLink>
 
           {admin ? (
             <>
-              <NavLink
-                to="/admin/tasks"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/admin/tasks" className={navClass} onClick={() => setMenuOpen(false)}>
                 Tasks
               </NavLink>
-              <NavLink
-                to="/admin/videos"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/admin/videos" className={navClass} onClick={() => setMenuOpen(false)}>
                 Videos
               </NavLink>
               <NavLink
                 to="/admin/validators"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                className={navClass}
+                onClick={() => setMenuOpen(false)}
               >
                 Validators
               </NavLink>
               <NavLink
                 to="/admin/labellers"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                className={navClass}
+                onClick={() => setMenuOpen(false)}
               >
                 Labellers
               </NavLink>
-              <NavLink
-                to="/admin/finance"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/admin/finance" className={navClass} onClick={() => setMenuOpen(false)}>
                 Finance
               </NavLink>
-              <NavLink
-                to="/review"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/review" className={navClass} onClick={() => setMenuOpen(false)}>
                 Reviews
               </NavLink>
-              <NavLink
-                to="/admin"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/admin" className={navClass} onClick={() => setMenuOpen(false)}>
                 Admin
               </NavLink>
             </>
           ) : validator ? (
             <>
               {validatorApproved && (
-                <NavLink
-                  to="/review"
-                  className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-                >
+                <NavLink to="/review" className={navClass} onClick={() => setMenuOpen(false)}>
                   Reviews
                 </NavLink>
               )}
-              <NavLink
-                to="/terminology"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
                 Terminology
               </NavLink>
             </>
           ) : (
             <>
-              <NavLink
-                to="/terminology"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
                 Terminology
               </NavLink>
-              <NavLink to="/test" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+              <NavLink to="/test" className={navClass} onClick={() => setMenuOpen(false)}>
                 Knowledge Test
               </NavLink>
-              <NavLink
-                to="/tutorials"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/tutorials" className={navClass} onClick={() => setMenuOpen(false)}>
                 Tutorials
               </NavLink>
-              <NavLink
-                to="/labeling-test"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/labeling-test" className={navClass} onClick={() => setMenuOpen(false)}>
                 Labeling test
               </NavLink>
-              <NavLink
-                to="/assignments"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/assignments" className={navClass} onClick={() => setMenuOpen(false)}>
                 Labeling
               </NavLink>
-              <NavLink
-                to="/earnings"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/earnings" className={navClass} onClick={() => setMenuOpen(false)}>
                 Earnings
               </NavLink>
-              <NavLink
-                to="/profile"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
+              <NavLink to="/profile" className={navClass} onClick={() => setMenuOpen(false)}>
                 Profile
               </NavLink>
             </>
           )}
 
           {admin && (
-            <NavLink
-              to="/terminology"
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-            >
+            <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
               Terminology
             </NavLink>
           )}

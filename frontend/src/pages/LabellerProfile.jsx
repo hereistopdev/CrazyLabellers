@@ -4,6 +4,8 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import { formatMoney } from '../utils/money';
+import PaymentAddressesForm, { PaymentAddressesDisplay } from '../components/PaymentAddressesSection';
+import { isAdmin } from '../utils/roles';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -87,6 +89,22 @@ export default function LabellerProfile() {
           </div>
         )}
       </div>
+
+      {isOwnProfile ? (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <PaymentAddressesForm compact />
+        </div>
+      ) : (
+        isAdmin(user) &&
+        labeller.paymentAddresses && (
+          <div className="card payment-addresses-form" style={{ marginBottom: '1.5rem' }}>
+            <PaymentAddressesDisplay
+              paymentAddresses={labeller.paymentAddresses}
+              updatedAt={labeller.paymentAddressesUpdatedAt}
+            />
+          </div>
+        )
+      )}
 
       <div className="profile-grid">
         <section className="card profile-section">
