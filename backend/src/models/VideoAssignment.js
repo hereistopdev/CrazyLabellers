@@ -1,22 +1,6 @@
 const mongoose = require('mongoose');
 const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
 
-const tutorialStepSchema = new mongoose.Schema(
-  {
-    frameTime: { type: Number, required: true, default: 0 },
-    eventType: { type: String, default: '' },
-    title: { type: String, default: '' },
-    explanation: { type: String, default: '' },
-  },
-  { _id: true, minimize: false }
-);
-
-tutorialStepSchema.pre('validate', function coerceOptionalFields() {
-  if (this.eventType == null || this.eventType === undefined) this.eventType = '';
-  if (this.title == null || this.title === undefined) this.title = '';
-  if (this.explanation == null || this.explanation === undefined) this.explanation = '';
-});
-
 const videoAssignmentSchema = new mongoose.Schema(
   {
     clipId: { type: String, unique: true, sparse: true },
@@ -34,7 +18,8 @@ const videoAssignmentSchema = new mongoose.Schema(
     sortOrder: { type: Number, default: 0 },
     groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaskGroup' },
     tutorialIntro: { type: String, default: '' },
-    tutorialSteps: [tutorialStepSchema],
+    // Plain objects — eventType/explanation are optional; admin fills in gradually.
+    tutorialSteps: { type: [mongoose.Schema.Types.Mixed], default: [] },
     taskPrice: { type: Number, default: 1, min: 0.3, max: 2 },
     challengeNote: { type: String, default: '' },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -48,7 +33,7 @@ const videoAssignmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-videoAssignmentSchema.pre('validate', function normalizeStepsBeforeValidate() {
+videoAssignmentSchema.pre('save', function normalizeStepsOnSave() {
   if (Array.isArray(this.tutorialSteps)) {
     this.tutorialSteps = normalizeTutorialSteps(this.tutorialSteps);
   }

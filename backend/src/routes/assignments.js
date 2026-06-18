@@ -144,9 +144,12 @@ router.post('/:id/claim', auth, async (req, res) => {
       return res.status(400).json({ message: 'Assignment is not available' });
     }
 
+    await patchAssignment(assignment._id, {
+      assignedTo: req.user._id,
+      status: 'assigned',
+    });
     assignment.assignedTo = req.user._id;
     assignment.status = 'assigned';
-    await assignment.save({ validateModifiedOnly: true });
 
     await LabelSubmission.findOneAndUpdate(
       { assignmentId: assignment._id, userId: req.user._id },

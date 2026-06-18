@@ -6,6 +6,7 @@ const { auth, requireRole } = require('../middleware/auth');
 const { validateTaskPrice } = require('../config/payments');
 const { hasReferenceForClip } = require('../services/referenceStorage');
 const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
+const { updateAssignmentFields } = require('../services/assignmentUpdate');
 
 const router = express.Router();
 
@@ -139,13 +140,8 @@ router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
     if (tutorialSteps !== undefined) update.tutorialSteps = normalizeTutorialSteps(tutorialSteps);
     if (status !== undefined) update.status = status;
 
-    const updated = await VideoAssignment.findByIdAndUpdate(
-      req.params.id,
-      { $set: update },
-      { new: true, runValidators: false }
-    )
-      .populate('groupId', 'name')
-      .populate('assignedTo', 'name email');
+    const updated = await updateAssignmentFields(req.params.id, update);
+    if (!updated) return res.status(404).json({ message: 'Task not found' });
 
     return res.json(updated);
   } catch (error) {

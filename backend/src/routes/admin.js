@@ -405,9 +405,11 @@ router.patch('/assignments/:id/price', auth, requireRole('admin'), async (req, r
       update.challengeNote = String(challengeNote).trim();
     }
 
-    const assignment = await VideoAssignment.findByIdAndUpdate(req.params.id, update, {
-      new: true,
-    }).populate('assignedTo', 'name email status');
+    const assignment = await VideoAssignment.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true, runValidators: false }
+    ).populate('assignedTo', 'name email status');
 
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
