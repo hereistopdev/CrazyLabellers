@@ -1,3 +1,4 @@
+const fs = require('fs');
 const SftpClient = require('ssh2-sftp-client');
 
 function isVpsStorageEnabled() {
@@ -51,9 +52,15 @@ async function ensureVpsVideoDir(sftp) {
 
 async function uploadVideoToVps(clipId, data) {
   const remotePath = `${getVpsVideoDir()}/${clipId}.mp4`;
+  const localSize = Buffer.isBuffer(data) ? data.length : fs.statSync(data).size;
+
   await withSftp(async (sftp) => {
     await ensureVpsVideoDir(sftp);
     await sftp.put(data, remotePath);
+    const stat = await sftp.stat(remotePath);
+    if (stat.size !== localSize) {
+      throw new Error(`Upload incomplete: expected ${localSize} bytes, got ${stat.size}`);
+    }
   });
   return remotePath;
 }

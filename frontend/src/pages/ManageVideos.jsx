@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { formatMoney } from '../utils/money';
+import { readVideoDurationFromFile } from '../utils/videoDuration';
 
 const MIN_PRICE = 0.3;
 const MAX_PRICE = 2;
@@ -60,12 +61,22 @@ export default function ManageVideos() {
     setUploading(true);
     setError('');
     try {
+      let durationSeconds = meta.durationSeconds;
+      try {
+        const detected = await readVideoDurationFromFile(file);
+        if (detected) {
+          durationSeconds = Math.round(detected * 100) / 100;
+        }
+      } catch {
+        // keep form value if browser cannot read metadata
+      }
+
       const formData = new FormData();
       formData.append('video', file);
       if (meta.title) formData.append('title', meta.title);
       if (meta.description) formData.append('description', meta.description);
       formData.append('gameTime', meta.gameTime);
-      formData.append('durationSeconds', String(meta.durationSeconds));
+      formData.append('durationSeconds', String(durationSeconds));
       formData.append('taskPrice', String(meta.taskPrice));
       if (meta.challengeNote) formData.append('challengeNote', meta.challengeNote);
 

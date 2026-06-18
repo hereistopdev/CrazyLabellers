@@ -12,7 +12,7 @@ import {
 import FrameMagnifier from '../components/FrameMagnifier';
 import EventPickerModal from '../components/EventPickerModal';
 import LabelingScoreModal from '../components/LabelingScoreModal';
-import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
+import { resolvePlaybackDuration } from '../utils/videoDuration';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -39,10 +39,11 @@ export default function Labeling() {
   const [magnifyEnabled, setMagnifyEnabled] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [gradingResult, setGradingResult] = useState(null);
+  const [mediaDuration, setMediaDuration] = useState(null);
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
-  const maxTime = assignment?.durationSeconds || 30;
+  const maxTime = resolvePlaybackDuration(mediaDuration, assignment?.durationSeconds);
   const currentFrame = Math.round(currentTime * fps);
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
@@ -59,6 +60,17 @@ export default function Labeling() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    setMediaDuration(null);
+  }, [assignment?.videoUrl]);
+
+  const handleLoadedMetadata = useCallback(() => {
+    const duration = videoRef.current?.duration;
+    if (Number.isFinite(duration) && duration > 0) {
+      setMediaDuration(duration);
+    }
+  }, []);
+
   const stopFrameAutoPlay = useCallback(() => {
     if (frameAutoTimerRef.current) {
       clearInterval(frameAutoTimerRef.current);
@@ -74,12 +86,6 @@ export default function Labeling() {
 
   useEffect(() => () => stopFrameAutoPlay(), [stopFrameAutoPlay]);
 
-  const handleTimeUpdate = useCallback(() => {
-    if (videoRef.current && playMode === 'normal') {
-      setCurrentTime(videoRef.current.currentTime);
-    }
-  }, [playMode]);
-
   const seekTo = useCallback((time) => {
     const clamped = Math.max(0, Math.min(maxTime, time));
     if (videoRef.current) {
@@ -87,6 +93,18 @@ export default function Labeling() {
       setCurrentTime(clamped);
     }
   }, [maxTime]);
+
+  const handleTimeUpdate = useCallback(() => {
+    if (videoRef.current && playMode === 'normal') {
+      const t = videoRef.current.currentTime;
+      if (t > maxTime) {
+        seekTo(maxTime);
+        pauseAll();
+        return;
+      }
+      setCurrentTime(t);
+    }
+  }, [playMode, maxTime, seekTo, pauseAll]);
 
   const stepFrames = useCallback(
     (count) => {
@@ -370,6 +388,9 @@ export default function Labeling() {
             <video
               ref={videoRef}
               src={assignment?.videoUrl}
+              crossOrigin="anonymous"
+              preload="auto"
+              onLoadedMetadata={handleLoadedMetadata}
               onTimeUpdate={handleTimeUpdate}
               onEnded={handleVideoEnded}
               onPause={() => {

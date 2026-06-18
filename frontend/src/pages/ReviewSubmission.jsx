@@ -7,8 +7,7 @@ import ReviewTimeline from '../components/ReviewTimeline';
 import { isEditableTarget } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings } from '../utils/money';
 import StarRating from '../components/StarRating';
-import {
-  buildSortedEventFrames,
+import { resolvePlaybackDuration } from '../utils/videoDuration';
   findNextEventFrame,
   findPrevEventFrame,
   getFrameNumber,
@@ -49,6 +48,7 @@ export default function ReviewSubmission() {
   const [aspects, setAspects] = useState({ quality: 5, accuracy: 5, timeliness: 5 });
   const [ratePerPoint, setRatePerPoint] = useState(0.1);
   const [currency, setCurrency] = useState('USD');
+  const [mediaDuration, setMediaDuration] = useState(null);
 
   const assignment = reviewData?.assignment;
   const submission = reviewData?.submission;
@@ -58,7 +58,7 @@ export default function ReviewSubmission() {
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
-  const maxTime = assignment?.durationSeconds || 30;
+  const maxTime = resolvePlaybackDuration(mediaDuration, assignment?.durationSeconds);
   const currentFrame = Math.round(currentTime * fps);
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
@@ -130,6 +130,17 @@ export default function ReviewSubmission() {
   }, [submissionId]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    setMediaDuration(null);
+  }, [assignment?.videoUrl]);
+
+  const handleLoadedMetadata = useCallback(() => {
+    const duration = videoRef.current?.duration;
+    if (Number.isFinite(duration) && duration > 0) {
+      setMediaDuration(duration);
+    }
+  }, []);
 
   const stopFrameAutoPlay = useCallback(() => {
     if (frameAutoTimerRef.current) {
@@ -476,6 +487,9 @@ export default function ReviewSubmission() {
             <video
               ref={videoRef}
               src={assignment?.videoUrl}
+              crossOrigin="anonymous"
+              preload="auto"
+              onLoadedMetadata={handleLoadedMetadata}
               onTimeUpdate={handleTimeUpdate}
               onEnded={pauseAll}
               onPause={() => {

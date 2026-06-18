@@ -17,7 +17,50 @@ sudo mkdir -p /var/www/football-clips
 sudo chmod 755 /var/www/football-clips
 ```
 
-Configure nginx + SSL for `media.crazylabel.us` (see main deployment guide).
+Configure nginx + SSL for `media.crazylabel.us`:
+
+```bash
+sudo nano /etc/nginx/sites-available/media.crazylabel.us
+```
+
+```nginx
+server {
+    listen 80;
+    server_name media.crazylabel.us;
+    root /var/www/football-clips;
+
+    location /api/videos/ {
+        alias /var/www/football-clips/;
+        types { video/mp4 mp4; }
+        default_type video/mp4;
+
+        # Required for full playback + seeking in the browser
+        add_header Accept-Ranges bytes always;
+        add_header Access-Control-Allow-Origin * always;
+        add_header Cache-Control "public, max-age=86400";
+
+        sendfile on;
+        tcp_nopush on;
+        aio on;
+        directio 512;
+    }
+
+    location / { return 404; }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/media.crazylabel.us /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot --nginx -d media.crazylabel.us
+```
+
+Test range requests (must return `206 Partial Content`):
+
+```bash
+curl -I -H "Range: bytes=0-1023" https://media.crazylabel.us/api/videos/YOUR_CLIP_ID.mp4
+```
 
 ---
 
@@ -107,4 +150,5 @@ To test VPS upload locally, add the same `VPS_*` vars to `backend/.env`.
 | Connection timeout | Open port 22 on VPS firewall; check `VPS_SSH_HOST` |
 | Permission denied | Verify public key in VPS `~/.ssh/authorized_keys` |
 | Video uploads but won’t play | Check nginx on `media.crazylabel.us` and `VIDEO_BASE_URL` |
+| Only first 2–3 seconds play | nginx must send `Accept-Ranges: bytes`; test with `curl -I -H "Range: bytes=0-1023" ...` → expect **206** |
 | Upload works, import finds 0 | Clips must be valid 30-char hex `.mp4` names |
