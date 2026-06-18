@@ -1,10 +1,7 @@
-function scoreLabel(score) {
-  if (score >= 100) return '100 (exact frame)';
-  if (score >= 90) return '90 (1 frame off)';
-  if (score >= 80) return '80 (2 frames off)';
-  if (score >= 70) return '70 (3 frames off)';
-  if (score > 0) return `${score}`;
-  return '0 (missed/wrong)';
+function scoreLabel(score, frameDiff) {
+  if (score <= 0) return '0 (missed/wrong)';
+  if (frameDiff == null || frameDiff <= 0) return '100 (exact frame)';
+  return `${score} (${frameDiff} frame${frameDiff === 1 ? '' : 's'} off)`;
 }
 
 export default function LabelingScoreModal({ grading, assignmentTitle, onClose }) {
@@ -57,7 +54,7 @@ export default function LabelingScoreModal({ grading, assignmentTitle, onClose }
                 <span className="meta">
                   {item.status === 'missing'
                     ? 'missing'
-                    : `${item.frameDiff ?? 0}f off · ${scoreLabel(item.score)}`}
+                    : scoreLabel(item.score, item.frameDiff)}
                 </span>
                 <strong>{item.score}</strong>
               </div>

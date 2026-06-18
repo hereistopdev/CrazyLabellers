@@ -1,10 +1,11 @@
 const { compareAnnotations, DEFAULT_TOLERANCE_MS } = require('./compareAnnotations');
 
 const PASS_THRESHOLD = 80;
+const FRAME_SCORE_STEP = 5;
 
 function scoreForFrameDiff(frameDiff) {
   if (frameDiff <= 0) return 100;
-  const score = 100 - frameDiff * 10;
+  const score = 100 - frameDiff * FRAME_SCORE_STEP;
   return Math.max(0, score);
 }
 
@@ -80,6 +81,7 @@ function computeLabelingScore(submissionEvents = [], referenceEvents = [], fps =
 
 module.exports = {
   PASS_THRESHOLD,
+  FRAME_SCORE_STEP,
   DEFAULT_TOLERANCE_MS,
   scoreForFrameDiff,
   getFrameDiff,

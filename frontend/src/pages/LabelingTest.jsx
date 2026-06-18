@@ -102,7 +102,8 @@ export default function LabelingTest() {
         canAccess && (
           <div className="alert alert-info">
             Each reference event is worth an equal share of 100 points. Frame accuracy per event:
-            0 frames = 100, 1 = 90, 2 = 80, and so on. Missing or wrong events score 0.
+            0 frames off = 100, 1 = 95, 2 = 90, 3 = 85, and so on (−5 per frame). Missing or
+            wrong events score 0.
           </div>
         )
       )}

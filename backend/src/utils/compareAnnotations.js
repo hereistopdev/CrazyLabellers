@@ -1,4 +1,4 @@
-const DEFAULT_TOLERANCE_MS = 200;
+const DEFAULT_TOLERANCE_MS = 250;
 
 function compareAnnotations(submissionEvents = [], referenceEvents = [], toleranceMs = DEFAULT_TOLERANCE_MS) {
   const sortedSubmission = [...submissionEvents]
