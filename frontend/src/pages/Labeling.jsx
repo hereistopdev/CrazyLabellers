@@ -11,6 +11,7 @@ import {
   resolveFrameOffset,
 } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
+import TutorialEventOverlay from '../components/TutorialEventOverlay';
 import EventPickerModal from '../components/EventPickerModal';
 import LabelingScoreModal from '../components/LabelingScoreModal';
 import TutorialPanel from '../components/TutorialPanel';
@@ -561,6 +562,13 @@ export default function Labeling() {
                 if (playMode === 'normal') setPlayMode('paused');
               }}
             />
+            {showTutorialGuide && (
+              <TutorialEventOverlay
+                steps={assignment?.tutorialSteps}
+                currentTime={currentTime}
+                fps={fps}
+              />
+            )}
           </FrameMagnifier>
           <div className="video-controls">
             <div className="video-controls-row">
