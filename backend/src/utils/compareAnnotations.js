@@ -1,11 +1,12 @@
 const DEFAULT_TOLERANCE_MS = 250;
+const { normalizeLabelEvents } = require('./normalizeLabelEvents');
 
 function compareAnnotations(submissionEvents = [], referenceEvents = [], toleranceMs = DEFAULT_TOLERANCE_MS) {
-  const sortedSubmission = [...submissionEvents]
+  const sortedSubmission = normalizeLabelEvents(submissionEvents)
     .map((event, submissionIndex) => ({ ...event, submissionIndex }))
     .sort((a, b) => a.frameTime - b.frameTime);
 
-  const sortedReference = [...referenceEvents]
+  const sortedReference = normalizeLabelEvents(referenceEvents)
     .map((event, referenceIndex) => ({ ...event, referenceIndex }))
     .sort((a, b) => a.frameTime - b.frameTime);
 
@@ -80,6 +81,7 @@ function compareAnnotations(submissionEvents = [], referenceEvents = [], toleran
 }
 
 function buildEventReviewRows(submissionEvents = [], comparison = null, eventValidations = []) {
+  const normalizedSubmission = normalizeLabelEvents(submissionEvents);
   const validationMap = new Map(
     (eventValidations || []).map((item) => [item.eventIndex, item])
   );
@@ -91,7 +93,7 @@ function buildEventReviewRows(submissionEvents = [], comparison = null, eventVal
     (comparison?.extraInSubmission || []).map((item) => item.submissionIndex)
   );
 
-  return submissionEvents.map((event, eventIndex) => {
+  return normalizedSubmission.map((event, eventIndex) => {
     const match = matchBySubmission.get(eventIndex);
     const validation = validationMap.get(eventIndex);
 

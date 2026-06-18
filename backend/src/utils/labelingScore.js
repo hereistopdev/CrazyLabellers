@@ -1,4 +1,5 @@
 const { compareAnnotations, DEFAULT_TOLERANCE_MS } = require('./compareAnnotations');
+const { normalizeLabelEvents } = require('./normalizeLabelEvents');
 
 const PASS_THRESHOLD = 80;
 const FRAME_SCORE_STEP = 5;
@@ -30,7 +31,7 @@ function computeLabelingScore(submissionEvents = [], referenceEvents = [], fps =
   }
 
   const matchedByRef = new Map(comparison.matched.map((item) => [item.referenceIndex, item]));
-  const sortedReference = [...referenceEvents]
+  const sortedReference = normalizeLabelEvents(referenceEvents)
     .map((event, referenceIndex) => ({ ...event, referenceIndex }))
     .sort((a, b) => a.frameTime - b.frameTime);
 

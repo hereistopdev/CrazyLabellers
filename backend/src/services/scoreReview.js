@@ -1,5 +1,6 @@
 const { loadReferenceForClip } = require('./referenceStorage');
 const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
+const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { ensureSubmissionAutoScore } = require('./grading');
 
 async function buildScoreReviewPayload(submission, assignment, { ensureScore = true } = {}) {
@@ -11,9 +12,10 @@ async function buildScoreReviewPayload(submission, assignment, { ensureScore = t
     ? await loadReferenceForClip(assignment.clipId, 'post')
     : { hasReference: false, events: [] };
 
-  const submissionEvents = submission?.events || [];
+  const submissionEvents = normalizeLabelEvents(submission?.events || []);
+  const referenceEvents = normalizeLabelEvents(reference.events || []);
   const comparison = reference.hasReference
-    ? compareAnnotations(submissionEvents, reference.events)
+    ? compareAnnotations(submissionEvents, referenceEvents)
     : null;
 
   const eventRows = buildEventReviewRows(
@@ -25,7 +27,7 @@ async function buildScoreReviewPayload(submission, assignment, { ensureScore = t
   return {
     submission: {
       _id: submission._id,
-      events: submission.events,
+      events: submissionEvents,
       status: submission.status,
       autoScore: submission.autoScore,
       autoScoreBreakdown: submission.autoScoreBreakdown,
@@ -38,7 +40,7 @@ async function buildScoreReviewPayload(submission, assignment, { ensureScore = t
     passThreshold: 80,
     reference: {
       hasReference: reference.hasReference,
-      events: reference.events,
+      events: referenceEvents,
       variant: reference.variant,
       annotationCount: reference.annotationCount || 0,
       source: reference.source,

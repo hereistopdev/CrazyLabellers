@@ -3,6 +3,7 @@ const VideoAssignment = require('../models/VideoAssignment');
 const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
 const { isLabeller, isAdmin } = require('../config/roles');
+const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const {
   gradeSubmissionAgainstReference,
   recordLabelingTestAttempt,
@@ -322,10 +323,12 @@ router.put('/:id/labels', auth, async (req, res) => {
       }
     }
 
+    const normalizedEvents = normalizeLabelEvents(events || []);
+
     const submission = await LabelSubmission.findOneAndUpdate(
       { assignmentId: req.params.id, userId: req.user._id },
       {
-        events: events || [],
+        events: normalizedEvents,
         status: status || 'draft',
       },
       { upsert: true, new: true, runValidators: true }

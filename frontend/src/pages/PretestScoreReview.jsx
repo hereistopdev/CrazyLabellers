@@ -9,6 +9,7 @@ import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { displayAssignmentTitle } from '../utils/displayTitle';
 
 function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) return '—';
   const m = Math.floor(seconds / 60);
   const s = (seconds % 60).toFixed(2);
   return `${m}:${s.padStart(5, '0')}`;

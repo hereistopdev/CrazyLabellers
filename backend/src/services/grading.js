@@ -2,6 +2,7 @@ const LabelingTestResult = require('../models/LabelingTestResult');
 const User = require('../models/User');
 const { loadReferenceForClip } = require('./referenceStorage');
 const { computeLabelingScore, PASS_THRESHOLD } = require('../utils/labelingScore');
+const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const {
   canAccessPretest,
   canAccessProduction,
@@ -18,8 +19,8 @@ async function gradeSubmissionAgainstReference(submission, assignment) {
   }
 
   const scoreResult = computeLabelingScore(
-    submission.events,
-    reference.events,
+    normalizeLabelEvents(submission.events),
+    normalizeLabelEvents(reference.events),
     assignment.fps || 25
   );
 
