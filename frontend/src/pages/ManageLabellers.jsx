@@ -535,8 +535,9 @@ export default function ManageLabellers() {
                                 )}
                                 {stepId === 'labelingTest' && (
                                   <>
-                                    Score: {step.score}/100 (need {step.requiredScore}+) · Clips assigned:{' '}
-                                    {step.clipsAssigned}/{step.clipsRequired}
+                                    Best score: {step.score}/100 (need {step.requiredScore}+ per clip) ·
+                                    Clips passed: {step.clipsPassed ?? 0}/{step.clipsRequired ?? 3} ·
+                                    Assigned: {step.clipsAssigned}/{step.clipsRequired}
                                   </>
                                 )}
                                 {stepId === 'production' && (

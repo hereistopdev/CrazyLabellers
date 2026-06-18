@@ -55,7 +55,8 @@ export default function LabelingTest() {
           You receive <strong>3 random clips</strong> from the admin pre-test pool. Open any of your
           clips directly — no claim needed. Each submission is scored automatically. After submit,
           you get a <strong>one-time</strong> score review with reference data, then move on to your
-          other clips. Score <strong>80/100 or higher</strong> to unlock real labeling tasks.
+          other clips. Score <strong>80/100 or higher on all 3 clips</strong> to unlock real labeling
+          tasks.
         </p>
       </div>
 
@@ -73,6 +74,12 @@ export default function LabelingTest() {
         <div className="stat-card">
           <div className="value">{status?.bestScore ?? 0}</div>
           <div className="label">Best score / 100</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">
+            {status?.clipsPassed ?? 0}/{status?.clipsRequired ?? status?.pretestCount ?? 3}
+          </div>
+          <div className="label">Clips passed</div>
         </div>
         <div className="stat-card">
           <div className="value">
@@ -98,7 +105,7 @@ export default function LabelingTest() {
 
       {passed ? (
         <div className="alert alert-success">
-          You passed the labeling pre-test!{' '}
+          You passed all {status?.clipsRequired ?? 3} pre-test clips!{' '}
           {canProduction ? (
             <Link to="/assignments">Open real labeling tasks</Link>
           ) : (
@@ -108,7 +115,11 @@ export default function LabelingTest() {
       ) : (
         canAccess && (
           <div className="alert alert-info">
-            Each reference event is worth an equal share of 100 points. Frame accuracy per event:
+            Pass each clip with {status?.passThreshold ?? 80}/100 or higher. Progress:{' '}
+            <strong>
+              {status?.clipsPassed ?? 0}/{status?.clipsRequired ?? 3} clips passed
+            </strong>
+            . Each reference event is worth an equal share of 100 points. Frame accuracy per event:
             0 frames off = 100, 1 = 95, 2 = 90, 3 = 85, and so on (−5 per frame). Missing or
             wrong events score 0.
           </div>
@@ -157,6 +168,12 @@ export default function LabelingTest() {
                       <>
                         {' · '}
                         Last score: <strong>{a.lastScore}/100</strong>
+                        {a.clipPassed != null && (
+                          <>
+                            {' '}
+                            ({a.clipPassed ? 'passed' : 'not passed'})
+                          </>
+                        )}
                       </>
                     )}
                     {' · '}

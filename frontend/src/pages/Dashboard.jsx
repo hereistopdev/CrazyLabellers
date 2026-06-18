@@ -61,8 +61,10 @@ export default function Dashboard() {
     onboarding?.canAccessPretest ?? (passedKnowledge && tutorialsDone);
   const passedLabeling =
     onboarding?.steps?.labelingTest?.passed ??
-    (user?.labelingTestPassed || (user?.bestLabelingTestScore ?? 0) >= 80 || user?.status === 'approved');
+    (user?.labelingTestPassed || user?.status === 'approved');
   const canProduction = onboarding?.canAccessProduction ?? (canPretest && passedLabeling);
+  const clipsPassed = onboarding?.steps?.labelingTest?.clipsPassed;
+  const clipsRequired = onboarding?.steps?.labelingTest?.clipsRequired ?? 3;
 
   return (
     <div>
@@ -70,7 +72,8 @@ export default function Dashboard() {
         <h1>Hello, {user?.name}</h1>
         <p>
           Knowledge test → tutorials → video pre-test → real tasks. After tutorials you get{' '}
-          <strong>3 random clips</strong> from the admin pre-test pool to label and score.
+          <strong>3 random clips</strong> from the admin pre-test pool — pass all 3 with 80/100+ to
+          unlock production work.
         </p>
       </div>
 
@@ -89,8 +92,16 @@ export default function Dashboard() {
 
       {canPretest && !passedLabeling && (
         <div className="alert alert-info">
-          Tutorials complete. You will receive 3 random pre-test clips from the pool. Score at least
-          80/100 to unlock real tasks.
+          Tutorials complete. You will receive 3 random pre-test clips from the pool. Pass all 3 with
+          at least 80/100 each to unlock real tasks
+          {clipsPassed != null ? (
+            <>
+              {' '}
+              (progress: {clipsPassed}/{clipsRequired} passed).
+            </>
+          ) : (
+            '.'
+          )}
         </div>
       )}
 

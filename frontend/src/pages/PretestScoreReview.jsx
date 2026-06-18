@@ -96,13 +96,12 @@ export default function PretestScoreReview() {
     try {
       await api.acknowledgePretestScoreReview(assignmentId);
       const profile = await refreshUser();
-      const canProduction =
-        profile?.labelingTestPassed || (profile?.bestLabelingTestScore ?? 0) >= passThreshold;
+      const canProduction = Boolean(profile?.labelingTestPassed);
       navigate(canProduction ? '/assignments' : '/labeling-test', {
         replace: true,
         state: {
           message: canProduction
-            ? 'Pre-test complete! Real labeling tasks are unlocked.'
+            ? 'All pre-test clips passed! Real labeling tasks are unlocked.'
             : 'Review saved. Open your next pre-test clip when ready.',
         },
       });
@@ -113,8 +112,7 @@ export default function PretestScoreReview() {
     }
   };
 
-  const canAccessProduction =
-    user?.labelingTestPassed || (user?.bestLabelingTestScore ?? 0) >= passThreshold;
+  const canAccessProduction = Boolean(user?.labelingTestPassed);
 
   const eventRows = useMemo(
     () =>
@@ -150,7 +148,11 @@ export default function PretestScoreReview() {
           <span className="labeling-score-value">{autoScore ?? '—'}</span>
           <span className="labeling-score-max">/ 100</span>
           <span style={{ marginLeft: 12, fontSize: '0.9rem' }}>
-            {passed ? 'Passed' : `Need ${passThreshold}+ to pass pre-test`}
+            {passed
+              ? canAccessProduction
+                ? 'Clip passed · All pre-test clips complete'
+                : 'Clip passed'
+              : `Need ${passThreshold}+ on this clip`}
           </span>
         </div>
         {reference?.hasReference && comparison?.summary && (

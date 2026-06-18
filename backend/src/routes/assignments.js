@@ -15,6 +15,7 @@ const {
   hasPassedKnowledgeTest,
   isPretestClipForUser,
   getPretestClipsWithProgress,
+  getLabelingTestClipProgress,
 } = require('../services/onboarding');
 
 const router = express.Router();
@@ -362,6 +363,11 @@ router.put('/:id/labels', auth, async (req, res) => {
             submission,
             scoreResult
           );
+          const clipProgress = await getLabelingTestClipProgress(req.user._id, user);
+          grading.clipPassed = scoreResult.passed;
+          grading.clipsPassed = clipProgress.clipsPassed;
+          grading.clipsRequired = clipProgress.clipsRequired;
+          grading.allClipsPassed = clipProgress.allPassed;
           grading.user = {
             bestLabelingTestScore: user.bestLabelingTestScore,
             labelingTestPassed: user.labelingTestPassed,

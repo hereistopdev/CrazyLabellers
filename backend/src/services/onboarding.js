@@ -25,8 +25,85 @@ function hasPassedLabelingTest(user) {
   if (!user) return false;
   if (user.status === 'approved') return true;
   if (user.onboardingOverrides?.labelingTest) return true;
-  if (user.labelingTestPassed) return true;
-  return (user.bestLabelingTestScore ?? 0) >= PASS_THRESHOLD;
+  return Boolean(user.labelingTestPassed);
+}
+
+async function getLabelingTestClipProgress(userId, user = null) {
+  const resolvedUser = user || (await User.findById(userId));
+  if (!resolvedUser) {
+    throw new Error('User not found');
+  }
+
+  const clipIds = resolvedUser.pretestClipIds || [];
+  const clipsRequired = PRETEST_CLIPS_PER_LABELLER;
+
+  if (clipIds.length === 0) {
+    return {
+      clipsRequired,
+      clipsAssigned: 0,
+      clipsSubmitted: 0,
+      clipsPassed: 0,
+      allPassed: false,
+      byClip: [],
+    };
+  }
+
+  const submissions = await LabelSubmission.find({
+    userId: resolvedUser._id,
+    assignmentId: { $in: clipIds },
+    status: 'submitted',
+  }).select('assignmentId autoScore');
+
+  const submissionByAssignment = new Map(
+    submissions.map((submission) => [String(submission.assignmentId), submission])
+  );
+
+  const byClip = clipIds.map((clipId) => {
+    const submission = submissionByAssignment.get(String(clipId));
+    const score = submission?.autoScore ?? null;
+    return {
+      assignmentId: clipId,
+      submitted: Boolean(submission),
+      score,
+      passed: score != null && score >= PASS_THRESHOLD,
+    };
+  });
+
+  const clipsSubmitted = byClip.filter((clip) => clip.submitted).length;
+  const clipsPassed = byClip.filter((clip) => clip.passed).length;
+  const allPassed =
+    clipIds.length >= clipsRequired &&
+    clipsPassed >= clipsRequired &&
+    byClip.every((clip) => clip.passed);
+
+  return {
+    clipsRequired,
+    clipsAssigned: clipIds.length,
+    clipsSubmitted,
+    clipsPassed,
+    allPassed,
+    byClip,
+  };
+}
+
+async function refreshLabelingTestPassed(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  if (user.onboardingOverrides?.labelingTest || user.status === 'approved') {
+    if (!user.labelingTestPassed) {
+      user.labelingTestPassed = true;
+      await user.save();
+    }
+    return user;
+  }
+
+  const progress = await getLabelingTestClipProgress(userId, user);
+  user.labelingTestPassed = progress.allPassed;
+  await user.save();
+  return user;
 }
 
 function canAccessTutorial(user) {
@@ -122,6 +199,7 @@ async function getPretestClipsWithProgress(userId) {
       taskPrice: 0,
       userProgress,
       lastScore: submission?.autoScore ?? null,
+      clipPassed: hasSubmitted && (submission?.autoScore ?? 0) >= PASS_THRESHOLD,
       lastSubmittedAt: hasSubmitted ? submission.updatedAt : null,
       scoreReviewAvailable: hasSubmitted && !submission?.pretestScoreReviewSeenAt,
     };
@@ -199,6 +277,16 @@ async function getOnboardingStatus(userId) {
 
   const tutorialProgress = await getTutorialProgress(userId);
   const pretestPool = await getPretestPoolStats();
+  const clipProgress = await getLabelingTestClipProgress(userId, user);
+
+  if (
+    !user.onboardingOverrides?.labelingTest &&
+    user.status !== 'approved' &&
+    user.labelingTestPassed !== clipProgress.allPassed
+  ) {
+    await User.updateOne({ _id: userId }, { $set: { labelingTestPassed: clipProgress.allPassed } });
+    user.labelingTestPassed = clipProgress.allPassed;
+  }
 
   const steps = {
     knowledge: {
@@ -223,8 +311,10 @@ async function getOnboardingStatus(userId) {
       passed: hasPassedLabelingTest(user),
       score: user.bestLabelingTestScore ?? 0,
       requiredScore: PASS_THRESHOLD,
-      clipsAssigned: user.pretestClipIds?.length ?? 0,
-      clipsRequired: PRETEST_CLIPS_PER_LABELLER,
+      clipsAssigned: clipProgress.clipsAssigned,
+      clipsRequired: clipProgress.clipsRequired,
+      clipsSubmitted: clipProgress.clipsSubmitted,
+      clipsPassed: clipProgress.clipsPassed,
       manualGrant: Boolean(user.onboardingOverrides?.labelingTest),
     },
     production: {
@@ -300,6 +390,8 @@ module.exports = {
   hasPassedKnowledgeTest,
   hasCompletedTutorials,
   hasPassedLabelingTest,
+  getLabelingTestClipProgress,
+  refreshLabelingTestPassed,
   canAccessTutorial,
   canAccessPretest,
   canAccessProduction,

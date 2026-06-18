@@ -6,6 +6,7 @@ const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const {
   canAccessPretest,
   canAccessProduction,
+  refreshLabelingTestPassed,
 } = require('./onboarding');
 
 async function gradeSubmissionAgainstReference(submission, assignment) {
@@ -65,12 +66,12 @@ async function recordLabelingTestAttempt(userId, assignmentId, submission, score
   if (scoreResult.totalScore > user.bestLabelingTestScore) {
     user.bestLabelingTestScore = scoreResult.totalScore;
   }
-  if (scoreResult.passed) {
-    user.labelingTestPassed = true;
-  }
   await user.save();
 
-  return { result, user };
+  await refreshLabelingTestPassed(userId);
+  const updatedUser = await User.findById(userId);
+
+  return { result, user: updatedUser };
 }
 
 module.exports = {
