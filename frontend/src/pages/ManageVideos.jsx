@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdmin, isVideoManager } from '../utils/roles';
 import { api } from '../api';
@@ -9,7 +9,6 @@ import { formatTimestamp } from '../utils/formatTimestamp';
 import VideoLabelLink from '../components/VideoLabelLink';
 import { parseBulkUploadFiles, summarizeBulkUpload } from '../utils/parseBulkUploadFiles';
 import { isVideoFilename } from '../utils/clipId';
-import { openLabelerRow } from '../utils/labelerAccess';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
@@ -200,7 +199,6 @@ function validateGroupChoice(choice, newName) {
 }
 
 export default function ManageVideos() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const adminUser = isAdmin(user);
   const managerUser = isAdmin(user) || isVideoManager(user);
@@ -1216,11 +1214,7 @@ export default function ManageVideos() {
               </thead>
               <tbody>
                 {videoTable.paginated.map((video) => (
-                <tr
-                  key={video._id}
-                  className="table-row-link"
-                  onClick={(e) => openLabelerRow(navigate, video._id, e)}
-                >
+                <tr key={video._id}>
                   {adminUser && (
                     <td>
                       <input
@@ -1231,11 +1225,9 @@ export default function ManageVideos() {
                     </td>
                   )}
                   <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                    <VideoLabelLink assignmentId={video._id}>{video.clipId || '—'}</VideoLabelLink>
+                    {video.clipId || '—'}
                   </td>
-                  <td>
-                    <VideoLabelLink assignmentId={video._id}>{video.title}</VideoLabelLink>
-                  </td>
+                  <td>{video.title}</td>
                   {adminUser && (
                     <td>
                       {isFreeTaskKind(video.kind) ? (
@@ -1299,7 +1291,7 @@ export default function ManageVideos() {
                   <td>{video.groupId?.name || '—'}</td>
                   <td>{video.hasReference ? 'Yes' : '—'}</td>
                   {managerUser && (
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td>
                       {video.hasReference && (video.kind || 'production') === 'production' ? (
                         <label className="review-checkbox-label" title="Let assigned labellers see reference while labeling">
                           <input
