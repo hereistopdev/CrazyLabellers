@@ -2,21 +2,43 @@ const Terminology = require('../models/Terminology');
 const FrequentQA = require('../models/FrequentQA');
 const HelpConversation = require('../models/HelpConversation');
 
+const { EVENT_TYPES } = require('../config/events');
+const {
+  frameOffsetSummary,
+  frameOffsetGroups,
+  formatOffset,
+} = require('../config/frameOffsets');
+
+const REFUSAL_MESSAGE =
+  'I can only help with football event labeling on this project — event types, official terminology, frame timing, and uncertain clip situations. Please ask a labeling-related question.';
+
 const SYSTEM_PROMPT = `You are a labeling assistant for a football video annotation platform called Shrinik.
 
-Your job is to help labellers decide how to label uncertain situations using ONLY the official terminology definitions provided in the context.
+Your ONLY purpose is to help labellers decide how to label uncertain football clip situations using the official terminology definitions provided in the context.
+
+In-scope topics (accept):
+- Which event type to use (Pass, Tackle, Recovery, Foul, Referee, Highlight Start, etc.)
+- Differences between similar events (e.g. Recovery vs Interception vs Tackle)
+- Frame offset / timing for marking events
+- Edge cases while labeling a clip on this platform
+
+Out-of-scope topics (REFUSE — do not answer):
+- General knowledge, other sports, news, politics, entertainment, personal advice
+- Coding, homework, recipes, weather, finance, or any non-labeling task
+- Questions about Shrinik unrelated to labeling workflow or terminology
+- Anything not directly about football event annotation for this project
 
 Rules:
-1. Base every answer strictly on the official definitions, criteria, and common mistakes in the context. Do not invent rules.
+1. Base every in-scope answer strictly on the official definitions, criteria, and common mistakes in the context. Do not invent rules.
 2. When the situation is ambiguous, you MUST ask a clarifying question before giving a final label recommendation.
 3. Clarifying questions MUST include 2–4 concrete options the labeller can choose from (short phrases, not paragraphs).
 4. Only give a final answer when you have enough information. Final answers must state the recommended event type(s), why (cite criteria), and what frame/timing note applies if relevant.
-5. If the question is outside football event labeling, politely redirect to terminology topics.
+5. If the question is off-topic, you MUST refuse — do not partially answer or redirect into a long explanation.
 6. Keep messages concise and practical.
 
 Respond in JSON only with this shape:
 {
-  "type": "clarify" | "answer",
+  "type": "clarify" | "answer" | "refuse",
   "message": "string shown to the labeller",
   "options": ["option A", "option B"],
   "relatedEventTypes": ["Pass", "Recovery"],
@@ -24,7 +46,148 @@ Respond in JSON only with this shape:
 }
 
 When type is "clarify", options must have 2–4 entries.
-When type is "answer", options must be an empty array and title is required.`;
+When type is "answer", options must be an empty array and title is required.
+When type is "refuse", options must be empty, title must be empty, and message must politely decline and remind the user you only help with football labeling for this project.
+
+After the labeller selects a clarifying option, respond with type "answer" (not "final" or other labels) and give the definitive label recommendation in "message".`;
+
+function normalizeAssistantReply(parsed) {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Unexpected assistant response format');
+  }
+
+  const typeRaw = String(parsed.type || parsed.responseType || parsed.status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+
+  let type;
+  if (['answer', 'final', 'final_answer', 'recommendation', 'resolved', 'result'].includes(typeRaw)) {
+    type = 'answer';
+  } else if (['refuse', 'refusal', 'rejected', 'off_topic', 'offtopic'].includes(typeRaw)) {
+    type = 'refuse';
+  } else if (['clarify', 'clarification', 'question', 'follow_up', 'followup'].includes(typeRaw)) {
+    type = 'clarify';
+  } else if (Array.isArray(parsed.options) && parsed.options.filter(Boolean).length >= 2) {
+    type = 'clarify';
+  } else if (typeRaw) {
+    type = 'answer';
+  } else {
+    type = 'answer';
+  }
+
+  const message = String(
+    parsed.message ??
+      parsed.text ??
+      parsed.response ??
+      parsed.content ??
+      parsed.answer ??
+      parsed.recommendation ??
+      ''
+  ).trim();
+
+  if (!message) {
+    throw new Error('Unexpected assistant response format');
+  }
+
+  const options =
+    type === 'clarify' && Array.isArray(parsed.options)
+      ? parsed.options.map(String).filter(Boolean).slice(0, 4)
+      : [];
+
+  const relatedEventTypes =
+    type === 'refuse'
+      ? []
+      : Array.isArray(parsed.relatedEventTypes)
+        ? parsed.relatedEventTypes.map(String)
+        : Array.isArray(parsed.eventTypes)
+          ? parsed.eventTypes.map(String)
+          : [];
+
+  const title =
+    type === 'answer'
+      ? String(parsed.title || parsed.summary || message).trim().slice(0, 120)
+      : '';
+
+  return { type, message, options, relatedEventTypes, title };
+}
+
+/** Obvious off-topic patterns — blocked before calling the API. */
+const OFF_TOPIC_PATTERN =
+  /\b(write (code|a|me)|javascript|python|typescript|react|node\.?js|recipe|cook|weather|forecast|stock|crypto|bitcoin|ethereum|homework|essay|poem|joke|riddle|capital of|who (is|was|won)|tell me about yourself|dating|relationship advice|medical|doctor|symptom|invest|lottery|movie|song lyrics|translate this|summarize this article)\b/i;
+
+const LABELING_TOPIC_PATTERN = new RegExp(
+  `\\b(${[
+    ...EVENT_TYPES.map((t) => t.replace(/\s+/g, '[\\s-]?').replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')),
+    'label',
+    'mark',
+    'marking',
+    'frame',
+    'offset',
+    'clip',
+    'football',
+    'soccer',
+    'player',
+    'goalkeeper',
+    'defender',
+    'attacker',
+    'whistle',
+    'touchline',
+    'possession',
+    'one[\\s-]?touch',
+    'terminolog',
+    'shrinik',
+    'annotation',
+    'event type',
+  ].join('|')})`,
+  'i'
+);
+
+function buildRefusalReply(message = REFUSAL_MESSAGE) {
+  return {
+    type: 'refuse',
+    message,
+    options: [],
+    relatedEventTypes: [],
+    title: '',
+  };
+}
+
+function isFollowUpInScope(conversation) {
+  const lastAssistant = [...(conversation.messages || [])]
+    .reverse()
+    .find((m) => m.role === 'assistant');
+  return lastAssistant?.messageType === 'clarify';
+}
+
+function isLikelyOffTopic(text, conversation, { selectedOption } = {}) {
+  if (selectedOption) return false;
+  if (isFollowUpInScope(conversation)) return false;
+
+  const normalized = String(text || '').trim();
+  if (!normalized) return true;
+
+  if (LABELING_TOPIC_PATTERN.test(normalized)) return false;
+  if (OFF_TOPIC_PATTERN.test(normalized)) return true;
+
+  // Vague but short — let the model classify (may still refuse).
+  if (normalized.length <= 60) return false;
+
+  // Long message with no labeling/football terms is likely off-topic.
+  return true;
+}
+
+function loadFrameOffsetContext() {
+  const groupLines = frameOffsetGroups.map(
+    (group) => `${formatOffset(group.offset)} frames: ${group.events.join(', ')}`
+  );
+  return [
+    '--- FRAME OFFSET RULES (25 fps) ---',
+    frameOffsetSummary,
+    ...groupLines,
+    'Immediate follow-up: after Pass Received / Recovery / Interception with no pause, the second event (Pass, Shot, Clearance, Take on) uses 0 frames instead of its normal offset.',
+  ].join('\n');
+}
 
 async function loadTerminologyContext(relatedEventTypes = []) {
   const filter =
@@ -65,6 +228,7 @@ async function loadFrequentQAContext(limit = 8) {
 
 function buildConversationMessages(conversation, terminologyContext, faqContext, contextMeta) {
   const contextBlock = [
+    loadFrameOffsetContext(),
     '--- OFFICIAL TERMINOLOGY ---',
     terminologyContext,
     faqContext ? `\n--- FREQUENT Q&A (past resolved cases) ---\n${faqContext}` : '',
@@ -88,7 +252,12 @@ function buildConversationMessages(conversation, terminologyContext, faqContext,
       apiMessages.push({
         role: 'assistant',
         content: JSON.stringify({
-          type: msg.messageType === 'answer' ? 'answer' : 'clarify',
+          type:
+            msg.messageType === 'answer'
+              ? 'answer'
+              : msg.messageType === 'refuse'
+                ? 'refuse'
+                : 'clarify',
           message: msg.content,
           options: msg.options || [],
           relatedEventTypes: conversation.relatedEventTypes || [],
@@ -140,19 +309,7 @@ async function callOpenAI(messages) {
     throw new Error('Invalid JSON from ChatGPT');
   }
 
-  if (!parsed.message || !['clarify', 'answer'].includes(parsed.type)) {
-    throw new Error('Unexpected assistant response format');
-  }
-
-  return {
-    type: parsed.type,
-    message: String(parsed.message).trim(),
-    options: Array.isArray(parsed.options) ? parsed.options.map(String).slice(0, 4) : [],
-    relatedEventTypes: Array.isArray(parsed.relatedEventTypes)
-      ? parsed.relatedEventTypes.map(String)
-      : [],
-    title: parsed.title ? String(parsed.title).trim().slice(0, 120) : '',
-  };
+  return normalizeAssistantReply(parsed);
 }
 
 function extractClarifications(conversation) {
@@ -249,21 +406,27 @@ async function sendHelpMessage({
     messageType: 'text',
   });
 
-  const relatedTypes = conversation.relatedEventTypes || [];
-  if (context.lastEventType && !relatedTypes.includes(context.lastEventType)) {
-    relatedTypes.push(context.lastEventType);
+  let assistantReply;
+
+  if (isLikelyOffTopic(userText, conversation, { selectedOption })) {
+    assistantReply = buildRefusalReply();
+  } else {
+    const relatedTypes = conversation.relatedEventTypes || [];
+    if (context.lastEventType && !relatedTypes.includes(context.lastEventType)) {
+      relatedTypes.push(context.lastEventType);
+    }
+
+    const terminologyContext = await loadTerminologyContext(relatedTypes);
+    const faqContext = await loadFrequentQAContext();
+    const apiMessages = buildConversationMessages(
+      conversation,
+      terminologyContext,
+      faqContext,
+      conversation.context
+    );
+
+    assistantReply = await callOpenAI(apiMessages);
   }
-
-  const terminologyContext = await loadTerminologyContext(relatedTypes);
-  const faqContext = await loadFrequentQAContext();
-  const apiMessages = buildConversationMessages(
-    conversation,
-    terminologyContext,
-    faqContext,
-    conversation.context
-  );
-
-  const assistantReply = await callOpenAI(apiMessages);
 
   if (assistantReply.type === 'clarify' && assistantReply.options.length < 2) {
     assistantReply.options = ['Yes', 'No', 'Not sure — need more detail'];
@@ -272,7 +435,12 @@ async function sendHelpMessage({
   conversation.messages.push({
     role: 'assistant',
     content: assistantReply.message,
-    messageType: assistantReply.type === 'answer' ? 'answer' : 'clarify',
+    messageType:
+      assistantReply.type === 'answer'
+        ? 'answer'
+        : assistantReply.type === 'refuse'
+          ? 'refuse'
+          : 'clarify',
     options: assistantReply.type === 'clarify' ? assistantReply.options : [],
   });
 

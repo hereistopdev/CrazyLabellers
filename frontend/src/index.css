@@ -745,6 +745,12 @@ body.nav-open {
   margin-bottom: 0.25rem;
 }
 
+.term-frame-offset {
+  margin: 0.75rem 0 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
 .test-progress {
   display: flex;
   align-items: center;
@@ -5020,12 +5026,25 @@ a.video-label-link.btn:hover {
   border-bottom-left-radius: 4px;
 }
 
+.labeling-chatbot-message-refused .labeling-chatbot-message-body {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
 .labeling-chatbot-answer-badge {
   display: inline-block;
   margin-top: 0.35rem;
   font-size: 0.72rem;
   font-weight: 600;
   color: #86efac;
+}
+
+.labeling-chatbot-refuse-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fca5a5;
 }
 
 .labeling-chatbot-options {

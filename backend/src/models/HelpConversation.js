@@ -4,7 +4,7 @@ const helpMessageSchema = new mongoose.Schema(
   {
     role: { type: String, enum: ['user', 'assistant'], required: true },
     content: { type: String, required: true },
-    messageType: { type: String, enum: ['text', 'clarify', 'answer'], default: 'text' },
+    messageType: { type: String, enum: ['text', 'clarify', 'answer', 'refuse'], default: 'text' },
     options: [{ type: String }],
     selectedOption: { type: String },
   },

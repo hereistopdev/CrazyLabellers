@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import EventFlowDiagrams from '../components/EventFlowDiagrams';
-import { frameOffsetSummary } from '../config/frameOffsets';
+import { frameOffsetSummary, formatOffset, getFrameOffset } from '../config/frameOffsets';
 
 export default function Terminology() {
   const [terms, setTerms] = useState([]);
@@ -78,6 +78,12 @@ export default function Terminology() {
               {expanded === term._id && (
                 <div className="term-body">
                   <p>{term.definition}</p>
+                  <p className="term-frame-offset">
+                    Mark timing:{' '}
+                    <span className={`offset-badge inline${getFrameOffset(term.eventType) > 0 ? ' positive' : ''}`}>
+                      {formatOffset(getFrameOffset(term.eventType))} frames
+                    </span>
+                  </p>
 
                   {term.criteria?.length > 0 && (
                     <>

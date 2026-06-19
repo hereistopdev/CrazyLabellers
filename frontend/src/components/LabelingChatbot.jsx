@@ -140,11 +140,12 @@ export default function LabelingChatbot({ open, onClose, assignment, lastEventTy
           {messages.length === 0 && (
             <div className="labeling-chatbot-welcome">
               <p>
-                I help with <strong>official terminology</strong> and labeling edge cases. Describe
-                what you see on the clip, or ask which event type applies.
+                I help with <strong>official football event labeling</strong> for this project —
+                terminology, frame timing, and uncertain clip situations.
               </p>
               <p className="labeling-chatbot-welcome-hint">
-                I may ask follow-up questions with options before giving a recommendation.
+                I cannot answer general questions, coding, or topics unrelated to labeling. I may
+                ask follow-up options before giving a recommendation.
               </p>
               <Link to="/faq" className="labeling-chatbot-faq-link" onClick={handleClose}>
                 Browse Frequent Q&amp;A →
@@ -155,7 +156,13 @@ export default function LabelingChatbot({ open, onClose, assignment, lastEventTy
           {messages.map((msg, index) => (
             <div
               key={`${msg.createdAt || index}-${msg.role}`}
-              className={`labeling-chatbot-message labeling-chatbot-message-${msg.role}`}
+              className={[
+                'labeling-chatbot-message',
+                `labeling-chatbot-message-${msg.role}`,
+                msg.messageType === 'refuse' ? 'labeling-chatbot-message-refused' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               <div className="labeling-chatbot-message-meta">
                 {msg.role === 'assistant' ? 'Assistant' : 'You'}
@@ -164,6 +171,9 @@ export default function LabelingChatbot({ open, onClose, assignment, lastEventTy
               <div className="labeling-chatbot-message-body">{msg.content}</div>
               {msg.role === 'assistant' && msg.messageType === 'answer' && (
                 <span className="labeling-chatbot-answer-badge">Final recommendation</span>
+              )}
+              {msg.role === 'assistant' && msg.messageType === 'refuse' && (
+                <span className="labeling-chatbot-refuse-badge">Out of scope</span>
               )}
             </div>
           ))}

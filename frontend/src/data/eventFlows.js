@@ -4,21 +4,29 @@ export const eventPairs = [
     title: 'Pass → Pass Received',
     description: 'Always two separate events on different frames. Never mark both at the same moment.',
     events: ['Pass', 'Pass Received'],
-    rule: 'Pass Received when teammate gains control. Pass when player kicks or throws to a teammate.',
+    rule:
+      'Pass at 0f when the ball leaves the passer. Pass Received at −1f when the teammate gains control.',
   },
   {
     id: 'shot-goal',
     title: 'Shot → Goal',
-    description: 'Goal always comes with a Shot at the same time.',
+    description: 'Goal always comes with a Shot when the ball crosses the line.',
     events: ['Shot', 'Goal'],
-    rule: 'Label both Shot and Goal when the ball crosses the line between the posts and under the crossbar.',
+    rule: 'Shot at 0f on contact. Goal at −1f when the whole ball crosses the line (same play).',
   },
   {
     id: 'shot-outcome',
     title: 'Shot → Outcome',
     description: 'A shot may be followed by Save or Block as separate events.',
     events: ['Shot', 'Save / Block'],
-    rule: 'Save = goalkeeper stops the ball after a shot. Block = outfield player blocks a shot.',
+    rule: 'Shot at 0f. Save at −1f (keeper stop) or Block at 0f (outfield block).',
+  },
+  {
+    id: 'foul-referee',
+    title: 'Foul → Referee',
+    description: 'When shown, mark the infringement and the confirming whistle separately.',
+    events: ['Foul', 'Referee'],
+    rule: 'Foul at +1f on contact. Referee at 0f when the whistle stops play.',
   },
 ];
 
@@ -28,11 +36,11 @@ export const sequenceFlows = [
     title: 'Build-up Attack',
     subtitle: 'Typical possession sequence leading to a chance',
     steps: [
-      { event: 'Pass', note: 'Kick or throw to teammate' },
-      { event: 'Pass Received', note: 'Teammate gains control' },
-      { event: 'Take on', note: 'Optional — move past opponent', optional: true },
-      { event: 'Shot', note: 'Attempt toward goal' },
-      { event: 'Save / Goal', note: 'One outcome only', branch: true },
+      { event: 'Pass', note: '0f — ball leaves passer' },
+      { event: 'Pass Received', note: '−1f — teammate gains control' },
+      { event: 'Take on', note: 'Optional +1f — beat defender', optional: true },
+      { event: 'Shot', note: '0f — shooting contact' },
+      { event: 'Save / Goal', note: 'Save −1f or Goal −1f on line', branch: true },
     ],
   },
   {
@@ -40,9 +48,9 @@ export const sequenceFlows = [
     title: 'Counter Attack',
     subtitle: 'Fast transition after winning the ball',
     steps: [
-      { event: 'Tackle / Interception / Recovery', note: 'Win possession', branch: true },
-      { event: 'Pass', note: 'Quick release' },
-      { event: 'Pass Received', note: 'Runner controls' },
+      { event: 'Tackle / Interception / Recovery', note: 'Win possession (−1f for Int/Rec)', branch: true },
+      { event: 'Pass', note: '0f — quick release' },
+      { event: 'Pass Received', note: '−1f — runner controls' },
       { event: 'Take on', note: 'Optional beat defender', optional: true },
       { event: 'Shot', note: 'Effort on goal' },
       { event: 'Goal / Save', note: 'Outcome', branch: true },
@@ -53,10 +61,10 @@ export const sequenceFlows = [
     title: 'Defensive Sequence',
     subtitle: 'Stopping an attack under pressure',
     steps: [
-      { event: 'Tackle / Interception', note: 'Win ball from opponent', branch: true },
-      { event: 'Block', note: 'Stop an opposing shot', optional: true },
-      { event: 'Clearance', note: 'Clear danger to safety' },
-      { event: 'Ball Out of Play', note: 'If ball leaves pitch', optional: true },
+      { event: 'Tackle / Interception', note: 'Tackle 0f; Interception −1f', branch: true },
+      { event: 'Block', note: '0f — stop opposing shot', optional: true },
+      { event: 'Clearance', note: '0f — clear danger' },
+      { event: 'Ball Out of Play', note: '−1f if ball leaves pitch', optional: true },
     ],
   },
   {
@@ -64,7 +72,7 @@ export const sequenceFlows = [
     title: 'Set Piece / Aerial',
     subtitle: 'Dead ball or contested high ball',
     steps: [
-      { event: 'Ball Out of Play', note: 'Ball crossed line' },
+      { event: 'Ball Out of Play', note: '−1f — ball crossed line' },
       { event: 'Aerial Duel', note: 'Each contesting player gets an event' },
       { event: 'Pass / Clearance / Shot', note: 'Outcome of duel', branch: true },
       { event: 'Pass Received', note: 'If teammate gains control', optional: true },
@@ -75,9 +83,9 @@ export const sequenceFlows = [
     title: 'Foul & Stoppage',
     subtitle: 'Infringement and restart',
     steps: [
-      { event: 'Foul', note: 'Infringement at +1 frame' },
-      { event: 'Referee', note: 'Whistle confirms foul — optional if shown', optional: true },
-      { event: 'Ball Out of Play', note: 'Often follows', optional: true },
+      { event: 'Foul', note: '+1f — infringement contact' },
+      { event: 'Referee', note: '0f — whistle confirms foul', optional: true },
+      { event: 'Ball Out of Play', note: '−1f if ball leaves pitch', optional: true },
       { event: 'Substitution', note: 'During stoppage in play', optional: true },
     ],
   },
@@ -86,9 +94,9 @@ export const sequenceFlows = [
     title: 'Non-main-board footage',
     subtitle: 'Replays, crowd, or sideline non-player exchanges',
     steps: [
-      { event: 'Highlight Start', note: 'Clip leaves main live match board' },
-      { event: 'Highlight End', note: 'Main board action resumes' },
-      { event: 'Invalid', note: 'Ball to/from non-players at touchline', optional: true },
+      { event: 'Highlight Start', note: '0f — leave main live board' },
+      { event: 'Highlight End', note: '0f — main board resumes' },
+      { event: 'Invalid', note: '0f — ball to/from non-player', optional: true },
     ],
   },
 ];
@@ -169,6 +177,57 @@ export const decisionTrees = [
         condition: 'Unchallenged control in the air',
         answer: 'Pass / Pass Received',
         example: 'Free header or chest control with no contest',
+      },
+    ],
+  },
+  {
+    id: 'foul-or-referee',
+    title: 'Foul or Referee?',
+    question: 'What are you marking at this moment?',
+    branches: [
+      {
+        condition: 'Player commits the infringement (trip, push, etc.)',
+        answer: 'Foul',
+        example: 'Mark Foul at +1 frame from the contact you pause on',
+      },
+      {
+        condition: 'Referee blows the whistle to confirm the foul',
+        answer: 'Referee',
+        example: 'Separate event at 0f on the whistle — not a substitute for Foul',
+      },
+    ],
+  },
+  {
+    id: 'invalid-or-out',
+    title: 'Invalid or Ball Out of Play?',
+    question: 'How did the ball leave normal play?',
+    branches: [
+      {
+        condition: 'Ball crosses the touchline or goal line and play stops',
+        answer: 'Ball Out of Play',
+        example: 'Mark −1f when the whole ball has crossed the line',
+      },
+      {
+        condition: 'Player gives or receives the ball from a non-player (staff, ball crew)',
+        answer: 'Invalid',
+        example: 'Sideline exchange with non-participants — not a normal throw-in to a teammate',
+      },
+    ],
+  },
+  {
+    id: 'highlight-footage',
+    title: 'Highlight Start / End?',
+    question: 'Is this still main live match board footage?',
+    branches: [
+      {
+        condition: 'Replay, crowd shot, tunnel, or other non-live board segment begins',
+        answer: 'Highlight Start',
+        example: 'Mark when the clip leaves in-play main board action',
+      },
+      {
+        condition: 'Live main board match action resumes after that segment',
+        answer: 'Highlight End',
+        example: 'Pair with Highlight Start when the non-gameplay section ends',
       },
     ],
   },

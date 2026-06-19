@@ -151,12 +151,11 @@ const terminologies = [
     definition: OFFICIAL_DEFINITIONS.Foul,
     criteria: [
       'Unfair play: tripping, pushing, handling, etc.',
-      'Mark at the infringement (+1 frame)',
       'Pair with Referee when the whistle confirms the foul',
       'Excludes offside and advantage situations',
     ],
     commonMistakes: [
-      'Marking when whistle blows instead of at infringement — use Referee for the whistle',
+      'Marking Referee instead of Foul at the infringement',
       'Labeling offside as foul',
     ],
   },

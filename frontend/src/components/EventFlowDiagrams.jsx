@@ -5,7 +5,13 @@ import {
   sequenceFlows,
   timingRules,
 } from '../data/eventFlows';
-import { formatOffset, frameOffsetRules, immediateFollowUpRules } from '../config/frameOffsets';
+import {
+  formatOffset,
+  frameOffsetEventTable,
+  frameOffsetGroups,
+  frameOffsetRules,
+  immediateFollowUpRules,
+} from '../config/frameOffsets';
 
 function FlowSequence({ flow }) {
   return (
@@ -79,7 +85,7 @@ export default function EventFlowDiagrams() {
       <section className="flow-section">
         <h2>Event categories</h2>
         <p className="flow-section-desc">
-          All 16 events grouped by role. One clip can contain events from multiple categories.
+          All 19 events grouped by role. One clip can contain events from multiple categories.
         </p>
         <div className="category-grid">
           {eventCategories.map((cat) => (
@@ -113,7 +119,7 @@ export default function EventFlowDiagrams() {
         <h2>Common sequences</h2>
         <p className="flow-section-desc">
           Typical event order in 30-second clips. Optional steps may not always appear.
-          Branch steps mean one of the listed options.
+          Branch steps mean one of the listed options. Notes include frame offsets where relevant.
         </p>
         <div className="sequence-grid">
           {sequenceFlows.map((flow) => (
@@ -148,32 +154,49 @@ export default function EventFlowDiagrams() {
       <section className="flow-section">
         <h2>Frame offset rules</h2>
         <p className="flow-section-desc">
-          When marking an event, adjust from the visible moment by this many frames (at 25 fps).
-          Negative = mark earlier. Positive = mark later.
+          Pause on the visible moment, pick the event, and the app applies the offset (at 25 fps).
+          Negative = saved earlier; positive = saved later; 0 = saved on the playhead frame.
         </p>
         <div className="offset-table-wrap">
           <table className="offset-table">
             <thead>
               <tr>
-                <th>Event</th>
+                <th>Group</th>
                 <th>Offset</th>
-                <th>Rule</th>
+                <th>Events</th>
               </tr>
             </thead>
             <tbody>
-              {frameOffsetRules.map((rule) => (
-                <tr key={rule.event}>
-                  <td>{rule.event}</td>
+              {frameOffsetGroups.map((group) => (
+                <tr key={group.offset}>
+                  <td>{group.label}</td>
                   <td>
-                    <span className={`offset-badge${rule.offset > 0 ? ' positive' : ''}`}>
-                      {rule.offset > 0 ? `+${rule.offset}` : rule.offset} frames
+                    <span className={`offset-badge${group.offset > 0 ? ' positive' : ''}`}>
+                      {formatOffset(group.offset)} frames
                     </span>
                   </td>
+                  <td>{group.events.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="offset-table-wrap" style={{ marginTop: '1rem' }}>
+          <table className="offset-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Offset</th>
+              </tr>
+            </thead>
+            <tbody>
+              {frameOffsetEventTable.map((row) => (
+                <tr key={row.eventType}>
+                  <td>{row.eventType}</td>
                   <td>
-                    {rule.detail}
-                    {rule.exception && (
-                      <span className="rule-exception"> Exception: {rule.exception}</span>
-                    )}
+                    <span className={`offset-badge${row.offset > 0 ? ' positive' : ''}`}>
+                      {formatOffset(row.offset)} frames
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -181,16 +204,16 @@ export default function EventFlowDiagrams() {
           </table>
         </div>
         <p className="flow-section-desc" style={{ marginTop: '0.75rem' }}>
-          Pass and Shot rows have exceptions when part of an immediate follow-up sequence (see below).
+          Pass, Shot, Clearance, and Take on use 0 frames when marked immediately after Pass
+          Received, Recovery, or Interception (see below).
         </p>
       </section>
 
       <section className="flow-section">
         <h2>Immediate follow-up exceptions</h2>
         <p className="flow-section-desc">
-          When the same player performs two actions in one motion with no pause, you cannot use the
-          normal offset for both. The first event keeps its offset; the second is marked at the
-          touch/contact frame (0).
+          When the same player performs two actions in one motion with no pause, the first event
+          keeps its normal offset; the second is marked at the touch/contact frame (0).
         </p>
         <div className="followup-grid">
           {immediateFollowUpRules.map((rule) => (

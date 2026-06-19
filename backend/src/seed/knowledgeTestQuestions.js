@@ -228,7 +228,7 @@ const testQuestions = [
     options: ['Pass', 'Pass Received', 'Recovery', 'Take on'],
     correctAnswer: 'Pass',
     explanation:
-      'Pass is marked when the ball leaves the passer\'s control — not when the receiver controls it (Pass Received).',
+      'Pass is marked at 0 frames when the ball leaves the passer\'s control — not when the receiver controls it (Pass Received at −1f).',
     difficulty: 'hard',
   },
   {
@@ -237,7 +237,7 @@ const testQuestions = [
     options: ['Pass Received', 'Pass', 'Recovery', 'Shot'],
     correctAnswer: 'Pass Received',
     explanation:
-      'Mark Pass Received at first control after a deliberate teammate pass — not at the pass itself.',
+      'Mark Pass Received at first control after a deliberate teammate pass — not at the pass itself. Uses −1 frame offset.',
     difficulty: 'medium',
   },
   {
@@ -344,7 +344,7 @@ const testQuestions = [
     options: ['Goal', 'Shot', 'Ball Out of Play', 'Save'],
     correctAnswer: 'Goal',
     explanation:
-      'Whole ball crossed the line between posts and under the bar — goal (and shot should also be labeled).',
+      'Whole ball crossed the line between posts and under the bar — Goal at −1f (and Shot at 0f on contact).',
     difficulty: 'medium',
   },
   {
@@ -362,7 +362,7 @@ const testQuestions = [
     options: ['Ball Out of Play', 'Goal', 'Save', 'Block'],
     correctAnswer: 'Ball Out of Play',
     explanation:
-      'Ball fully left the field without scoring — mark Ball Out of Play when it crosses the line.',
+      'Ball fully left the field without scoring — Ball Out of Play at −1 frame when it crosses the line.',
     difficulty: 'hard',
   },
   {
@@ -371,7 +371,7 @@ const testQuestions = [
     options: ['Ball Out of Play', 'Goal', 'Clearance', 'Block'],
     correctAnswer: 'Ball Out of Play',
     explanation:
-      'Ball crossed the goal line but not between the posts for a goal — Ball Out of Play at full crossing.',
+      'Ball crossed the goal line wide of the posts — Ball Out of Play at −1 frame at full crossing.',
     difficulty: 'hard',
   },
 
@@ -433,7 +433,7 @@ const testQuestions = [
     options: ['Foul', 'Tackle', 'Recovery', 'Interception'],
     correctAnswer: 'Foul',
     explanation:
-      'Referee stops play for the infringement — mark foul at contact. Advantage situations are excluded.',
+      'Referee stops play for the infringement — mark Foul (+1 frame from contact). Use Referee for the confirming whistle. Advantage situations are excluded.',
     difficulty: 'medium',
   },
 
@@ -462,7 +462,7 @@ const testQuestions = [
     options: ['Goal', 'Block', 'Shot', 'Recovery'],
     correctAnswer: 'Goal',
     explanation:
-      'Whole ball crossed the goal line between the posts — goal. The deflection may also warrant block and shot labels.',
+      'Whole ball crossed the goal line between the posts — Goal at −1 frame, with Shot at 0f on contact.',
     difficulty: 'hard',
   },
   {
@@ -480,8 +480,97 @@ const testQuestions = [
     options: ['Recovery', 'Interception', 'Pass Received', 'Tackle'],
     correctAnswer: 'Recovery',
     explanation:
-      'Ball directed to an opponent without a tackle contest — recovery for the player gaining possession. Not interception (pass was not cut between two opposing players).',
+      'Ball directed to an opponent without a tackle contest — recovery, not pass received.',
     difficulty: 'hard',
+  },
+
+  // ── Frame offsets (mark timing) ──
+  {
+    scenario:
+      'Which event type uses a −1 frame offset (mark one frame before the control/out moment)?',
+    options: ['Pass Received', 'Pass', 'Shot', 'Tackle'],
+    correctAnswer: 'Pass Received',
+    explanation:
+      'Pass Received, Recovery, Interception, Ball Out of Play, Save, and Goal use −1 frame. Pass, Shot, and Tackle use 0 frames at contact.',
+    difficulty: 'medium',
+  },
+  {
+    scenario:
+      'You pause on the frame where the passer\'s foot clearly strikes the ball toward a teammate. Which event?',
+    options: ['Pass', 'Pass Received', 'Recovery', 'Take on'],
+    correctAnswer: 'Pass',
+    explanation: 'Pass is marked at 0 frames — the contact frame when the ball is played.',
+    difficulty: 'medium',
+  },
+  {
+    scenario:
+      'A striker beats a defender one frame after taking first touch. Which event marks the beat?',
+    options: ['Take on', 'Pass Received', 'Tackle', 'Recovery'],
+    correctAnswer: 'Take on',
+    explanation: 'Take on uses +1 frame — mark one frame after the visible beat past the opponent.',
+    difficulty: 'hard',
+  },
+  {
+    scenario:
+      'The whole ball has just crossed the touchline. Which event and offset apply?',
+    options: ['Ball Out of Play', 'Goal', 'Invalid', 'Clearance'],
+    correctAnswer: 'Ball Out of Play',
+    explanation: 'Ball Out of Play is marked at −1 frame from the crossing moment.',
+    difficulty: 'medium',
+  },
+
+  // ── Referee, Invalid, Highlight ──
+  {
+    scenario:
+      'The referee blows the whistle to stop play and confirm a foul that was committed two frames earlier.',
+    options: ['Referee', 'Foul', 'Ball Out of Play', 'Substitution'],
+    correctAnswer: 'Referee',
+    explanation:
+      'Referee marks the confirming whistle at 0 frames. Foul marks the infringement at +1 frame — a separate earlier event.',
+    difficulty: 'medium',
+  },
+  {
+    scenario:
+      'A ball boy throws a replacement ball to a player at the touchline — not to a teammate on the pitch.',
+    options: ['Invalid', 'Ball Out of Play', 'Pass Received', 'Substitution'],
+    correctAnswer: 'Invalid',
+    explanation:
+      'Ball exchanged with a non-player (staff, ball crew) is Invalid at 0 frames — not a pass or out-of-play line crossing.',
+    difficulty: 'hard',
+  },
+  {
+    scenario:
+      'The broadcast cuts from live pitch action to a slow-motion replay of the previous chance.',
+    options: ['Highlight Start', 'Highlight End', 'Ball Out of Play', 'Substitution'],
+    correctAnswer: 'Highlight Start',
+    explanation:
+      'Highlight Start marks when footage leaves the main live match board (replays, crowd, etc.).',
+    difficulty: 'medium',
+  },
+  {
+    scenario:
+      'After a replay, the feed returns to live wide-angle match action on the main board.',
+    options: ['Highlight End', 'Highlight Start', 'Recovery', 'Pass Received'],
+    correctAnswer: 'Highlight End',
+    explanation: 'Highlight End marks when main live board action resumes after non-gameplay footage.',
+    difficulty: 'medium',
+  },
+  {
+    scenario:
+      'A defender trips an attacker. You pause on the contact frame. Which event do you mark first?',
+    options: ['Foul', 'Referee', 'Tackle', 'Recovery'],
+    correctAnswer: 'Foul',
+    explanation:
+      'Mark Foul at +1 frame from the infringement contact. Add Referee later if the whistle is shown.',
+    difficulty: 'hard',
+  },
+  {
+    scenario:
+      'The goalkeeper parries a shot. Which event marks the save timing?',
+    options: ['Save', 'Block', 'Recovery', 'Clearance'],
+    correctAnswer: 'Save',
+    explanation: 'Save follows a shot and is marked at −1 frame from the stopping contact.',
+    difficulty: 'medium',
   },
 ];
 

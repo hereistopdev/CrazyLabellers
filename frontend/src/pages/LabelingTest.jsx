@@ -4,9 +4,8 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
+import { frameOffsetSummary } from '../config/frameOffsets';
 import { labelerPath } from '../utils/labelerAccess';
-
-function progressLabel(assignment) {
   const progress = assignment.userProgress || 'open';
   if (progress === 'submitted') {
     return assignment.scoreReviewAvailable ? 'Review pending' : 'Completed';
@@ -56,7 +55,7 @@ export default function LabelingTest() {
           clips directly — no claim needed. Each submission is scored automatically. After submit,
           you get a <strong>one-time</strong> score review with reference data, then move on to your
           other clips. Score <strong>80/100 or higher on all 3 clips</strong> to unlock real labeling
-          tasks.
+          tasks. Mark events using current frame offsets: {frameOffsetSummary}.
         </p>
       </div>
 

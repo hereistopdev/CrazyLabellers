@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { FPS } from '../config/frameOffsets';
+import { FPS, frameOffsetSummary } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
@@ -142,7 +142,7 @@ export default function PretestScoreReview() {
         <h1>{displayAssignmentTitle({ ...assignment, kind: 'pretest' })}</h1>
         <p>
           <strong>One-time score review</strong> — compare your submission to the reference annotations.
-          Reference data will not be shown again after you continue.
+          Reference data will not be shown again after you continue. Marking offsets: {frameOffsetSummary}.
         </p>
         <div className={`labeling-score-total${passed ? ' passed' : ''}`} style={{ marginTop: '0.75rem' }}>
           <span className="labeling-score-value">{autoScore ?? '—'}</span>

@@ -139,6 +139,29 @@ function formatOffset(offset) {
   return String(offset);
 }
 
+const frameOffsetSummary =
+  '0f: Pass, Tackle, Clearance, Block, Aerial Duel, Shot · −1f: Pass Received, Recovery, Interception, Ball Out of Play, Save, Goal · +1f: Take on, Foul';
+
+const OFFSET_GROUP_META = {
+  [-1]: 'One frame before the moment',
+  0: 'Contact / visible action',
+  1: 'One frame after the moment',
+};
+
+const frameOffsetEventTable = Object.entries(FRAME_OFFSETS)
+  .map(([eventType, offset]) => ({
+    eventType,
+    offset,
+    group: OFFSET_GROUP_META[offset] || `${offset} frames`,
+  }))
+  .sort((a, b) => a.offset - b.offset || a.eventType.localeCompare(b.eventType));
+
+const frameOffsetGroups = [-1, 0, 1].map((offset) => ({
+  offset,
+  label: OFFSET_GROUP_META[offset],
+  events: frameOffsetEventTable.filter((row) => row.offset === offset).map((row) => row.eventType),
+}));
+
 const frameOffsetRules = [
   {
     event: '0 frames — contact / visible action',
@@ -173,4 +196,7 @@ module.exports = {
   applyFrameOffset,
   formatOffset,
   frameOffsetRules,
+  frameOffsetSummary,
+  frameOffsetEventTable,
+  frameOffsetGroups,
 };
