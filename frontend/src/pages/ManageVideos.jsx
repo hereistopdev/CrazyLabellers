@@ -13,6 +13,8 @@ import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
 import UploadGroupSelect, { appendGroupFields, GROUP_NEW } from '../components/UploadGroupSelect';
+import AssignmentStatusBadge from '../components/AssignmentStatusBadge';
+import { ASSIGNMENT_STATUS_LABELS } from '../utils/assignmentStatus';
 
 import { matchesDateRange } from '../utils/tableFilter';
 
@@ -28,15 +30,6 @@ const TASK_KINDS = [
 ];
 
 const TASK_KIND_LABELS = Object.fromEntries(TASK_KINDS.map((k) => [k.value, k.label]));
-
-const STATUS_LABELS = {
-  available: 'Available',
-  assigned: 'Assigned',
-  in_progress: 'In progress',
-  submitted: 'Submitted',
-  approved: 'Approved',
-  rejected: 'Rejected',
-};
 
 const VIDEO_FILTERS = {
   kind: 'all',
@@ -125,7 +118,7 @@ function VideoTableFilters({ table, groups, adminUser }) {
         title="Status"
       >
         <option value="all">All statuses</option>
-        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+        {Object.entries(ASSIGNMENT_STATUS_LABELS).map(([value, label]) => (
           <option key={value} value={value}>
             {label}
           </option>
@@ -389,29 +382,40 @@ export default function ManageVideos() {
       return;
     }
 
-    const { clips, rejected } = parseBulkUploadFiles(files);
+    const { clips, rejected, layout, groupNames } = parseBulkUploadFiles(files);
     const existingClipIds = new Set(videos.map((v) => v.clipId).filter(Boolean));
     const summary = summarizeBulkUpload(clips, existingClipIds, rejected);
     setUploadClips(clips);
-    setUploadSummary(summary);
+    setUploadSummary({ ...summary, layout, groupNames });
     setUploadProgress(null);
     setBulkUploadResult(null);
 
     if (clips.length === 0) {
-      const videoCount = rejected.filter((item) => isVideoFilename(item.name)).length;
+      const videoCount = rejected.filter((item) => {
+        const name = String(item.name || '').split('/').pop();
+        return isVideoFilename(name);
+      }).length;
       setError(
         videoCount > 0
           ? `Found ${videoCount} video file(s) but none could be prepared for upload. Check filenames are safe (letters, numbers, _ and -).`
-          : 'No video files found. Choose a folder with videos in data/ (and optional JSON in annotations/).'
+          : 'No video files found. Choose a group folder, a parent folder with group subfolders, or a data/ + annotations/ layout.'
       );
     } else {
       setError('');
+      const layoutNote =
+        layout === 'clip-folders'
+          ? 'Clip-folder layout detected (ClipID/video.mkv + labeling/*.json).'
+          : layout === 'group-labeling'
+            ? `Group layout detected${summary.groupCount ? ` — ${summary.groupCount} group(s)` : ''}.`
+            : layout === 'data-annotations'
+              ? 'Legacy data/ + annotations/ layout detected.'
+              : '';
       setMessage(
         rejected.length > 0
-          ? `Selected ${clips.length} video(s). JSON is optional — matched ${summary.withPostRef} reference file(s). Ignored ${rejected.length} unrelated file(s).`
-          : `Selected ${clips.length} video(s)${summary.withoutJson ? ` (${summary.withoutJson} without JSON)` : ''}.`
+          ? `Selected ${clips.length} video(s). ${layoutNote} Matched ${summary.withPostRef} JSON file(s) by video ID. Ignored ${rejected.length} unrelated file(s).`
+          : `Selected ${clips.length} video(s). ${layoutNote}${summary.withoutJson ? ` ${summary.withoutJson} without JSON.` : ''}`
       );
-      setTimeout(() => setMessage(''), 6000);
+      setTimeout(() => setMessage(''), 8000);
     }
 
     event.target.value = '';
@@ -428,11 +432,14 @@ export default function ManageVideos() {
     setMessage('');
     setBulkUploadResult(null);
 
-    const groupError = validateGroupChoice(bulkGroupChoice, bulkNewGroupName);
-    if (groupError) {
-      setError(groupError);
-      setUploadingBulk(false);
-      return;
+    const clipsNeedManualGroup = uploadClips.some((clip) => !clip.groupName);
+    if (clipsNeedManualGroup && uploadBulkKind === 'production') {
+      const groupError = validateGroupChoice(bulkGroupChoice, bulkNewGroupName);
+      if (groupError) {
+        setError(groupError);
+        setUploadingBulk(false);
+        return;
+      }
     }
 
     const totals = { created: 0, skipped: 0, updated: 0, errors: 0 };
@@ -454,8 +461,8 @@ export default function ManageVideos() {
       formData.append('taskPrice', String(isFreeTaskKind(uploadBulkKind) ? 0 : uploadBulkTaskPrice));
       formData.append('skipExisting', String(uploadSkipExisting));
       appendGroupFields(formData, {
-        choice: bulkGroupChoice,
-        newName: bulkNewGroupName,
+        choice: clip.groupName ? GROUP_NEW : bulkGroupChoice,
+        newName: clip.groupName || bulkNewGroupName,
         kind: uploadBulkKind,
       });
 
@@ -745,11 +752,25 @@ export default function ManageVideos() {
       >
         <h3 style={{ marginBottom: '0.5rem' }}>Bulk upload (folder)</h3>
         <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Select a folder with videos in <strong>data/</strong> and optional JSON in{' '}
-          <strong>annotations/</strong>. No strict naming rules — videos and JSON are paired when
-          filenames are <strong>80%+ similar</strong>. JSON is optional. Supported video formats:
-          mp4, webm, mov, mkv, avi, m4v.
+          Select a folder using one of these layouts:
         </p>
+        <ul style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1rem', paddingLeft: '1.25rem' }}>
+          <li>
+            <strong>Clip folders</strong> — one folder per clip ID containing <code>video.mkv</code>{' '}
+            (or mp4, avi, etc.), plus a sibling <code>labeling/</code> folder with{' '}
+            <code>ClipID_post.json</code> / <code>ClipID.json</code> reference files.
+          </li>
+          <li>
+            <strong>Group folder</strong> — videos named by clip ID at the group root, with JSON in{' '}
+            <code>Labeling/</code>.
+          </li>
+          <li>
+            <strong>Multiple groups</strong> — select the parent folder containing group subfolders.
+          </li>
+          <li>
+            <strong>Legacy</strong> — <code>data/*.mp4</code> with optional <code>annotations/*.json</code>.
+          </li>
+        </ul>
 
         <div className="form-group">
           <label>Choose folder</label>
@@ -762,8 +783,10 @@ export default function ManageVideos() {
             disabled={uploadingBulk}
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-            Example: <code>D:\Bittensor\3754293_2</code> with <code>data/3754293_2_p000.mp4</code> and
-            optional <code>annotations/3754293_2_p000_post.json</code>.
+            Example clip-folder batch: <code>3753973_1_p000/video.mkv</code>,{' '}
+            <code>3753973_1_p001/video.mkv</code>, … and{' '}
+            <code>labeling/3753973_1_p000_post.json</code>. Extra JSON inside clip folders (e.g.{' '}
+            Labels-ball.json) is ignored.
           </p>
         </div>
 
@@ -809,6 +832,11 @@ export default function ManageVideos() {
             onNewNameChange={setBulkNewGroupName}
             disabled={uploadingBulk}
             kind={uploadBulkKind}
+            label={
+              uploadSummary?.groupCount > 0
+                ? 'Default production group (when folder name is not detected)'
+                : 'Production group'
+            }
           />
         )}
 
@@ -840,6 +868,14 @@ export default function ManageVideos() {
                 {uploadSummary.withPostRef} with matched JSON · {uploadSummary.withRawRef} with extra
                 raw JSON · {uploadSummary.withoutJson} without JSON · {uploadSummary.alreadyInApp}{' '}
                 already in app
+                {uploadSummary.groupCount > 0 && (
+                  <>
+                    {' '}
+                    · {uploadSummary.groupCount} group(s):{' '}
+                    {uploadSummary.groupNames.slice(0, 3).join(', ')}
+                    {uploadSummary.groupNames.length > 3 ? '…' : ''}
+                  </>
+                )}
                 {uploadSummary.rejectedCount > 0 && (
                   <> · {uploadSummary.rejectedCount} file(s) ignored</>
                 )}
@@ -1284,9 +1320,7 @@ export default function ManageVideos() {
                     </td>
                   )}
                   <td>
-                    <span className={`status-badge status-${video.status}`}>
-                      {STATUS_LABELS[video.status] || video.status}
-                    </span>
+                    <AssignmentStatusBadge status={video.status} />
                   </td>
                   <td>{video.groupId?.name || '—'}</td>
                   <td>{video.hasReference ? 'Yes' : '—'}</td>

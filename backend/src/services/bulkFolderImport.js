@@ -2,16 +2,67 @@ const fs = require('fs');
 const path = require('path');
 const VideoAssignment = require('../models/VideoAssignment');
 const { matchBulkFiles } = require('../utils/matchBulkFiles');
-const { isVideoFilename, getVideoExtension } = require('../utils/clipId');
+const { isVideoFilename, getVideoExtension, clipIdFromFilename, isSafeClipId } = require('../utils/clipId');
 const { buildVideoUrl, getVideoDataDir } = require('./videoStorage');
 const { isFreeTaskKind, validateTaskPrice, DEFAULT_TASK_PRICE } = require('../config/payments');
 const { isVpsStorageEnabled, listVpsClipIds, uploadVideoToVps } = require('./vpsStorage');
 const { saveReferenceForClip } = require('./referenceStorage');
 
+function findCaseInsensitiveSubdir(parentDir, folderPattern) {
+  if (!fs.existsSync(parentDir)) return null;
+  for (const name of fs.readdirSync(parentDir)) {
+    const full = path.join(parentDir, name);
+    if (folderPattern.test(name) && fs.statSync(full).isDirectory()) {
+      return full;
+    }
+  }
+  return null;
+}
+
 function resolveBulkLayout(sourceDir) {
   const resolved = path.resolve(sourceDir);
   if (!fs.existsSync(resolved)) {
     throw new Error(`Source folder not found: ${resolved}`);
+  }
+
+  const labelingDir = findCaseInsensitiveSubdir(resolved, /^labeling$/i);
+
+  if (labelingDir) {
+    const hasClipFolderVideos = fs.readdirSync(resolved).some((name) => {
+      const full = path.join(resolved, name);
+      if (!fs.statSync(full).isDirectory()) return false;
+      if (/^labeling$/i.test(name)) return false;
+      if (!isSafeClipId(clipIdFromFilename(name))) return false;
+      return fs.readdirSync(full).some((fileName) => {
+        const filePath = path.join(full, fileName);
+        return fs.statSync(filePath).isFile() && isVideoFilename(fileName);
+      });
+    });
+
+    if (hasClipFolderVideos) {
+      return {
+        sourceDir: resolved,
+        dataDir: resolved,
+        annotationsDir: labelingDir,
+        groupName: null,
+        layout: 'clip-folders',
+      };
+    }
+  }
+
+  const hasVideosAtRoot = fs.readdirSync(resolved).some((name) => {
+    const full = path.join(resolved, name);
+    return fs.statSync(full).isFile() && isVideoFilename(name);
+  });
+
+  if (labelingDir && hasVideosAtRoot) {
+    return {
+      sourceDir: resolved,
+      dataDir: resolved,
+      annotationsDir: labelingDir,
+      groupName: path.basename(resolved),
+      layout: 'group-labeling',
+    };
   }
 
   const nestedData = path.join(resolved, 'data');
@@ -26,7 +77,13 @@ function resolveBulkLayout(sourceDir) {
       ? nestedAnnotations
       : null;
 
-  return { sourceDir: resolved, dataDir, annotationsDir };
+  return {
+    sourceDir: resolved,
+    dataDir,
+    annotationsDir,
+    groupName: null,
+    layout: annotationsDir || nestedData !== resolved ? 'data-annotations' : 'flat',
+  };
 }
 
 function listEntriesFromDir(dir) {
@@ -34,18 +91,45 @@ function listEntriesFromDir(dir) {
   return fs.readdirSync(dir).map((name) => ({ name, dir }));
 }
 
-function listClipMatchesFromLayout(layout) {
-  const videoEntries = listEntriesFromDir(layout.dataDir)
-    .filter((entry) => isVideoFilename(entry.name))
-    .map((entry) => ({ name: entry.name }));
+function listClipFolderVideoEntries(sourceDir) {
+  const entries = [];
 
+  for (const dirName of fs.readdirSync(sourceDir)) {
+    const dirPath = path.join(sourceDir, dirName);
+    if (!fs.statSync(dirPath).isDirectory()) continue;
+    if (/^labeling$/i.test(dirName)) continue;
+
+    const clipId = clipIdFromFilename(dirName);
+    if (!isSafeClipId(clipId)) continue;
+
+    for (const fileName of fs.readdirSync(dirPath)) {
+      const filePath = path.join(dirPath, fileName);
+      if (!fs.statSync(filePath).isFile() || !isVideoFilename(fileName)) continue;
+      entries.push({ name: fileName, clipId, videoFolder: dirName });
+      break;
+    }
+  }
+
+  return entries;
+}
+
+function listClipMatchesFromLayout(layout) {
   const jsonEntries = layout.annotationsDir
     ? listEntriesFromDir(layout.annotationsDir)
         .filter((entry) => entry.name.toLowerCase().endsWith('.json'))
         .map((entry) => ({ name: entry.name }))
     : [];
 
-  return matchBulkFiles([...videoEntries, ...jsonEntries]);
+  if (layout.layout === 'clip-folders') {
+    const videoEntries = listClipFolderVideoEntries(layout.sourceDir);
+    return matchBulkFiles([...videoEntries, ...jsonEntries], { layout: layout.layout });
+  }
+
+  const videoEntries = listEntriesFromDir(layout.dataDir)
+    .filter((entry) => isVideoFilename(entry.name))
+    .map((entry) => ({ name: entry.name }));
+
+  return matchBulkFiles([...videoEntries, ...jsonEntries], { layout: layout.layout || 'flat' });
 }
 
 async function previewBulkFolder(sourceDir) {
@@ -116,8 +200,17 @@ async function importReferencesForClip(clipId, annotationsDir, clipMatch) {
   return { imported };
 }
 
-async function uploadVideoFromFolder(clipId, dataDir, videoName, existingVpsClips, skipExistingVideos) {
-  const filePath = path.join(dataDir, videoName);
+async function uploadVideoFromFolder(
+  clipId,
+  dataDir,
+  videoName,
+  existingVpsClips,
+  skipExistingVideos,
+  videoFolder = null
+) {
+  const filePath = videoFolder
+    ? path.join(dataDir, videoFolder, videoName)
+    : path.join(dataDir, videoName);
   if (!fs.existsSync(filePath)) {
     throw new Error(`Video file missing: ${filePath}`);
   }
@@ -219,7 +312,8 @@ async function importBulkFromFolder({
           layout.dataDir,
           videoName,
           existingVpsClips,
-          skipExistingVideos
+          skipExistingVideos,
+          clipMatch.videoFolder
         );
         extension = uploadResult.extension || extension;
         if (uploadResult.uploaded) videosUploaded += 1;

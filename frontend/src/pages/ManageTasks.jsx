@@ -10,6 +10,8 @@ import { openLabelerRow } from '../utils/labelerAccess';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
+import AssignmentStatusBadge from '../components/AssignmentStatusBadge';
+import { ASSIGNMENT_STATUS_LABELS } from '../utils/assignmentStatus';
 import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
 
 const KIND_TABS = [
@@ -82,7 +84,9 @@ function TaskRow({ task, tab, navigate, onEdit }) {
         <td>{task.taskPrice != null ? formatMoney(task.taskPrice) : '—'}</td>
       )}
       <td>{task.sortOrder ?? 0}</td>
-      <td>{task.status}</td>
+      <td>
+        <AssignmentStatusBadge status={task.status} />
+      </td>
       <td>{task.hasReference ? '✓' : '—'}</td>
       <td>{task.submissionCount ?? 0}</td>
       <td>{formatTimestamp(task.createdAt)}</td>
@@ -729,12 +733,11 @@ export default function ManageTasks() {
                     onChange={(e) => taskTable.updateFilter('status', e.target.value)}
                   >
                     <option value="all">All statuses</option>
-                    <option value="available">Available</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="in_progress">In progress</option>
-                    <option value="submitted">Submitted</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
+                    {Object.entries(ASSIGNMENT_STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
                   </select>
                   <input
                     type="number"
@@ -788,11 +791,11 @@ export default function ManageTasks() {
                   onChange={(e) => taskTable.updateFilter('status', e.target.value)}
                 >
                   <option value="all">All statuses</option>
-                  <option value="available">Available</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="submitted">Submitted</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
+                  {Object.entries(ASSIGNMENT_STATUS_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               )}
             </TableToolbar>

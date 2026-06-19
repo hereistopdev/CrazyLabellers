@@ -34,8 +34,9 @@ export default function Earnings() {
 
   if (loading) return <div className="loading">Loading earnings...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
+  if (!data?.summary) return <div className="alert alert-error">Could not load earnings data.</div>;
 
-  const currency = data?.settings?.currency || 'USD';
+  const currency = data.settings?.currency || 'USD';
 
   return (
     <div>

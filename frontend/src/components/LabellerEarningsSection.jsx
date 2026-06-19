@@ -17,6 +17,7 @@ export default function LabellerEarningsSection({
   currency = 'USD',
   showAdminActions = false,
   onClearEarnings,
+  className = '',
 }) {
   const [note, setNote] = useState('');
   const [clearing, setClearing] = useState(false);

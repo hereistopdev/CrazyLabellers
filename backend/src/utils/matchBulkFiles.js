@@ -5,17 +5,43 @@ const {
   isSafeClipId,
   isVideoFilename,
 } = require('./clipId');
-const { classifyJsonVariant, MATCH_THRESHOLD, nameSimilarity, pickBestMatch } = require('./fuzzyMatch');
+const {
+  classifyJsonVariant,
+  MATCH_THRESHOLD,
+  pickBestMatch,
+  pickJsonByClipId,
+} = require('./fuzzyMatch');
 
-function parseFilenameEntry(name) {
+function parseFilenameEntry(entry) {
+  const name = entry.name || entry;
   return {
     name,
     stem: path.basename(name, path.extname(name)),
     key: name,
+    clipId: entry.clipId || null,
+    videoFolder: entry.videoFolder || null,
   };
 }
 
-function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD } = {}) {
+function usesClipIdJsonMatching(layout) {
+  return layout === 'group-labeling' || layout === 'clip-folders';
+}
+
+function matchJsonToClip(clipId, videoStem, jsonFiles, usedJson, variant, layout) {
+  const candidates =
+    variant === 'post'
+      ? jsonFiles.filter((item) => item.variant === 'post')
+      : jsonFiles.filter((item) => item.variant !== 'post');
+
+  const clipIdMatch = pickJsonByClipId(clipId, candidates, usedJson, variant);
+  if (clipIdMatch) return clipIdMatch;
+
+  if (usesClipIdJsonMatching(layout)) return null;
+
+  return pickBestMatch(videoStem, candidates, usedJson, MATCH_THRESHOLD);
+}
+
+function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD, layout = 'flat' } = {}) {
   const videos = [];
   const jsonFiles = [];
   const ignored = [];
@@ -23,7 +49,7 @@ function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD } = {}) {
   for (const entry of entries) {
     const name = entry.name || entry;
     if (isVideoFilename(name)) {
-      videos.push(parseFilenameEntry(name));
+      videos.push(parseFilenameEntry(entry));
       continue;
     }
     if (isJsonFilename(name)) {
@@ -40,7 +66,7 @@ function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD } = {}) {
   const clips = [];
 
   for (const video of videos) {
-    const clipId = clipIdFromFilename(video.name);
+    const clipId = video.clipId || clipIdFromFilename(video.name);
     if (!isSafeClipId(clipId)) {
       ignored.push({ name: video.name, reason: 'could not derive a safe clip ID' });
       continue;
@@ -49,22 +75,20 @@ function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD } = {}) {
     const clip = {
       clipId,
       videoName: video.name,
+      videoFolder: video.videoFolder || null,
       postRefName: null,
       rawRefName: null,
       matches: [],
     };
 
-    const postCandidates = jsonFiles.filter((item) => item.variant === 'post');
-    const rawCandidates = jsonFiles.filter((item) => item.variant !== 'post');
-
-    const postMatch = pickBestMatch(video.stem, postCandidates, usedJson, threshold);
+    const postMatch = matchJsonToClip(clipId, video.stem, jsonFiles, usedJson, 'post', layout);
     if (postMatch) {
       clip.postRefName = postMatch.name;
       usedJson.add(postMatch.key);
       clip.matches.push({ file: postMatch.name, score: postMatch.score, type: 'post' });
     }
 
-    const rawMatch = pickBestMatch(video.stem, rawCandidates, usedJson, threshold);
+    const rawMatch = matchJsonToClip(clipId, video.stem, jsonFiles, usedJson, 'raw', layout);
     if (rawMatch) {
       if (!clip.postRefName && rawMatch.variant === 'raw') {
         clip.postRefName = rawMatch.name;
@@ -81,7 +105,13 @@ function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD } = {}) {
 
   for (const json of jsonFiles) {
     if (usedJson.has(json.key)) continue;
-    ignored.push({ name: json.name, reason: 'JSON did not match any video (80%+ name similarity)' });
+    ignored.push({
+      name: json.name,
+      reason:
+        usesClipIdJsonMatching(layout)
+          ? 'JSON filename does not contain a matching video ID'
+          : 'JSON did not match any video (clip ID or 80%+ name similarity)',
+    });
   }
 
   clips.sort((a, b) => a.clipId.localeCompare(b.clipId));
@@ -91,5 +121,4 @@ function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD } = {}) {
 
 module.exports = {
   matchBulkFiles,
-  nameSimilarity,
 };

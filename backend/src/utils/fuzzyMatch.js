@@ -66,10 +66,43 @@ function pickBestMatch(targetName, candidates, usedKeys, threshold = MATCH_THRES
   return best;
 }
 
+function fileStem(name) {
+  return String(name || '').replace(/\.[^.]+$/, '');
+}
+
+function jsonMatchesClipId(jsonFilename, clipId) {
+  const stem = fileStem(jsonFilename).toLowerCase();
+  const id = String(clipId || '').toLowerCase();
+  if (!id || !stem.startsWith(id)) return false;
+  const rest = stem.slice(id.length);
+  if (!rest) return true;
+  return /^[_-]/.test(rest);
+}
+
+function pickJsonByClipId(clipId, candidates, usedKeys, variant) {
+  const pool =
+    variant === 'post'
+      ? candidates.filter((candidate) => candidate.variant === 'post')
+      : candidates.filter((candidate) => candidate.variant !== 'post');
+
+  const matches = pool
+    .filter(
+      (candidate) =>
+        !usedKeys.has(candidate.key || candidate.name) &&
+        jsonMatchesClipId(candidate.name, clipId)
+    )
+    .sort((a, b) => a.name.length - b.name.length);
+
+  if (matches.length === 0) return null;
+  return { ...matches[0], score: 1, matchType: 'clipId' };
+}
+
 module.exports = {
   MATCH_THRESHOLD,
   normalizeMatchKey,
   nameSimilarity,
   classifyJsonVariant,
   pickBestMatch,
+  jsonMatchesClipId,
+  pickJsonByClipId,
 };
