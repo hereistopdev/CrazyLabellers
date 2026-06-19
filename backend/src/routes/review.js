@@ -14,6 +14,7 @@ const { gradeSubmissionAgainstReference, gradeEventsAgainstReference } = require
 const { applyCorrectionScore, buildCorrectionBreakdown } = require('../services/submissionCorrections');
 const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { EVENT_TYPES } = require('../config/events');
+const { buildSubmissionExport, sendSubmissionExport } = require('../services/submissionExport');
 
 const router = express.Router();
 
@@ -485,6 +486,23 @@ router.post('/submissions/:id/reopen-for-relabel', auth, requireReviewerRole, as
     });
   } catch (error) {
     return res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/submissions/:id/export', auth, requireReviewerRole, async (req, res) => {
+  try {
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const { payload, filename, submission } = await buildSubmissionExport(req.params.id, variant);
+
+    if (submission.status !== 'approved') {
+      return res.status(403).json({
+        message: 'JSON export is only available for approved submissions',
+      });
+    }
+
+    return sendSubmissionExport(res, { payload, filename });
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
   }
 });
 

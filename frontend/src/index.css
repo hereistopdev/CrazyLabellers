@@ -1430,6 +1430,24 @@ th {
   margin-top: 1rem;
 }
 
+.export-submission-actions {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.table-actions-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.table-export-actions {
+  margin-left: 0.15rem;
+}
+
 /* Tabs */
 .tab-bar {
   display: flex;

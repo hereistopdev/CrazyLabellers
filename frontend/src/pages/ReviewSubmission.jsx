@@ -6,6 +6,7 @@ import { canAccessReview } from '../utils/roles';
 import { FPS, applyFrameOffset, getImmediateFollowUpRule, resolveFrameOffset } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
+import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import EventPickerModal from '../components/EventPickerModal';
 import { isEditableTarget } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
@@ -973,6 +974,14 @@ export default function ReviewSubmission() {
         <Link to="/review" style={{ fontSize: '0.88rem' }}>
           ← Back to review queue
         </Link>
+        {!isPreview && submission?.status === 'approved' && assignment?.clipId && canEditReference && (
+          <div className="actions-row" style={{ marginTop: '0.75rem' }}>
+            <ExportSubmissionButtons
+              submissionId={submission._id}
+              clipId={assignment.clipId}
+            />
+          </div>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

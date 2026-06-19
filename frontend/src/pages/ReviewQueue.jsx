@@ -9,6 +9,7 @@ import { openLabelerRow } from '../utils/labelerAccess';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
+import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import { matchesDateRange } from '../utils/tableFilter';
 
 const STATUS_LABELS = {
@@ -259,13 +260,23 @@ export default function ReviewQueue() {
                     </td>
                     <td>{formatTimestamp(submission.submittedAt || submission.createdAt)}</td>
                     <td>{formatTimestamp(submission.updatedAt)}</td>
-                    <td>
-                      <Link
-                        to={`/review/${submission._id}`}
-                        className="btn btn-primary btn-sm"
-                      >
-                        Review with video
-                      </Link>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div className="table-actions-inline">
+                        <Link
+                          to={`/review/${submission._id}`}
+                          className="btn btn-primary btn-sm"
+                        >
+                          Review with video
+                        </Link>
+                        {submission.status === 'approved' && submission.assignmentId?.clipId && (
+                          <ExportSubmissionButtons
+                            submissionId={submission._id}
+                            clipId={submission.assignmentId.clipId}
+                            compact
+                            className="table-export-actions"
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                   ))}

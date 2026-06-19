@@ -7,7 +7,8 @@ const TestResult = require('../models/TestResult');
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
 const { auth, requireRole, requireVideoManagerAccess } = require('../middleware/auth');
-const { LABELLER_ROLES } = require('../config/roles');
+const { buildSubmissionExport, sendSubmissionExport } = require('../services/submissionExport');
+const { isReviewer, canAccessReview, LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { upsertLabellerReview, getLabellerStats } = require('../services/labellerProfile');
@@ -18,7 +19,6 @@ const {
   getCurrentOnboardingStep,
   ONBOARDING_STEP_LABELS,
 } = require('../services/onboarding');
-const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
 const { importClipsFromDir } = require('../services/clipImport');
 const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
 const { importClipFromUpload } = require('../services/clipUpload');
@@ -934,30 +934,24 @@ router.post('/import-clips', auth, requireVideoManagerAccess, async (req, res) =
   }
 });
 
-router.get('/submissions/:id/export', auth, requireRole('admin'), async (req, res) => {
+router.get('/submissions/:id/export', auth, async (req, res) => {
   try {
+    if (!isReviewer(req.user) || !canAccessReview(req.user)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
-    const submission = await LabelSubmission.findById(req.params.id);
-    if (!submission) {
-      return res.status(404).json({ message: 'Submission not found' });
+    const { payload, filename, submission } = await buildSubmissionExport(req.params.id, variant);
+
+    if (submission.status !== 'approved') {
+      return res.status(403).json({
+        message: 'JSON export is only available for approved submissions',
+      });
     }
 
-    const assignment = await VideoAssignment.findById(submission.assignmentId);
-    if (!assignment?.clipId) {
-      return res.status(400).json({ message: 'Assignment has no clipId for export' });
-    }
-
-    const payload = exportAnnotation(submission.events, {
-      gameTime: assignment.gameTime || '1 - 00:00',
-      variant,
-    });
-    const filename = getExportFilename(assignment.clipId, variant);
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    return res.send(JSON.stringify(payload, null, 2));
+    return sendSubmissionExport(res, { payload, filename });
   } catch (error) {
-    return res.status(400).json({ message: error.message });
+    return res.status(error.status || 400).json({ message: error.message });
   }
 });
 

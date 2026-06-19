@@ -144,8 +144,10 @@ export const api = {
     request(`/assignments/${id}/labels`, { method: 'PUT', body: JSON.stringify(body) }),
   exportLabels: (id, variant = 'post') =>
     downloadRequest(`/assignments/${id}/export?variant=${variant}`, `labels_${variant}.json`),
+  exportReviewSubmission: (id, variant = 'post') =>
+    downloadRequest(`/review/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
   exportSubmission: (id, variant = 'post') =>
-    downloadRequest(`/admin/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
+    downloadRequest(`/review/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
   getAdminStats: () => request('/admin/stats'),
   createLabeller: (body) =>
     request('/admin/labellers', { method: 'POST', body: JSON.stringify(body) }),
