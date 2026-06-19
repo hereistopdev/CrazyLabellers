@@ -41,7 +41,7 @@ export default function Earnings() {
       <div className="page-header">
         <h1>My Earnings</h1>
         <p>
-          You earn from approved task review points plus one-time badge bonuses for work milestones.
+          You earn from approved task review points and one-time badge bonuses.
         </p>
         <Link to="/profile" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
           View my work profile
@@ -84,9 +84,6 @@ export default function Earnings() {
       {badgeData && (
         <section className="card labeller-badges-panel">
           <h3>Work badges</h3>
-          <p className="labeller-badges-panel-intro">
-            Each badge pays once when you reach the clip milestone. Bonus = $0.02 × milestone clips.
-          </p>
           <LabellerBadges
             badges={badgeData.badges}
             jobsCompleted={badgeData.jobsCompleted}

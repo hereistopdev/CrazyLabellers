@@ -2,7 +2,7 @@ const express = require('express');
 const VideoAssignment = require('../models/VideoAssignment');
 const TaskGroup = require('../models/TaskGroup');
 const LabelSubmission = require('../models/LabelSubmission');
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, requireVideoManagerAccess } = require('../middleware/auth');
 const { validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { hasReferenceForClip } = require('../services/referenceStorage');
 const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
@@ -10,7 +10,7 @@ const { updateAssignmentFields } = require('../services/assignmentUpdate');
 
 const router = express.Router();
 
-router.get('/groups', auth, requireRole('admin'), async (_req, res) => {
+router.get('/groups', auth, requireVideoManagerAccess, async (_req, res) => {
   try {
     const groups = await TaskGroup.find().sort({ sortOrder: 1, name: 1 });
     const counts = await VideoAssignment.aggregate([
@@ -30,7 +30,7 @@ router.get('/groups', auth, requireRole('admin'), async (_req, res) => {
   }
 });
 
-router.post('/groups', auth, requireRole('admin'), async (req, res) => {
+router.post('/groups', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const { name, description, sortOrder, active } = req.body;
     if (!name?.trim()) {
@@ -48,7 +48,7 @@ router.post('/groups', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-router.patch('/groups/:id', auth, requireRole('admin'), async (req, res) => {
+router.patch('/groups/:id', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const { name, description, sortOrder, active } = req.body;
     const update = {};
@@ -65,7 +65,7 @@ router.patch('/groups/:id', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-router.delete('/groups/:id', auth, requireRole('admin'), async (req, res) => {
+router.delete('/groups/:id', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     await VideoAssignment.updateMany({ groupId: req.params.id }, { $unset: { groupId: 1 } });
     const group = await TaskGroup.findByIdAndDelete(req.params.id);
@@ -76,7 +76,7 @@ router.delete('/groups/:id', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-router.get('/', auth, requireRole('admin'), async (req, res) => {
+router.get('/', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const filter = {};
     if (req.query.kind) filter.kind = req.query.kind;
@@ -85,6 +85,9 @@ router.get('/', auth, requireRole('admin'), async (req, res) => {
     const tasks = await VideoAssignment.find(filter)
       .populate('assignedTo', 'name email')
       .populate('groupId', 'name')
+      .populate('uploadedBy', 'name email')
+      .populate('referenceUpdatedBy', 'name email')
+      .populate('reviewedBy', 'name email')
       .sort({ kind: 1, sortOrder: 1, createdAt: -1 });
 
     const enriched = await Promise.all(
@@ -101,7 +104,7 @@ router.get('/', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-router.patch('/:id', auth, requireRole('admin'), async (req, res) => {
+router.patch('/:id', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const {
       title,

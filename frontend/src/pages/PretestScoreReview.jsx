@@ -102,7 +102,9 @@ export default function PretestScoreReview() {
         state: {
           message: canProduction
             ? 'All pre-test clips passed! Real labeling tasks are unlocked.'
-            : 'Review saved. Open your next pre-test clip when ready.',
+            : passed
+              ? 'Clip passed! Continue with your remaining pre-test clips.'
+              : 'A new pre-test clip has been assigned. Continue when ready.',
         },
       });
     } catch (err) {

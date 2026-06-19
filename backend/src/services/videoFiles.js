@@ -43,6 +43,7 @@ async function createVideoAssignment({
   kind,
   sortOrder,
   videoExtension,
+  uploadedBy,
 }) {
   const existing = await VideoAssignment.findOne({ clipId });
   if (existing) {
@@ -72,6 +73,7 @@ async function createVideoAssignment({
     taskPrice: resolvedPrice,
     challengeNote: challengeNote || '',
     status: 'available',
+    uploadedBy: uploadedBy || null,
   });
 }
 

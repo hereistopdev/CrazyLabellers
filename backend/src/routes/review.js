@@ -2,7 +2,7 @@ const express = require('express');
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
 const PaymentSettings = require('../models/PaymentSettings');
-const { auth, requireRole } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const { isReviewer, canAccessReview } = require('../config/roles');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints } = require('../config/payments');
 const { upsertLabellerReview } = require('../services/labellerProfile');
@@ -14,6 +14,13 @@ const { gradeSubmissionAgainstReference } = require('../services/grading');
 const { EVENT_TYPES } = require('../config/events');
 
 const router = express.Router();
+
+async function loadAssignmentForReview(id) {
+  return VideoAssignment.findById(id)
+    .populate('uploadedBy', 'name email')
+    .populate('referenceUpdatedBy', 'name email')
+    .populate('reviewedBy', 'name email');
+}
 
 function requireReviewerRole(req, res, next) {
   if (!isReviewer(req.user)) {
@@ -71,7 +78,7 @@ router.get('/assignments', auth, requireReviewerRole, async (_req, res) => {
 
 router.get('/assignments/:id/preview', auth, requireReviewerRole, async (req, res) => {
   try {
-    const assignment = await VideoAssignment.findById(req.params.id);
+    const assignment = await loadAssignmentForReview(req.params.id);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
@@ -120,7 +127,7 @@ router.get('/submissions/:id', auth, requireReviewerRole, async (req, res) => {
       return res.status(404).json({ message: 'Submission not found' });
     }
 
-    const assignment = await VideoAssignment.findById(submission.assignmentId);
+    const assignment = await loadAssignmentForReview(submission.assignmentId);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
@@ -132,7 +139,7 @@ router.get('/submissions/:id', auth, requireReviewerRole, async (req, res) => {
   }
 });
 
-router.patch('/assignments/:id/reference', auth, requireRole('admin'), async (req, res) => {
+router.patch('/assignments/:id/reference', auth, requireReviewerRole, async (req, res) => {
   try {
     const { events, submissionId, variant = 'post' } = req.body;
     if (!Array.isArray(events)) {
@@ -148,7 +155,7 @@ router.patch('/assignments/:id/reference', auth, requireRole('admin'), async (re
       }
     }
 
-    const assignment = await VideoAssignment.findById(req.params.id);
+    const assignment = await loadAssignmentForReview(req.params.id);
     if (!assignment?.clipId) {
       return res.status(404).json({ message: 'Assignment not found or has no clip ID' });
     }
@@ -157,7 +164,12 @@ router.patch('/assignments/:id/reference', auth, requireRole('admin'), async (re
     await saveReferenceEventsForClip(assignment.clipId, events, {
       variant: refVariant,
       gameTime: assignment.gameTime || '1 - 00:00',
-      sourceFilename: 'admin-review-edit',
+      sourceFilename: 'review-edit',
+    });
+
+    await VideoAssignment.findByIdAndUpdate(assignment._id, {
+      referenceUpdatedBy: req.user._id,
+      referenceUpdatedAt: new Date(),
     });
 
     const refVariantForPayload = refVariant;
@@ -208,7 +220,7 @@ router.patch('/submissions/:id/validate', auth, requireReviewerRole, async (req,
       return res.status(404).json({ message: 'Submission not found' });
     }
 
-    const assignment = await VideoAssignment.findById(submission.assignmentId);
+    const assignment = await loadAssignmentForReview(submission.assignmentId);
     const now = new Date();
     const validations = [...(submission.eventValidations || [])];
     const validationMap = new Map(validations.map((item) => [item.eventIndex, { ...item }]));
@@ -285,7 +297,7 @@ router.patch('/submissions/:id/review', auth, requireReviewerRole, async (req, r
       return res.status(404).json({ message: 'Submission not found' });
     }
 
-    const assignment = await VideoAssignment.findById(submissionDoc.assignmentId);
+    const assignment = await loadAssignmentForReview(submissionDoc.assignmentId);
     const points = status === 'approved' ? clampReviewPoints(parseInt(reviewPoints, 10) || 0) : 0;
     const earnings =
       status === 'approved'
@@ -310,6 +322,8 @@ router.patch('/submissions/:id/review', auth, requireReviewerRole, async (req, r
     if (submission.assignmentId) {
       await VideoAssignment.findByIdAndUpdate(submission.assignmentId, {
         status: status === 'approved' ? 'approved' : 'rejected',
+        reviewedBy: req.user._id,
+        reviewedAt: new Date(),
       });
     }
 

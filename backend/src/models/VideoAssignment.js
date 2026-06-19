@@ -29,6 +29,11 @@ const videoAssignmentSchema = new mongoose.Schema(
       default: 'available',
     },
     dueDate: { type: Date },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    referenceUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    referenceUpdatedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reviewedAt: { type: Date },
   },
   { timestamps: true }
 );

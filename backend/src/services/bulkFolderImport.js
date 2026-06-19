@@ -154,6 +154,8 @@ async function importBulkFromFolder({
   kind = 'production',
   taskPrice,
   continueOnError = true,
+  uploadedBy,
+  referenceUpdatedBy,
 } = {}) {
   const layout = resolveBulkLayout(sourceDir);
   const { clips: allMatches } = listClipMatchesFromLayout(layout);
@@ -200,6 +202,12 @@ async function importBulkFromFolder({
         if (importReferences && layout.annotationsDir) {
           const refResult = await importReferencesForClip(clipId, layout.annotationsDir, clipMatch);
           referencesImported += refResult.imported;
+          if (refResult.imported > 0 && referenceUpdatedBy) {
+            await VideoAssignment.updateOne(
+              { clipId },
+              { referenceUpdatedBy, referenceUpdatedAt: new Date() }
+            );
+          }
         }
         continue;
       }
@@ -218,9 +226,11 @@ async function importBulkFromFolder({
         if (uploadResult.skipped) videosSkipped += 1;
       }
 
+      let refsForClip = 0;
       if (importReferences && layout.annotationsDir) {
         const refResult = await importReferencesForClip(clipId, layout.annotationsDir, clipMatch);
         referencesImported += refResult.imported;
+        refsForClip = refResult.imported;
       }
 
       const assignment = await VideoAssignment.create({
@@ -234,6 +244,9 @@ async function importBulkFromFolder({
         kind: taskKind,
         taskPrice: resolvedPrice,
         status: 'available',
+        uploadedBy: uploadedBy || null,
+        referenceUpdatedBy: refsForClip > 0 && referenceUpdatedBy ? referenceUpdatedBy : null,
+        referenceUpdatedAt: refsForClip > 0 && referenceUpdatedBy ? new Date() : null,
       });
 
       created += 1;

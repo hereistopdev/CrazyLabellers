@@ -3,9 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   isValidator,
-  isVideoManager,
-  canAccessReview,
-  canAccessVideoManagement,
+  getAuthedHomePath,
 } from '../utils/roles';
 
 function resolveInitialRole(roleParam) {
@@ -57,7 +55,7 @@ const REGISTER_COPY = {
 };
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, logout } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialRole = resolveInitialRole(searchParams.get('role'));
@@ -77,15 +75,19 @@ export default function Register() {
     setLoading(true);
     try {
       const user = await register(name, email, password, role);
-      if (user.role === 'admin') {
-        navigate('/admin');
-      } else if (isVideoManager(user)) {
-        navigate(canAccessVideoManagement(user) ? '/admin/videos' : '/');
-      } else if (isValidator(user)) {
-        navigate(canAccessReview(user) ? '/review' : '/');
-      } else {
-        navigate('/');
+      if (role === 'video_manager' && user.role !== 'video_manager') {
+        logout();
+        throw new Error(
+          'Manager registration is not available on this server. Ask an admin to deploy the latest backend or create your account from the admin panel.'
+        );
       }
+      if (role === 'validator' && !isValidator(user)) {
+        logout();
+        throw new Error(
+          'Validator registration is not available on this server. Ask an admin to deploy the latest backend.'
+        );
+      }
+      navigate(getAuthedHomePath(user), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

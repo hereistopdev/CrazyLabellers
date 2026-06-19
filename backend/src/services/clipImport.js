@@ -4,7 +4,7 @@ const { isVideoFilename, isSafeClipId, getVideoExtension } = require('../utils/c
 const { getVideoDataDir, buildVideoUrl, listStoredClipIds } = require('./videoStorage');
 const { isVpsStorageEnabled } = require('./vpsStorage');
 
-async function importClipsFromDir(dataDir = getVideoDataDir()) {
+async function importClipsFromDir(dataDir = getVideoDataDir(), { uploadedBy } = {}) {
   let clipEntries = [];
 
   if (isVpsStorageEnabled()) {
@@ -46,6 +46,7 @@ async function importClipsFromDir(dataDir = getVideoDataDir()) {
       durationSeconds: 30,
       fps: 25,
       status: 'available',
+      uploadedBy: uploadedBy || null,
     });
     created += 1;
     imported.push({ clipId, id: assignment._id });

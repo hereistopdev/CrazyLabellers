@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { isAdmin, isLabeller, isReviewer, canAccessReview, canAccessVideoManagement } from './utils/roles';
+import { isAdmin, isLabeller, isReviewer, canAccessReview, canAccessVideoManagement, getAuthedHomePath } from './utils/roles';
 import { canUseLabeler } from './utils/labelerAccess';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -88,7 +88,7 @@ function PublicOnlyRoute({ children }) {
   }
 
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getAuthedHomePath(user)} replace />;
   }
 
   return children;
@@ -131,6 +131,14 @@ export default function App() {
       />
       <Route
         path="/validator/register"
+        element={
+          <PublicOnlyRoute>
+            <Register />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/manager/register"
         element={
           <PublicOnlyRoute>
             <Register />

@@ -30,6 +30,8 @@ async function importClipFromUpload({
   gameTime = '1 - 00:00',
   durationSeconds = 30,
   challengeNote = '',
+  uploadedBy,
+  referenceUpdatedBy,
 }) {
   if (!videoFile) {
     throw new Error('Video file is required');
@@ -55,6 +57,12 @@ async function importClipFromUpload({
     let refsImported = 0;
     if (await saveReferenceFile(clipId, referencePostFile, 'post')) refsImported += 1;
     if (await saveReferenceFile(clipId, referenceRawFile, 'raw')) refsImported += 1;
+    if (refsImported > 0 && referenceUpdatedBy) {
+      await VideoAssignment.findByIdAndUpdate(existing._id, {
+        referenceUpdatedBy,
+        referenceUpdatedAt: new Date(),
+      });
+    }
     return {
       skipped: true,
       clipId,
@@ -94,12 +102,20 @@ async function importClipFromUpload({
       kind: taskKind,
       videoUrl,
       videoExtension,
+      uploadedBy,
     });
   }
 
   let hasReference = false;
   if (await saveReferenceFile(clipId, referencePostFile, 'post')) hasReference = true;
   if (await saveReferenceFile(clipId, referenceRawFile, 'raw')) hasReference = true;
+
+  if (hasReference && referenceUpdatedBy) {
+    await VideoAssignment.findByIdAndUpdate(assignment._id, {
+      referenceUpdatedBy,
+      referenceUpdatedAt: new Date(),
+    });
+  }
 
   return {
     skipped: false,

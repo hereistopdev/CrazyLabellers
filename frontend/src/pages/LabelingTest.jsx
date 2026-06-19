@@ -55,8 +55,9 @@ export default function LabelingTest() {
         <p>
           You receive <strong>3 random clips</strong> from the admin pre-test pool. Open any of your
           clips directly — no claim needed. Each submission is scored automatically. After submit,
-          you get a <strong>one-time</strong> score review with reference data, then move on to your
-          other clips. Score <strong>80/100 or higher on all 3 clips</strong> to unlock real labeling
+          you get a <strong>one-time</strong> score review with reference data. If you fail a clip,
+          you receive a <strong>new replacement clip</strong> after viewing the review. Pass{' '}
+          <strong>3 pre-test clips in total</strong> (80/100 or higher each) to unlock real labeling
           tasks. Mark events using current frame offsets: {frameOffsetSummary}.
         </p>
       </div>
@@ -116,13 +117,12 @@ export default function LabelingTest() {
       ) : (
         canAccess && (
           <div className="alert alert-info">
-            Pass each clip with {status?.passThreshold ?? 80}/100 or higher. Progress:{' '}
+            Pass {status?.clipsRequired ?? 3} pre-test clips with {status?.passThreshold ?? 80}/100 or
+            higher. Progress:{' '}
             <strong>
               {status?.clipsPassed ?? 0}/{status?.clipsRequired ?? 3} clips passed
             </strong>
-            . Each reference event is worth an equal share of 100 points. Frame accuracy per event:
-            0 frames off = 100, 1 = 95, 2 = 90, 3 = 85, and so on (−5 per frame). Missing or
-            wrong events score 0.
+            . Failed clips are swapped for new ones after you view the score review.
           </div>
         )
       )}

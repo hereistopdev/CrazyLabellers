@@ -43,6 +43,17 @@ export function roleLabel(user) {
   return 'Labeller';
 }
 
+/** Default landing route after login/register for each role. */
+export function getAuthedHomePath(user) {
+  if (!user) return '/login';
+  if (isAdmin(user)) return '/admin';
+  if (canAccessVideoManagement(user)) return '/admin/videos';
+  if (isVideoManager(user)) return '/';
+  if (canAccessReview(user)) return '/review';
+  if (isValidator(user)) return '/';
+  return '/';
+}
+
 export const VALIDATOR_STATUSES = [
   { value: '', label: 'All' },
   { value: 'pending', label: 'Pending approval' },

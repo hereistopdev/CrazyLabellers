@@ -28,22 +28,97 @@ function hasPassedLabelingTest(user) {
   return Boolean(user.labelingTestPassed);
 }
 
+async function countPretestPasses(userId) {
+  const passed = await LabelSubmission.find({
+    userId,
+    status: 'submitted',
+    autoScore: { $gte: PASS_THRESHOLD },
+  })
+    .populate({ path: 'assignmentId', select: 'kind' })
+    .select('assignmentId');
+
+  return passed.filter((submission) => submission.assignmentId?.kind === 'pretest').length;
+}
+
+async function getExcludedPretestAssignmentIds(userId, user = null) {
+  const resolvedUser = user || (await User.findById(userId));
+  const fromSubmissions = await LabelSubmission.find({ userId }).distinct('assignmentId');
+  const current = resolvedUser?.pretestClipIds || [];
+  return new Set([...fromSubmissions, ...current].map(String));
+}
+
+async function pickRandomPretestClip(userId, extraExclude = []) {
+  const user = await User.findById(userId);
+  const excluded = await getExcludedPretestAssignmentIds(userId, user);
+  extraExclude.forEach((id) => excluded.add(String(id)));
+
+  const pool = await VideoAssignment.find({ kind: 'pretest' }).select('_id').lean();
+  const available = pool.filter((row) => !excluded.has(String(row._id)));
+
+  if (available.length === 0) {
+    const err = new Error(
+      'No more pre-test clips available. Ask an admin to add more pre-test clips to the pool.'
+    );
+    err.status = 503;
+    throw err;
+  }
+
+  return shuffleArray(available)[0];
+}
+
+async function swapFailedPretestClip(userId, failedAssignmentId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const failedId = String(failedAssignmentId);
+  const current = (user.pretestClipIds || []).map(String);
+  if (!current.includes(failedId)) {
+    return user;
+  }
+
+  const replacement = await pickRandomPretestClip(userId, [failedAssignmentId]);
+  user.pretestClipIds = current
+    .filter((id) => id !== failedId)
+    .concat(replacement._id);
+  await user.save();
+  return user;
+}
+
+async function removePretestClipFromActive(userId, assignmentId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const targetId = String(assignmentId);
+  const next = (user.pretestClipIds || []).filter((id) => String(id) !== targetId);
+  if (next.length !== (user.pretestClipIds || []).length) {
+    user.pretestClipIds = next;
+    await user.save();
+  }
+  return user;
+}
+
 async function getLabelingTestClipProgress(userId, user = null) {
   const resolvedUser = user || (await User.findById(userId));
   if (!resolvedUser) {
     throw new Error('User not found');
   }
 
-  const clipIds = resolvedUser.pretestClipIds || [];
   const clipsRequired = PRETEST_CLIPS_PER_LABELLER;
+  const clipIds = resolvedUser.pretestClipIds || [];
+  const clipsPassed = await countPretestPasses(userId);
+  const allPassed = clipsPassed >= clipsRequired;
 
   if (clipIds.length === 0) {
     return {
       clipsRequired,
       clipsAssigned: 0,
       clipsSubmitted: 0,
-      clipsPassed: 0,
-      allPassed: false,
+      clipsPassed,
+      allPassed,
       byClip: [],
     };
   }
@@ -70,11 +145,6 @@ async function getLabelingTestClipProgress(userId, user = null) {
   });
 
   const clipsSubmitted = byClip.filter((clip) => clip.submitted).length;
-  const clipsPassed = byClip.filter((clip) => clip.passed).length;
-  const allPassed =
-    clipIds.length >= clipsRequired &&
-    clipsPassed >= clipsRequired &&
-    byClip.every((clip) => clip.passed);
 
   return {
     clipsRequired,
@@ -221,7 +291,16 @@ async function ensurePretestClipsForUser(userId) {
     throw new Error('User not found');
   }
 
-  if (user.pretestClipIds?.length >= PRETEST_CLIPS_PER_LABELLER) {
+  const clipsPassed = await countPretestPasses(userId);
+  if (clipsPassed >= PRETEST_CLIPS_PER_LABELLER) {
+    if (user.pretestClipIds?.length) {
+      user.pretestClipIds = [];
+      await user.save();
+    }
+    return [];
+  }
+
+  if (user.pretestClipIds?.length > 0) {
     return VideoAssignment.find({ _id: { $in: user.pretestClipIds } }).sort({ createdAt: 1 });
   }
 
@@ -234,7 +313,11 @@ async function ensurePretestClipsForUser(userId) {
     throw err;
   }
 
-  const picked = shuffleArray(pool)
+  const excluded = await getExcludedPretestAssignmentIds(userId, user);
+  const available = pool.filter((row) => !excluded.has(String(row._id)));
+  const source = available.length >= PRETEST_CLIPS_PER_LABELLER ? available : pool;
+
+  const picked = shuffleArray(source)
     .slice(0, PRETEST_CLIPS_PER_LABELLER)
     .map((row) => row._id);
 
@@ -403,6 +486,9 @@ module.exports = {
   getPretestClipsWithProgress,
   isPretestClipForUser,
   getPretestPoolStats,
+  countPretestPasses,
+  swapFailedPretestClip,
+  removePretestClipFromActive,
   getCurrentOnboardingStep,
   getOnboardingStatus,
   applyOnboardingGrants,

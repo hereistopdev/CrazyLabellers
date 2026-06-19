@@ -101,9 +101,6 @@ export default function LabellerProfile() {
 
       <section className="card labeller-badges-panel">
         <h3>Work badges</h3>
-        <p className="labeller-badges-panel-intro">
-          Milestone badges for approved production tasks. Bonus = $0.02 × clip count at each tier.
-        </p>
         <LabellerBadges badges={badges} jobsCompleted={labeller.jobsCompleted} showLocked />
       </section>
 

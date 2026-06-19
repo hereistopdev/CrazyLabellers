@@ -8,8 +8,14 @@ import LabellerBadges from '../components/LabellerBadges';
 import { formatMoney } from '../utils/money';
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [badgeData, setBadgeData] = useState(null);
+
+  useEffect(() => {
+    if (isVideoManager(user) || isValidator(user)) {
+      refreshUser().catch(() => {});
+    }
+  }, [user?.role, user?.status, refreshUser]);
 
   useEffect(() => {
     if (user?.role === 'labeller' || user?.role === 'freelancer') {
@@ -129,8 +135,9 @@ export default function Dashboard() {
         <h1>Hello, {user?.name}</h1>
         <p>
           Knowledge test → tutorials → video pre-test → real tasks. After tutorials you get{' '}
-          <strong>3 random clips</strong> from the admin pre-test pool — pass all 3 with 80/100+ to
-          unlock production work.
+          <strong>3 random clips</strong> from the admin pre-test pool — pass{' '}
+          <strong>3 clips in total</strong> with 80/100+ to unlock production work. Failed clips
+          are replaced with new ones.
         </p>
       </div>
 
@@ -149,15 +156,15 @@ export default function Dashboard() {
 
       {canPretest && !passedLabeling && (
         <div className="alert alert-info">
-          Tutorials complete. You will receive 3 random pre-test clips from the pool. Pass all 3 with
-          at least 80/100 each to unlock real tasks
+          Tutorials complete. You will receive 3 random pre-test clips from the pool. Pass{' '}
+          <strong>3 clips in total</strong> with at least 80/100 each to unlock real tasks
           {clipsPassed != null ? (
             <>
               {' '}
               (progress: {clipsPassed}/{clipsRequired} passed).
             </>
           ) : (
-            '.'
+            '. Failed clips are swapped for new ones after score review.'
           )}
         </div>
       )}
@@ -171,17 +178,6 @@ export default function Dashboard() {
       {badgeData && (
         <section className="card labeller-badges-panel">
           <h3>Work badges</h3>
-          <p className="labeller-badges-panel-intro">
-            Earn badges from approved production tasks. Each badge pays a one-time bonus of{' '}
-            <strong>$0.02 × clip milestone</strong>
-            {badgeData.totalBadgeEarnings > 0 && (
-              <>
-                {' '}
-                — total badge bonuses: <strong>{formatMoney(badgeData.totalBadgeEarnings)}</strong>
-              </>
-            )}
-            .
-          </p>
           <LabellerBadges
             badges={badgeData.badges}
             jobsCompleted={badgeData.jobsCompleted}
@@ -254,8 +250,9 @@ export default function Dashboard() {
           <div className="step-number">4</div>
           <h3>Labeling Pre-test</h3>
           <p>
-            Label your assigned practice clips (3 random picks from the admin pool). Auto score out
-            of 100 — 80+ required to unlock real tasks.
+            Label practice clips from the admin pool (3 at a time). Pass{' '}
+            <strong>3 clips in total</strong> with 80/100+ to unlock real tasks. Failed clips are
+            replaced with new ones after score review.
           </p>
           <div className="actions-row">
             {canPretest ? (

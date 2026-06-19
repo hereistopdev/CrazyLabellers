@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { canAccessVideoManagement } = require('../config/roles');
 
 const auth = async (req, res, next) => {
   try {
@@ -30,4 +31,11 @@ const requireRole = (...roles) => (req, res, next) => {
   return next();
 };
 
-module.exports = { auth, requireRole };
+const requireVideoManagerAccess = (req, res, next) => {
+  if (!canAccessVideoManagement(req.user)) {
+    return res.status(403).json({ message: 'Video manager access required' });
+  }
+  return next();
+};
+
+module.exports = { auth, requireRole, requireVideoManagerAccess };

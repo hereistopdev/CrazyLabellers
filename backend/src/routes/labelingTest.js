@@ -11,6 +11,9 @@ const {
   getOnboardingStatus,
   isPretestClipForUser,
   PRETEST_CLIPS_PER_LABELLER,
+  swapFailedPretestClip,
+  removePretestClipFromActive,
+  refreshLabelingTestPassed,
 } = require('../services/onboarding');
 const { PASS_THRESHOLD } = require('../utils/labelingScore');
 const { buildScoreReviewPayload } = require('../services/scoreReview');
@@ -157,7 +160,15 @@ router.post('/assignments/:assignmentId/score-review/acknowledge', auth, async (
       return res.status(404).json({ message: 'No submitted pre-test found' });
     }
 
-    return res.json({ acknowledged: true });
+    const passed = (submission.autoScore ?? 0) >= PASS_THRESHOLD;
+    if (passed) {
+      await removePretestClipFromActive(req.user._id, assignment._id);
+    } else {
+      await swapFailedPretestClip(req.user._id, assignment._id);
+    }
+    await refreshLabelingTestPassed(req.user._id);
+
+    return res.json({ acknowledged: true, passed });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

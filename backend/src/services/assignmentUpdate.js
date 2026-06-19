@@ -17,7 +17,10 @@ async function updateAssignmentFields(id, fields) {
 
   return VideoAssignment.findById(id)
     .populate('groupId', 'name')
-    .populate('assignedTo', 'name email');
+    .populate('assignedTo', 'name email')
+    .populate('uploadedBy', 'name email')
+    .populate('referenceUpdatedBy', 'name email')
+    .populate('reviewedBy', 'name email');
 }
 
 module.exports = { updateAssignmentFields };

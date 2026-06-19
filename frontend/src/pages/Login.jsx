@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
-import {
-  isValidator,
-  isVideoManager,
-  canAccessReview,
-  canAccessVideoManagement,
-} from '../utils/roles';
+import { getAuthedHomePath } from '../utils/roles';
 
 export default function Login() {
   const { login } = useAuth();
@@ -23,15 +17,7 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      if (user.role === 'admin') {
-        navigate('/admin');
-      } else if (isVideoManager(user)) {
-        navigate(canAccessVideoManagement(user) ? '/admin/videos' : '/');
-      } else if (isValidator(user)) {
-        navigate(canAccessReview(user) ? '/review' : '/');
-      } else {
-        navigate('/');
-      }
+      navigate(getAuthedHomePath(user), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

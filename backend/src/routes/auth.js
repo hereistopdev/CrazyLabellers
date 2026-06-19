@@ -7,7 +7,7 @@ const { getOnboardingStatus } = require('../services/onboarding');
 
 const router = express.Router();
 
-const PUBLIC_REGISTER_ROLES = ['labeller', 'validator'];
+const PUBLIC_REGISTER_ROLES = ['labeller', 'validator', 'video_manager'];
 
 function buildAuthUser(user) {
   return {
@@ -38,6 +38,12 @@ router.post('/register', async (req, res) => {
 
     const role = PUBLIC_REGISTER_ROLES.includes(requestedRole) ? requestedRole : 'labeller';
     const status = 'pending';
+
+    if (requestedRole === 'video_manager' && role !== 'video_manager') {
+      return res.status(503).json({
+        message: 'Video manager registration is not enabled. Restart or redeploy the backend with the latest version.',
+      });
+    }
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {

@@ -6,7 +6,7 @@ const User = require('../models/User');
 const TestResult = require('../models/TestResult');
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, requireRole, requireVideoManagerAccess } = require('../middleware/auth');
 const { LABELLER_ROLES } = require('../config/roles');
 const PaymentSettings = require('../models/PaymentSettings');
 const { calculateTaskEarnings, DEFAULT_RATE_PER_POINT, clampReviewPoints, validateTaskPrice, isFreeTaskKind } = require('../config/payments');
@@ -92,6 +92,35 @@ async function createValidatorAccount({ name, email, password }) {
   });
 }
 
+async function createVideoManagerAccount({ name, email, password }) {
+  if (!name || !email || !password) {
+    const error = new Error('Name, email, and password are required');
+    error.status = 400;
+    throw error;
+  }
+
+  if (password.length < 6) {
+    const error = new Error('Password must be at least 6 characters');
+    error.status = 400;
+    throw error;
+  }
+
+  const existing = await User.findOne({ email: email.toLowerCase() });
+  if (existing) {
+    const error = new Error('Email already registered');
+    error.status = 409;
+    throw error;
+  }
+
+  return User.create({
+    name,
+    email,
+    password,
+    role: 'video_manager',
+    status: 'approved',
+  });
+}
+
 router.post('/validators', auth, requireRole('admin'), async (req, res) => {
   try {
     const validator = await createValidatorAccount(req.body);
@@ -153,6 +182,74 @@ router.patch('/validators/:id/status', auth, requireRole('admin'), async (req, r
 
     if (!user) {
       return res.status(404).json({ message: 'Validator not found' });
+    }
+    return res.json(user);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.post('/video-managers', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const manager = await createVideoManagerAccount(req.body);
+    return res.status(201).json({
+      id: manager._id,
+      name: manager.name,
+      email: manager.email,
+      role: manager.role,
+      status: manager.status,
+      createdAt: manager.createdAt,
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.get('/video-managers', auth, requireRole('admin'), async (_req, res) => {
+  try {
+    const managers = await User.find({ role: 'video_manager' })
+      .select('-password')
+      .sort({ createdAt: -1 });
+    return res.json(managers);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/video-managers/:id', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const manager = await User.findOne({
+      _id: req.params.id,
+      role: 'video_manager',
+    });
+
+    if (!manager) {
+      return res.status(404).json({ message: 'Video manager not found' });
+    }
+
+    await User.deleteOne({ _id: manager._id });
+    return res.json({ message: 'Video manager removed' });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/video-managers/:id/status', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const allowed = ['pending', 'approved', 'rejected'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'video_manager' },
+      { status },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'Video manager not found' });
     }
     return res.json(user);
   } catch (error) {
@@ -490,6 +587,8 @@ router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, 
     if (submission.assignmentId) {
       await VideoAssignment.findByIdAndUpdate(submission.assignmentId, {
         status: status === 'approved' ? 'approved' : 'rejected',
+        reviewedBy: req.user._id,
+        reviewedAt: new Date(),
       });
     }
 
@@ -525,10 +624,14 @@ router.patch('/submissions/:id/review', auth, requireRole('admin'), async (req, 
   }
 });
 
-router.get('/assignments', auth, requireRole('admin'), async (_req, res) => {
+router.get('/assignments', auth, requireVideoManagerAccess, async (_req, res) => {
   try {
     const assignments = await VideoAssignment.find()
       .populate('assignedTo', 'name email status')
+      .populate('uploadedBy', 'name email')
+      .populate('referenceUpdatedBy', 'name email')
+      .populate('reviewedBy', 'name email')
+      .populate('groupId', 'name')
       .sort({ createdAt: -1 });
 
     const enriched = await Promise.all(
@@ -612,7 +715,7 @@ router.patch('/assignments/bulk-price', auth, requireRole('admin'), async (req, 
   }
 });
 
-router.get('/storage-status', auth, requireRole('admin'), async (_req, res) => {
+router.get('/storage-status', auth, requireVideoManagerAccess, async (_req, res) => {
   try {
     const status = await getStorageStatus();
     return res.json(status);
@@ -621,7 +724,7 @@ router.get('/storage-status', auth, requireRole('admin'), async (_req, res) => {
   }
 });
 
-router.post('/videos/bulk-clip', auth, requireRole('admin'), uploadBulkClip, async (req, res) => {
+router.post('/videos/bulk-clip', auth, requireVideoManagerAccess, uploadBulkClip, async (req, res) => {
   try {
     const videoFile = req.files?.video?.[0];
     if (!videoFile) {
@@ -647,6 +750,8 @@ router.post('/videos/bulk-clip', auth, requireRole('admin'), uploadBulkClip, asy
       gameTime: req.body.gameTime,
       durationSeconds: parseInt(req.body.durationSeconds, 10) || 30,
       challengeNote: req.body.challengeNote,
+      uploadedBy: req.user._id,
+      referenceUpdatedBy: req.user._id,
     });
 
     return res.status(result.skipped ? 200 : 201).json({
@@ -658,7 +763,7 @@ router.post('/videos/bulk-clip', auth, requireRole('admin'), uploadBulkClip, asy
   }
 });
 
-router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, async (req, res) => {
+router.post('/videos', auth, requireVideoManagerAccess, uploadVideoWithReference, async (req, res) => {
   try {
     const videoFile = req.files?.video?.[0];
     const referenceFile = req.files?.reference?.[0];
@@ -684,6 +789,8 @@ router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, asy
       gameTime: req.body.gameTime,
       durationSeconds: parseInt(req.body.durationSeconds, 10) || 30,
       challengeNote: req.body.challengeNote,
+      uploadedBy: req.user._id,
+      referenceUpdatedBy: req.user._id,
     });
 
     return res.status(201).json({
@@ -699,7 +806,7 @@ router.post('/videos', auth, requireRole('admin'), uploadVideoWithReference, asy
 router.post(
   '/assignments/:id/reference',
   auth,
-  requireRole('admin'),
+  requireVideoManagerAccess,
   uploadReferenceOnly.single('reference'),
   async (req, res) => {
     try {
@@ -717,6 +824,11 @@ router.post(
         sourceFilename: req.file.originalname,
       });
 
+      await VideoAssignment.findByIdAndUpdate(assignment._id, {
+        referenceUpdatedBy: req.user._id,
+        referenceUpdatedAt: new Date(),
+      });
+
       return res.json({
         message: 'Reference annotation saved',
         clipId: assignment.clipId,
@@ -729,7 +841,7 @@ router.post(
   }
 );
 
-router.delete('/videos/:id', auth, requireRole('admin'), async (req, res) => {
+router.delete('/videos/:id', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const deleteFile = req.query.deleteFile !== 'false';
     const result = await removeVideoAssignment(req.params.id, { deleteFile });
@@ -744,7 +856,7 @@ router.delete('/videos/:id', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-router.get('/import-folder/preview', auth, requireRole('admin'), async (req, res) => {
+router.get('/import-folder/preview', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const sourceDir = req.query.sourceDir?.trim();
     if (!sourceDir) {
@@ -757,7 +869,7 @@ router.get('/import-folder/preview', auth, requireRole('admin'), async (req, res
   }
 });
 
-router.post('/import-folder', auth, requireRole('admin'), async (req, res) => {
+router.post('/import-folder', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const {
       sourceDir,
@@ -786,6 +898,8 @@ router.post('/import-folder', auth, requireRole('admin'), async (req, res) => {
       skipExistingVideos: Boolean(skipExistingVideos),
       kind,
       taskPrice,
+      uploadedBy: req.user._id,
+      referenceUpdatedBy: req.user._id,
     });
 
     return res.json(result);
@@ -794,9 +908,9 @@ router.post('/import-folder', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-router.post('/import-clips', auth, requireRole('admin'), async (_req, res) => {
+router.post('/import-clips', auth, requireVideoManagerAccess, async (req, res) => {
   try {
-    const result = await importClipsFromDir();
+    const result = await importClipsFromDir(undefined, { uploadedBy: req.user._id });
     return res.json(result);
   } catch (error) {
     return res.status(400).json({ message: error.message });
