@@ -53,6 +53,7 @@ export default function Labeling() {
   const [chatOpen, setChatOpen] = useState(false);
   const [mediaDuration, setMediaDuration] = useState(null);
   const [reference, setReference] = useState(null);
+  const [submissionStatus, setSubmissionStatus] = useState('draft');
   const [tutorialDone, setTutorialDone] = useState(false);
 
   const fps = assignment?.fps || FPS;
@@ -116,6 +117,7 @@ export default function Labeling() {
         setAssignment(assign);
         setEventTypes(types);
         setEvents(labels.events || []);
+        setSubmissionStatus(labels.status || 'draft');
       } catch (err) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -145,16 +147,27 @@ export default function Labeling() {
   }, [id, labellerMode, assignment?.kind]);
 
   useEffect(() => {
-    if (!adminMode || !id) {
+    if (!id) {
       setReference(null);
       return;
     }
 
-    api
-      .getReviewPreview(id)
-      .then((data) => setReference(data.reference || null))
+    const labellerReferenceMode =
+      labellerMode && assignment?.allowLabellerReference && assignment?.kind !== 'tutorial';
+
+    if (!adminMode && !labellerReferenceMode) {
+      setReference(null);
+      return;
+    }
+
+    const loader = adminMode
+      ? api.getReviewPreview(id).then((data) => data.reference || null)
+      : api.getAssignmentReference(id);
+
+    loader
+      .then((ref) => setReference(ref?.hasReference != null ? ref : { hasReference: false, events: [] }))
       .catch(() => setReference(null));
-  }, [adminMode, id]);
+  }, [adminMode, labellerMode, id, assignment?.allowLabellerReference, assignment?.kind]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -316,6 +329,7 @@ export default function Labeling() {
       setError('');
       try {
         const data = await api.saveLabels(id, { events, status });
+        setSubmissionStatus(data.submission?.status || status);
         if (status === 'submitted' && data.tutorial?.completed) {
           await refreshUser();
           setMessage('Tutorial completed! Continue to the next tutorial or pre-test.');
@@ -464,7 +478,18 @@ export default function Labeling() {
   const showTutorialEditor = adminMode && isTutorial;
   const showTutorialGuide = tutorialLabellerMode;
   const referenceEvents = reference?.hasReference ? reference.events : [];
-  const showReference = adminMode && reference?.hasReference;
+  const showReference =
+    reference?.hasReference &&
+    (adminMode || (labellerMode && assignment?.allowLabellerReference));
+  const relabelMode =
+    labellerMode &&
+    assignment?.allowLabellerReference &&
+    (submissionStatus === 'rejected' || assignment?.status === 'rejected');
+  const awaitingReview =
+    labellerMode &&
+    submissionStatus === 'submitted' &&
+    assignment?.status === 'submitted' &&
+    !relabelMode;
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) {
@@ -502,6 +527,12 @@ export default function Labeling() {
         <div className="page-header-main">
         <h1>{displayAssignmentTitle(assignment)}</h1>
         <p>{assignment?.description}</p>
+        {showReference && labellerMode && !adminMode && (
+          <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
+            Reference visible — compare gold-standard events (blue) with your labels (green), then
+            update and {relabelMode ? 're-submit' : 'submit'} when they match the current criteria.
+          </p>
+        )}
         {adminMode && (
           <p style={{ fontSize: '0.85rem', color: 'var(--accent)' }}>
             Admin preview
@@ -653,7 +684,7 @@ export default function Labeling() {
               fps={fps}
               submissionEvents={events}
               referenceEvents={referenceEvents}
-              labellerName="Draft labels"
+              labellerName={labellerMode && !adminMode ? 'Your labels' : 'Draft labels'}
               hasReference
               previewMode
               onSeek={handleScrub}
@@ -791,15 +822,20 @@ export default function Labeling() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving}>
               Save draft
             </button>
-            {labellerMode && (
+            {labellerMode && !awaitingReview && (
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={() => save('submitted')}
                 disabled={saving || events.length === 0}
               >
-                Submit
+                {relabelMode ? 'Re-submit' : 'Submit'}
               </button>
+            )}
+            {awaitingReview && (
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Awaiting validator review
+              </span>
             )}
           </div>
         </div>

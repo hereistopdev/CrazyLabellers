@@ -2425,6 +2425,103 @@ tbody tr:hover {
   margin-top: 0.5rem;
 }
 
+.review-frame-edit-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.review-frame-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.review-frame-edit-row .btn {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.frame-nudge-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.frame-nudge-group {
+  display: inline-flex;
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.frame-nudge-btn {
+  flex: 1 1 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  min-width: 0;
+  height: 2.1rem;
+  padding: 0 0.2rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.frame-nudge-btn + .frame-nudge-btn {
+  border-left: 1px solid var(--border);
+}
+
+.frame-nudge-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.frame-nudge-btn:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.frame-nudge-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.frame-nudge-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.frame-nudge-step {
+  font-weight: 700;
+  font-size: 0.74rem;
+}
+
+.review-frame-validate-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.review-frame-validate-actions .btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 .review-timeline-title {
   font-size: 0.9rem;
   font-weight: 600;
@@ -2681,6 +2778,89 @@ tbody tr:hover {
 
 .review-timeline-marker.validation-invalid .review-timeline-marker-dot {
   box-shadow: 0 0 0 2px #ef4444, 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.review-timeline-marker-submission.comparison-off .review-timeline-marker-dot,
+.review-timeline-marker-reference.comparison-off .review-timeline-marker-dot {
+  background: #f97316;
+  box-shadow:
+    0 0 0 3px rgba(249, 115, 22, 0.55),
+    0 0 14px rgba(249, 115, 22, 0.75);
+}
+
+.review-timeline-marker-reference.comparison-missing .review-timeline-marker-dot {
+  background: #ef4444;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.45),
+    0 0 12px rgba(239, 68, 68, 0.6);
+}
+
+.review-timeline-marker-submission.comparison-extra .review-timeline-marker-dot {
+  background: #ef4444;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.45),
+    0 0 12px rgba(239, 68, 68, 0.55);
+}
+
+.review-timeline-attention-count {
+  color: #fb923c;
+  font-weight: 600;
+  margin-left: 0.35rem;
+}
+
+.review-attention-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.35);
+}
+
+.review-attention-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #fdba74;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.review-attention-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.review-attention-chip {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.74rem;
+  font-family: var(--mono);
+  cursor: pointer;
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.review-attention-chip-off {
+  border-color: rgba(249, 115, 22, 0.55);
+  color: #fdba74;
+}
+
+.review-attention-chip-missing,
+.review-attention-chip-extra {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.review-attention-chip:hover {
+  filter: brightness(1.08);
+}
+
+.labeling-score-row.score-row-off {
+  background: rgba(249, 115, 22, 0.12);
+  border-radius: 6px;
+  outline: 1px solid rgba(249, 115, 22, 0.35);
 }
 
 .review-frame-panel {
@@ -2995,6 +3175,17 @@ tbody tr:hover {
 .comparison-close {
   background: rgba(234, 179, 8, 0.2);
   color: #fde047;
+}
+
+.comparison-off {
+  background: rgba(249, 115, 22, 0.28);
+  color: #fdba74;
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.45);
+}
+
+.comparison-missing {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
 }
 
 .comparison-extra,

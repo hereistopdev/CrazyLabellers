@@ -236,6 +236,7 @@ export default function PretestScoreReview() {
             submissionEvents={submission?.events || []}
             referenceEvents={reference?.hasReference ? reference.events : []}
             eventRows={eventRows}
+            comparison={comparison}
             labellerName="Your labels"
             hasReference={reference?.hasReference}
             previewMode

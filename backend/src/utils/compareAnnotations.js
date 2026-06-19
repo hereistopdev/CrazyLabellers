@@ -1,7 +1,30 @@
 const DEFAULT_TOLERANCE_MS = 250;
 const { normalizeLabelEvents } = require('./normalizeLabelEvents');
 
-function compareAnnotations(submissionEvents = [], referenceEvents = [], toleranceMs = DEFAULT_TOLERANCE_MS) {
+function getFrameDiff(timeDiffMs, fps = 25) {
+  return Math.round((timeDiffMs * fps) / 1000);
+}
+
+function matchQualityFromFrameDiff(frameDiff) {
+  if (frameDiff <= 0) return 'exact';
+  if (frameDiff === 1) return 'close';
+  return 'off';
+}
+
+function comparisonStatusFromMatch(match) {
+  if (!match) return null;
+  if (match.matchQuality === 'exact') return 'match';
+  if (match.matchQuality === 'close') return 'close';
+  if (match.matchQuality === 'off') return 'off';
+  return 'close';
+}
+
+function compareAnnotations(
+  submissionEvents = [],
+  referenceEvents = [],
+  toleranceMs = DEFAULT_TOLERANCE_MS,
+  fps = 25
+) {
   const sortedSubmission = normalizeLabelEvents(submissionEvents)
     .map((event, submissionIndex) => ({ ...event, submissionIndex }))
     .sort((a, b) => a.frameTime - b.frameTime);
@@ -35,6 +58,7 @@ function compareAnnotations(submissionEvents = [], referenceEvents = [], toleran
 
     if (bestMatch) {
       usedReference.add(bestMatch.referenceEvent.referenceIndex);
+      const frameDiff = getFrameDiff(bestMatch.timeDiffMs, fps);
       matched.push({
         submissionIndex: submissionEvent.submissionIndex,
         referenceIndex: bestMatch.referenceEvent.referenceIndex,
@@ -42,7 +66,8 @@ function compareAnnotations(submissionEvents = [], referenceEvents = [], toleran
         submissionTime: submissionEvent.frameTime,
         referenceTime: bestMatch.referenceEvent.frameTime,
         timeDiffMs: bestMatch.timeDiffMs,
-        matchQuality: bestMatch.timeDiffMs <= 40 ? 'exact' : 'close',
+        frameDiff,
+        matchQuality: matchQualityFromFrameDiff(frameDiff),
       });
     } else {
       extraInSubmission.push({
@@ -80,7 +105,12 @@ function compareAnnotations(submissionEvents = [], referenceEvents = [], toleran
   };
 }
 
-function buildEventReviewRows(submissionEvents = [], comparison = null, eventValidations = []) {
+function buildEventReviewRows(
+  submissionEvents = [],
+  comparison = null,
+  eventValidations = [],
+  fps = 25
+) {
   const normalizedSubmission = normalizeLabelEvents(submissionEvents);
   const validationMap = new Map(
     (eventValidations || []).map((item) => [item.eventIndex, item])
@@ -100,7 +130,7 @@ function buildEventReviewRows(submissionEvents = [], comparison = null, eventVal
     let comparisonStatus = null;
     if (comparison) {
       if (match) {
-        comparisonStatus = match.matchQuality === 'exact' ? 'match' : 'close';
+        comparisonStatus = comparisonStatusFromMatch(match);
       } else if (extraSet.has(eventIndex)) {
         comparisonStatus = 'extra';
       } else {
@@ -112,6 +142,7 @@ function buildEventReviewRows(submissionEvents = [], comparison = null, eventVal
       eventIndex,
       event,
       comparisonStatus,
+      frameDiff: match?.frameDiff ?? null,
       match,
       validation: validation || { eventIndex, status: 'pending', notes: '' },
     };
@@ -120,6 +151,9 @@ function buildEventReviewRows(submissionEvents = [], comparison = null, eventVal
 
 module.exports = {
   DEFAULT_TOLERANCE_MS,
+  getFrameDiff,
+  matchQualityFromFrameDiff,
+  comparisonStatusFromMatch,
   compareAnnotations,
   buildEventReviewRows,
 };

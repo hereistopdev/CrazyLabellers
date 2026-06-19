@@ -22,6 +22,8 @@ const videoAssignmentSchema = new mongoose.Schema(
     tutorialSteps: { type: [mongoose.Schema.Types.Mixed], default: [] },
     taskPrice: { type: Number, default: 1, min: 0, max: 2 },
     challengeNote: { type: String, default: '' },
+    /** When true, assigned labellers may view reference JSON and re-label against it. */
+    allowLabellerReference: { type: Boolean, default: false },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: {
       type: String,

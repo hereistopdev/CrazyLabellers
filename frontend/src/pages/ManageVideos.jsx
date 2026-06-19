@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { isAdmin } from '../utils/roles';
+import { isAdmin, isVideoManager } from '../utils/roles';
 import { api } from '../api';
 import { formatMoney, isFreeTaskKind } from '../utils/money';
 import { readVideoDurationFromFile } from '../utils/videoDuration';
@@ -203,6 +203,7 @@ export default function ManageVideos() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const adminUser = isAdmin(user);
+  const managerUser = isAdmin(user) || isVideoManager(user);
   const [videos, setVideos] = useState([]);
   const [tableLoading, setTableLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -226,6 +227,7 @@ export default function ManageVideos() {
   const [bulkKind, setBulkKind] = useState('production');
   const [savingPrice, setSavingPrice] = useState(null);
   const [savingKind, setSavingKind] = useState(null);
+  const [savingRefAccess, setSavingRefAccess] = useState(null);
   const [storage, setStorage] = useState(null);
   const [uploadClips, setUploadClips] = useState([]);
   const [uploadSummary, setUploadSummary] = useState(null);
@@ -542,6 +544,29 @@ export default function ManageVideos() {
       load();
     } finally {
       setSavingKind(null);
+    }
+  };
+
+  const toggleLabellerReference = async (video, enabled) => {
+    setSavingRefAccess(video._id);
+    setError('');
+    try {
+      await api.updateAdminTask(video._id, { allowLabellerReference: enabled });
+      setVideos((prev) =>
+        prev.map((v) =>
+          v._id === video._id ? { ...v, allowLabellerReference: enabled } : v
+        )
+      );
+      setMessage(
+        enabled
+          ? 'Labellers can now view reference on this task'
+          : 'Reference hidden from labellers'
+      );
+      setTimeout(() => setMessage(''), 2500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingRefAccess(null);
     }
   };
 
@@ -1157,6 +1182,7 @@ export default function ManageVideos() {
                   <th>Status</th>
                   <th>Group</th>
                   <th>Ref</th>
+                  {managerUser && <th>Labeller ref</th>}
                   <th>Uploaded by</th>
                   <th>Validated by</th>
                   <th>Assigned to</th>
@@ -1249,6 +1275,23 @@ export default function ManageVideos() {
                   </td>
                   <td>{video.groupId?.name || '—'}</td>
                   <td>{video.hasReference ? 'Yes' : '—'}</td>
+                  {managerUser && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {video.hasReference && (video.kind || 'production') === 'production' ? (
+                        <label className="review-checkbox-label" title="Let assigned labellers see reference while labeling">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(video.allowLabellerReference)}
+                            disabled={savingRefAccess === video._id}
+                            onChange={(e) => toggleLabellerReference(video, e.target.checked)}
+                          />
+                          {video.allowLabellerReference ? 'On' : 'Off'}
+                        </label>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  )}
                   <td>{userLabel(video.uploadedBy)}</td>
                   <td>{userLabel(video.reviewedBy)}</td>
                   <td>{video.assignedTo?.name || '—'}</td>

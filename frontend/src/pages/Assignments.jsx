@@ -221,7 +221,11 @@ export default function Assignments() {
             <div className="card-grid">
               {group.tasks.map((a) => {
                 const isMine = a.assignedTo?._id === user?.id || a.assignedTo === user?.id;
-                const canOpen = isMine && ['assigned', 'in_progress', 'submitted'].includes(a.status);
+                const canRelabel =
+                  isMine && a.allowLabellerReference && a.status === 'rejected';
+                const canOpen =
+                  isMine &&
+                  (['assigned', 'in_progress', 'submitted'].includes(a.status) || canRelabel);
                 const canClaim = a.status === 'available';
 
                 return (
@@ -249,6 +253,11 @@ export default function Assignments() {
                         Challenge: {a.challengeNote}
                       </p>
                     )}
+                    {a.allowLabellerReference && (
+                      <p style={{ fontSize: '0.8rem', color: '#93c5fd', marginBottom: '0.5rem' }}>
+                        Reference available — label by comparing with gold-standard events
+                      </p>
+                    )}
 
                     <div className="actions-row">
                       {canClaim && (
@@ -263,7 +272,7 @@ export default function Assignments() {
                       )}
                       {canOpen && (
                         <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
-                          Open labeler
+                          {canRelabel ? 'Re-label with reference' : 'Open labeler'}
                         </Link>
                       )}
                       {a.status === 'submitted' && isMine && (

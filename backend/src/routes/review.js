@@ -433,4 +433,59 @@ router.patch('/submissions/:id/review', auth, requireReviewerRole, async (req, r
   }
 });
 
+router.post('/submissions/:id/reopen-for-relabel', auth, requireReviewerRole, async (req, res) => {
+  try {
+    const { clearEvents = false } = req.body || {};
+
+    const submission = await LabelSubmission.findById(req.params.id).populate(
+      'userId',
+      'name email'
+    );
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const assignment = await VideoAssignment.findById(submission.assignmentId);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.kind === 'tutorial' || assignment.kind === 'pretest') {
+      return res.status(400).json({ message: 'Only production tasks can be reopened for re-labeling' });
+    }
+
+    if (!assignment.clipId) {
+      return res.status(400).json({ message: 'Task has no reference clip' });
+    }
+
+    const reference = await loadReferenceForClip(assignment.clipId, 'post');
+    if (!reference.hasReference) {
+      return res.status(400).json({ message: 'Upload reference JSON before sending back for re-label' });
+    }
+
+    submission.status = 'draft';
+    submission.eventValidations = [];
+    submission.reviewPoints = 0;
+    submission.reviewerNotes = '';
+    submission.reviewedAt = undefined;
+    submission.reviewedBy = undefined;
+    if (clearEvents) {
+      submission.events = [];
+    }
+    await submission.save();
+
+    assignment.status = 'in_progress';
+    assignment.allowLabellerReference = true;
+    await assignment.save();
+
+    return res.json({
+      message: 'Task reopened — labeller can compare against reference and re-submit',
+      submission,
+      assignment,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
 module.exports = router;

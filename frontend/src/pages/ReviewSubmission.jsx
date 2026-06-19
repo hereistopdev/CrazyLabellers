@@ -695,6 +695,30 @@ export default function ReviewSubmission() {
     }
   };
 
+  const sendBackForRelabel = async (clearEvents = false) => {
+    if (!submissionId) return;
+    setSaving(true);
+    setError('');
+    try {
+      const data = await api.reopenSubmissionForRelabel(submissionId, { clearEvents });
+      setReviewData((prev) => ({
+        ...prev,
+        assignment: data.assignment,
+        submission: {
+          ...prev?.submission,
+          ...data.submission,
+          status: data.submission.status,
+        },
+      }));
+      setMessage(data.message || 'Sent back for re-label with reference visible');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const submitReview = async (status) => {
     setSaving(true);
     setError('');
@@ -792,6 +816,13 @@ export default function ReviewSubmission() {
   const correctionBreakdown = reviewData?.correctionBreakdown ?? submission?.correctionBreakdown;
   const validatedCount = eventRows.filter((row) => row.validation.status !== 'pending').length;
   const hasUnsavedEdits = referenceDirty || submissionDirty;
+  const canSendBackForRelabel =
+    !isPreview &&
+    canEditReference &&
+    reference?.hasReference &&
+    assignment?.kind !== 'tutorial' &&
+    assignment?.kind !== 'pretest' &&
+    ['submitted', 'rejected', 'approved'].includes(submission?.status);
   const scoreLabel = reference?.hasReference
     ? 'Auto score (reference comparison)'
     : 'Correction score (manual review)';
@@ -884,6 +915,16 @@ export default function ReviewSubmission() {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Reference: {referenceEvents.length || reference.annotationCount} events · Matched {comparison.summary.matchedCount} ·
             Missing {comparison.summary.missingCount} · Extra {comparison.summary.extraCount}
+            {(comparison.matched || []).filter((item) => (item.frameDiff ?? 0) >= 2).length > 0 && (
+              <>
+                {' '}
+                ·{' '}
+                <strong style={{ color: '#fb923c' }}>
+                  {(comparison.matched || []).filter((item) => (item.frameDiff ?? 0) >= 2).length}{' '}
+                  ≥2f off
+                </strong>
+              </>
+            )}
             {comparison.summary.accuracy != null && ` · Accuracy ${comparison.summary.accuracy}%`}
             {canEditReference && referenceDirty && (
               <>
@@ -1062,6 +1103,7 @@ export default function ReviewSubmission() {
             submissionEvents={submissionEvents}
             referenceEvents={referenceEvents}
             eventRows={eventRows}
+            comparison={comparison}
             labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
             hasReference={reference?.hasReference || (canEditReference && referenceEvents.length > 0)}
             previewMode={isPreview}
@@ -1099,7 +1141,10 @@ export default function ReviewSubmission() {
                     {reference?.hasReference ? 'Auto score breakdown' : 'Correction score breakdown'}
                   </h4>
                   {autoScoreBreakdown.map((item) => (
-                    <div key={`${item.eventType}-${item.referenceIndex}`} className="labeling-score-row">
+                    <div
+                      key={`${item.eventType}-${item.referenceIndex}`}
+                      className={`labeling-score-row${(item.frameDiff ?? 0) >= 2 ? ' score-row-off' : ''}`}
+                    >
                       <span className="type">{item.eventType}</span>
                       <span className="meta">
                         {item.status === 'missing'
@@ -1174,7 +1219,34 @@ export default function ReviewSubmission() {
                   Save submission or reference edits before approving.
                 </p>
               )}
+              {canSendBackForRelabel && (
+                <p className="alert alert-info" style={{ marginBottom: '1rem' }}>
+                  Reference was updated or criteria changed? Send the task back so the labeller can
+                  compare against reference and re-label.
+                </p>
+              )}
               <div className="review-final-actions">
+                {canSendBackForRelabel && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => sendBackForRelabel(false)}
+                      disabled={saving || hasUnsavedEdits}
+                    >
+                      Send back for re-label
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => sendBackForRelabel(true)}
+                      disabled={saving || hasUnsavedEdits}
+                      title="Clear existing labels so labeller starts fresh"
+                    >
+                      Send back (clear labels)
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   className="btn btn-danger btn-sm"

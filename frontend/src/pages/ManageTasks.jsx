@@ -115,6 +115,7 @@ function TaskEditor({ task, groups, onSave, onCancel, saving, adminUser = true }
     groupId: task.groupId?._id || task.groupId || '',
     taskPrice: task.taskPrice ?? 1,
     challengeNote: task.challengeNote || '',
+    allowLabellerReference: Boolean(task.allowLabellerReference),
     tutorialIntro: task.tutorialIntro || '',
     tutorialSteps: task.tutorialSteps?.length ? [...task.tutorialSteps] : [{ ...EMPTY_STEP }],
   });
@@ -151,6 +152,7 @@ function TaskEditor({ task, groups, onSave, onCancel, saving, adminUser = true }
       groupId: form.groupId || null,
       taskPrice: isFreeTaskKind(form.kind) ? 0 : Number(form.taskPrice),
       challengeNote: form.challengeNote,
+      allowLabellerReference: form.kind === 'production' ? form.allowLabellerReference : false,
       tutorialIntro: form.tutorialIntro,
       tutorialSteps: form.tutorialSteps.map((s) => ({
         frameTime: Number(s.frameTime) || 0,
@@ -231,6 +233,16 @@ function TaskEditor({ task, groups, onSave, onCancel, saving, adminUser = true }
                 value={form.challengeNote}
                 onChange={(e) => setForm({ ...form, challengeNote: e.target.value })}
               />
+            </label>
+            <label className="form-grid-full review-checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.allowLabellerReference}
+                onChange={(e) =>
+                  setForm({ ...form, allowLabellerReference: e.target.checked })
+                }
+              />
+              Allow labellers to view reference and label by comparison (for updated criteria / re-label tasks)
             </label>
           </>
         )}

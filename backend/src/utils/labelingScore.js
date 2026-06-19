@@ -15,7 +15,12 @@ function getFrameDiff(timeDiffMs, fps = 25) {
 }
 
 function computeLabelingScore(submissionEvents = [], referenceEvents = [], fps = 25) {
-  const comparison = compareAnnotations(submissionEvents, referenceEvents);
+  const comparison = compareAnnotations(
+    submissionEvents,
+    referenceEvents,
+    DEFAULT_TOLERANCE_MS,
+    fps
+  );
   const totalReference = comparison.summary.totalReference;
 
   if (totalReference === 0) {

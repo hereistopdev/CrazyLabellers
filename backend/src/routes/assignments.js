@@ -17,6 +17,12 @@ const {
   getPretestClipsWithProgress,
   getLabelingTestClipProgress,
 } = require('../services/onboarding');
+const { loadReferenceForClip } = require('../services/referenceStorage');
+const {
+  assertLabellerProductionAssignment,
+  canLabellerRelabelWithReference,
+  isAssignedLabeller,
+} = require('../services/labellerAssignmentAccess');
 
 const router = express.Router();
 
@@ -194,6 +200,36 @@ router.post('/:id/claim', auth, async (req, res) => {
   }
 });
 
+router.get('/:id/reference', auth, async (req, res) => {
+  try {
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (isLabeller(req.user) && !isAdmin(req.user)) {
+      if (!assignment.allowLabellerReference) {
+        return res.status(403).json({ message: 'Reference is not shared for this task' });
+      }
+      assertLabellerProductionAssignment(req.user, assignment);
+    }
+
+    if (!assignment.clipId) {
+      return res.json({ hasReference: false, events: [], annotationCount: 0 });
+    }
+
+    const reference = await loadReferenceForClip(assignment.clipId, 'post');
+    return res.json({
+      hasReference: reference.hasReference,
+      events: reference.events || [],
+      annotationCount: reference.annotationCount || 0,
+      variant: reference.variant || 'post',
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.message });
+  }
+});
+
 router.get('/:id/export', auth, async (req, res) => {
   try {
     const assignment = await VideoAssignment.findById(req.params.id);
@@ -308,12 +344,26 @@ router.put('/:id/labels', auth, async (req, res) => {
     if (
       isLabeller(req.user) &&
       !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest'
+    ) {
+      if (!isAssignedLabeller(req.user, assignment)) {
+        return res.status(403).json({ message: 'You are not assigned to this video' });
+      }
+    }
+
+    const normalizedEvents = normalizeLabelEvents(events || []);
+
+    const existing = await LabelSubmission.findOne({
+      assignmentId: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
       assignment.kind === 'pretest'
     ) {
-      const existing = await LabelSubmission.findOne({
-        assignmentId: req.params.id,
-        userId: req.user._id,
-      });
       if (existing?.status === 'submitted') {
         if (status === 'submitted') {
           return res.status(400).json({ message: 'Pre-test already submitted for this clip' });
@@ -324,7 +374,43 @@ router.put('/:id/labels', auth, async (req, res) => {
       }
     }
 
-    const normalizedEvents = normalizeLabelEvents(events || []);
+    const relabelWithReference = canLabellerRelabelWithReference(assignment, existing);
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest' &&
+      existing?.status === 'submitted' &&
+      !relabelWithReference
+    ) {
+      return res.status(403).json({
+        message: 'This submission is awaiting review and cannot be edited',
+      });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest' &&
+      existing?.status === 'approved'
+    ) {
+      return res.status(403).json({ message: 'This submission is approved and cannot be edited' });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest' &&
+      existing?.status === 'rejected' &&
+      !assignment.allowLabellerReference
+    ) {
+      return res.status(403).json({
+        message: 'This task was rejected. Contact an admin if you need to re-label.',
+      });
+    }
 
     const updatePayload = {
       events: normalizedEvents,
@@ -333,6 +419,9 @@ router.put('/:id/labels', auth, async (req, res) => {
 
     if (status === 'submitted') {
       updatePayload.originalEvents = normalizedEvents;
+      if (relabelWithReference && existing?.status === 'rejected') {
+        updatePayload.eventValidations = [];
+      }
     }
 
     const submission = await LabelSubmission.findOneAndUpdate(
@@ -389,7 +478,7 @@ router.put('/:id/labels', auth, async (req, res) => {
     } else if (
       assignment.kind !== 'tutorial' &&
       assignment.kind !== 'pretest' &&
-      assignment.status === 'assigned'
+      (assignment.status === 'assigned' || assignment.status === 'rejected')
     ) {
       await patchAssignment(assignment._id, { status: 'in_progress' });
     }

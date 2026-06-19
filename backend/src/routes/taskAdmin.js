@@ -114,6 +114,7 @@ router.patch('/:id', auth, requireVideoManagerAccess, async (req, res) => {
       groupId,
       taskPrice,
       challengeNote,
+      allowLabellerReference,
       gameTime,
       durationSeconds,
       tutorialIntro,
@@ -143,6 +144,9 @@ router.patch('/:id', auth, requireVideoManagerAccess, async (req, res) => {
     if (sortOrder !== undefined) update.sortOrder = parseInt(sortOrder, 10) || 0;
     if (groupId !== undefined && effectiveKind !== 'tutorial') update.groupId = groupId || null;
     if (challengeNote !== undefined) update.challengeNote = String(challengeNote);
+    if (allowLabellerReference !== undefined) {
+      update.allowLabellerReference = Boolean(allowLabellerReference);
+    }
     if (gameTime !== undefined) update.gameTime = String(gameTime);
     if (durationSeconds !== undefined) update.durationSeconds = parseInt(durationSeconds, 10) || 30;
     if (tutorialIntro !== undefined) update.tutorialIntro = String(tutorialIntro);

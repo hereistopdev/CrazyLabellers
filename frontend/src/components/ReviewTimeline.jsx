@@ -23,12 +23,61 @@ function isOnFrame(eventTime, currentTime, fps) {
   return Math.round(eventTime * fps) === Math.round(currentTime * fps);
 }
 
-function comparisonLabel(status) {
+function comparisonLabel(status, frameDiff) {
   if (status === 'match') return 'Match';
-  if (status === 'close') return 'Close';
+  if (status === 'close') return '1f off';
+  if (status === 'off') return `${frameDiff ?? '2+'}f off`;
   if (status === 'extra') return 'Extra';
   if (status === 'unmatched') return 'No ref';
+  if (status === 'missing') return 'Missing';
   return null;
+}
+
+function referenceComparisonStatus(referenceIndex, comparisonByReference) {
+  const entry = comparisonByReference?.get(referenceIndex);
+  if (!entry) return null;
+  return entry.status;
+}
+
+const FRAME_NUDGE_STEPS = [1, 3, 5];
+
+function FrameNudgeRow({ onNudge, disabled = false }) {
+  if (!onNudge) return null;
+
+  return (
+    <div className="frame-nudge-row" role="group" aria-label="Nudge event frame">
+      {FRAME_NUDGE_STEPS.map((step) => (
+        <div key={step} className="frame-nudge-group">
+          <button
+            type="button"
+            className="frame-nudge-btn"
+            onClick={() => onNudge(-step)}
+            disabled={disabled}
+            title={`Back ${step} frame${step === 1 ? '' : 's'}`}
+            aria-label={`Back ${step} frame${step === 1 ? '' : 's'}`}
+          >
+            <span className="frame-nudge-icon" aria-hidden>
+              ‹
+            </span>
+            <span className="frame-nudge-step">{step}</span>
+          </button>
+          <button
+            type="button"
+            className="frame-nudge-btn"
+            onClick={() => onNudge(step)}
+            disabled={disabled}
+            title={`Forward ${step} frame${step === 1 ? '' : 's'}`}
+            aria-label={`Forward ${step} frame${step === 1 ? '' : 's'}`}
+          >
+            <span className="frame-nudge-step">{step}</span>
+            <span className="frame-nudge-icon" aria-hidden>
+              ›
+            </span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function EventMarkers({
@@ -39,6 +88,7 @@ function EventMarkers({
   fps,
   onSeek,
   eventRowsByIndex,
+  comparisonByReference,
 }) {
   return items.map(({ event, eventIndex }, index) => {
     const active = isOnFrame(event.frameTime, currentTime, fps);
@@ -47,7 +97,19 @@ function EventMarkers({
         ? eventRowsByIndex?.get(eventIndex)
         : null;
     const validationStatus = row?.validation?.status || 'pending';
-    const comparisonStatus = row?.comparisonStatus;
+    const comparisonStatus =
+      variant === 'submission'
+        ? row?.comparisonStatus
+        : referenceComparisonStatus(eventIndex, comparisonByReference);
+    const frameDiff = row?.frameDiff ?? comparisonByReference?.get(eventIndex)?.frameDiff;
+    const titleSuffix =
+      comparisonStatus === 'off' && frameDiff != null
+        ? ` · ${frameDiff}f off ref`
+        : comparisonStatus === 'close'
+          ? ' · 1f off ref'
+          : comparisonStatus === 'missing'
+            ? ' · missing from submission'
+            : '';
 
     return (
       <button
@@ -63,7 +125,7 @@ function EventMarkers({
           .filter(Boolean)
           .join(' ')}
         style={{ left: `${toPercent(event.frameTime, maxTime)}%` }}
-        title={`${event.eventType} @ ${formatTime(event.frameTime)}`}
+        title={`${event.eventType} @ ${formatTime(event.frameTime)}${titleSuffix}`}
         onClick={(e) => {
           e.stopPropagation();
           onSeek(event.frameTime);
@@ -83,6 +145,7 @@ export default function ReviewTimeline({
   submissionEvents = [],
   referenceEvents = [],
   eventRows = [],
+  comparison = null,
   labellerName = 'Submitter',
   onSeek,
   onValidateEvent,
@@ -225,6 +288,57 @@ export default function ReviewTimeline({
     [eventRows]
   );
 
+  const comparisonByReference = useMemo(() => {
+    const map = new Map();
+    for (const item of comparison?.matched || []) {
+      const status = item.matchQuality === 'off' ? 'off' : item.matchQuality === 'close' ? 'close' : 'match';
+      map.set(item.referenceIndex, { status, frameDiff: item.frameDiff });
+    }
+    for (const item of comparison?.missingInSubmission || []) {
+      map.set(item.referenceIndex, { status: 'missing' });
+    }
+    return map;
+  }, [comparison]);
+
+  const attentionItems = useMemo(() => {
+    if (!comparison) return [];
+    const items = [];
+
+    for (const item of comparison.matched || []) {
+      if ((item.frameDiff ?? 0) >= 2) {
+        items.push({
+          key: `off-${item.submissionIndex}-${item.referenceIndex}`,
+          label: `${item.eventType} · ${item.frameDiff}f off`,
+          time: item.submissionTime,
+          kind: 'off',
+        });
+      }
+    }
+    for (const item of comparison.missingInSubmission || []) {
+      items.push({
+        key: `missing-${item.referenceIndex}`,
+        label: `${item.eventType} · missing`,
+        time: item.frameTime,
+        kind: 'missing',
+      });
+    }
+    for (const item of comparison.extraInSubmission || []) {
+      items.push({
+        key: `extra-${item.submissionIndex}`,
+        label: `${item.eventType} · extra`,
+        time: item.frameTime,
+        kind: 'extra',
+      });
+    }
+
+    return items.sort((a, b) => a.time - b.time);
+  }, [comparison]);
+
+  const offFrameCount = useMemo(
+    () => (comparison?.matched || []).filter((item) => (item.frameDiff ?? 0) >= 2).length,
+    [comparison]
+  );
+
   const submissionOnFrame = useMemo(
     () => sortedSubmission.filter(({ event }) => isOnFrame(event.frameTime, currentTime, fps)),
     [sortedSubmission, currentTime, fps]
@@ -270,55 +384,29 @@ export default function ReviewTimeline({
     : null;
 
   const renderSubmissionEditActions = (eventIndex) => (
-    <div className="review-frame-actions review-frame-actions-submission">
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={() => onChangeSubmissionEventType?.(eventIndex)}
+    <div className="review-frame-edit-toolbar">
+      <div className="review-frame-edit-row">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => onChangeSubmissionEventType?.(eventIndex)}
+          disabled={saving}
+        >
+          Change type
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger btn-sm"
+          onClick={() => onDeleteSubmissionEvent?.(eventIndex)}
+          disabled={saving}
+        >
+          Delete
+        </button>
+      </div>
+      <FrameNudgeRow
         disabled={saving}
-      >
-        Change type
-      </button>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={() => onNudgeSubmissionEvent?.(-1, eventIndex)}
-        disabled={saving}
-      >
-        −1f
-      </button>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={() => onNudgeSubmissionEvent?.(1, eventIndex)}
-        disabled={saving}
-      >
-        +1f
-      </button>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={() => onNudgeSubmissionEvent?.(-5, eventIndex)}
-        disabled={saving}
-      >
-        −5f
-      </button>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={() => onNudgeSubmissionEvent?.(5, eventIndex)}
-        disabled={saving}
-      >
-        +5f
-      </button>
-      <button
-        type="button"
-        className="btn btn-danger btn-sm"
-        onClick={() => onDeleteSubmissionEvent?.(eventIndex)}
-        disabled={saving}
-      >
-        Delete
-      </button>
+        onNudge={(delta) => onNudgeSubmissionEvent?.(delta, eventIndex)}
+      />
     </div>
   );
 
@@ -403,6 +491,11 @@ export default function ReviewTimeline({
         )}
         <span className="review-timeline-current">
           Frame {Math.round(currentTime * fps)} · {formatTime(currentTime)}
+          {offFrameCount > 0 && (
+            <span className="review-timeline-attention-count">
+              · {offFrameCount} event{offFrameCount !== 1 ? 's' : ''} ≥2f off
+            </span>
+          )}
         </span>
         <div className="review-timeline-zoom-controls">
           <span className="review-timeline-zoom-hint">Scroll to zoom</span>
@@ -505,12 +598,36 @@ export default function ReviewTimeline({
                 maxTime={maxTime}
                 fps={fps}
                 onSeek={onSeek}
+                comparisonByReference={comparisonByReference}
               />
             </div>
           </div>
         </div>
         </div>
       </div>
+
+      {!previewMode && attentionItems.length > 0 && (
+        <div className="review-attention-panel">
+          <div className="review-attention-title">
+            Compare issues — {offFrameCount} matched event{offFrameCount !== 1 ? 's' : ''} ≥2 frames off
+            {comparison?.summary?.missingCount > 0 &&
+              ` · ${comparison.summary.missingCount} missing`}
+            {comparison?.summary?.extraCount > 0 && ` · ${comparison.summary.extraCount} extra`}
+          </div>
+          <div className="review-attention-chips">
+            {attentionItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`review-attention-chip review-attention-chip-${item.kind}`}
+                onClick={() => onSeek(item.time)}
+              >
+                {item.label} @ {formatTime(item.time)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="review-frame-panel">
         <div className="review-frame-panel-title">Current frame</div>
@@ -526,8 +643,11 @@ export default function ReviewTimeline({
                   </span>
                   {primaryRow?.comparisonStatus && (
                     <span className={`comparison-badge comparison-${primaryRow.comparisonStatus}`}>
-                      {comparisonLabel(primaryRow.comparisonStatus)}
-                      {primaryRow.match?.timeDiffMs != null && ` ±${primaryRow.match.timeDiffMs}ms`}
+                      {comparisonLabel(primaryRow.comparisonStatus, primaryRow.frameDiff)}
+                      {primaryRow.match?.timeDiffMs != null &&
+                        primaryRow.comparisonStatus !== 'off' &&
+                        primaryRow.comparisonStatus !== 'close' &&
+                        ` ±${primaryRow.match.timeDiffMs}ms`}
                     </span>
                   )}
                   {canEditSubmission && renderSubmissionEditActions(primarySubmission.index)}
@@ -544,7 +664,7 @@ export default function ReviewTimeline({
                         </span>
                         {row?.comparisonStatus && (
                           <span className={`comparison-badge comparison-${row.comparisonStatus}`}>
-                            {comparisonLabel(row.comparisonStatus)}
+                            {comparisonLabel(row.comparisonStatus, row.frameDiff)}
                           </span>
                         )}
                         {canEditSubmission && renderSubmissionEditActions(index)}
@@ -587,33 +707,17 @@ export default function ReviewTimeline({
               <span className="review-frame-empty">No reference event</span>
             )}
             {canEditReference && (
-              <div className="review-frame-actions review-frame-actions-reference">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={onAddReferenceEvent}
-                  disabled={saving}
-                >
-                  Add
-                </button>
-                {referenceOnFrame[0] && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onNudgeReferenceEvent?.(-1)}
-                      disabled={saving}
-                    >
-                      −1f
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onNudgeReferenceEvent?.(1)}
-                      disabled={saving}
-                    >
-                      +1f
-                    </button>
+              <div className="review-frame-edit-toolbar">
+                <div className="review-frame-edit-row">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={onAddReferenceEvent}
+                    disabled={saving}
+                  >
+                    Add
+                  </button>
+                  {referenceOnFrame[0] && (
                     <button
                       type="button"
                       className="btn btn-danger btn-sm"
@@ -622,14 +726,20 @@ export default function ReviewTimeline({
                     >
                       Delete
                     </button>
-                  </>
+                  )}
+                </div>
+                {referenceOnFrame[0] && (
+                  <FrameNudgeRow
+                    disabled={saving}
+                    onNudge={onNudgeReferenceEvent}
+                  />
                 )}
               </div>
             )}
           </div>
 
           {primarySubmission && !previewMode && (
-            <div className="review-frame-actions">
+            <div className="review-frame-actions review-frame-validate-actions">
               <button
                 type="button"
                 className={`btn btn-sm${primaryRow?.validation?.status === 'valid' ? ' btn-primary' : ' btn-secondary'}`}

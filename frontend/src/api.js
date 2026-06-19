@@ -137,6 +137,7 @@ export const api = {
       body: JSON.stringify({ pretestCount }),
     }),
   getAssignment: (id) => request(`/assignments/${id}`),
+  getAssignmentReference: (id) => request(`/assignments/${id}/reference`),
   claimAssignment: (id) => request(`/assignments/${id}/claim`, { method: 'POST' }),
   getLabels: (id) => request(`/assignments/${id}/labels`),
   saveLabels: (id, body) =>
@@ -206,6 +207,11 @@ export const api = {
   updateReviewSubmissionEvents: (id, body) =>
     request(`/review/submissions/${id}/events`, {
       method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  reopenSubmissionForRelabel: (id, body = {}) =>
+    request(`/review/submissions/${id}/reopen-for-relabel`, {
+      method: 'POST',
       body: JSON.stringify(body),
     }),
   getValidators: () => request('/admin/validators'),

@@ -1,5 +1,5 @@
 const { loadReferenceForClip } = require('./referenceStorage');
-const { compareAnnotations, buildEventReviewRows } = require('../utils/compareAnnotations');
+const { compareAnnotations, buildEventReviewRows, DEFAULT_TOLERANCE_MS } = require('../utils/compareAnnotations');
 const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { ensureSubmissionAutoScore } = require('./grading');
 
@@ -14,14 +14,16 @@ async function buildScoreReviewPayload(submission, assignment, { ensureScore = t
 
   const submissionEvents = normalizeLabelEvents(submission?.events || []);
   const referenceEvents = normalizeLabelEvents(reference.events || []);
+  const fps = assignment?.fps || 25;
   const comparison = reference.hasReference
-    ? compareAnnotations(submissionEvents, referenceEvents)
+    ? compareAnnotations(submissionEvents, referenceEvents, DEFAULT_TOLERANCE_MS, fps)
     : null;
 
   const eventRows = buildEventReviewRows(
     submissionEvents,
     comparison,
-    submission?.eventValidations || []
+    submission?.eventValidations || [],
+    fps
   );
 
   return {
