@@ -1,4 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 40;
+const ZOOM_WHEEL_FACTOR = 0.14;
+
+function clampZoom(value) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -97,7 +105,107 @@ export default function ReviewTimeline({
   onNudgeSubmissionEvent,
   onSaveSubmission,
 }) {
+  const viewportRef = useRef(null);
+  const contentRef = useRef(null);
+  const pendingScrollRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
+
   const playheadPercent = toPercent(currentTime, maxTime);
+
+  const zoomAroundPlayhead = useCallback(
+    (nextZoom) => {
+      const viewport = viewportRef.current;
+      const content = contentRef.current;
+      if (!viewport || !content || !maxTime) {
+        setZoom(nextZoom);
+        return;
+      }
+
+      const playheadRatio = currentTime / maxTime;
+      const oldContentWidth = content.offsetWidth;
+      const playheadInContent = playheadRatio * oldContentWidth;
+      const cursorInViewport = playheadInContent - viewport.scrollLeft;
+
+      pendingScrollRef.current = {
+        anchorRatio: playheadRatio,
+        cursorInViewport: Math.max(0, Math.min(viewport.clientWidth, cursorInViewport)),
+      };
+      setZoom(nextZoom);
+    },
+    [currentTime, maxTime]
+  );
+
+  const resetZoom = useCallback(() => {
+    pendingScrollRef.current = null;
+    setZoom(1);
+    if (viewportRef.current) {
+      viewportRef.current.scrollLeft = 0;
+    }
+  }, []);
+
+  const handleTimelineWheel = useCallback(
+    (e) => {
+      if (!maxTime) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const viewport = viewportRef.current;
+      const content = contentRef.current;
+      if (!viewport || !content) return;
+
+      const zoomIn = e.deltaY < 0;
+      const multiplier = zoomIn ? 1 + ZOOM_WHEEL_FACTOR : 1 / (1 + ZOOM_WHEEL_FACTOR);
+      const nextZoom = clampZoom(zoom * multiplier);
+      if (nextZoom === zoom) return;
+
+      const viewportRect = viewport.getBoundingClientRect();
+      const oldContentWidth = content.offsetWidth;
+      const cursorInViewport = e.clientX - viewportRect.left;
+      const cursorInContent = viewport.scrollLeft + cursorInViewport;
+      const anchorRatio = oldContentWidth > 0 ? cursorInContent / oldContentWidth : 0;
+
+      pendingScrollRef.current = { anchorRatio, cursorInViewport };
+      setZoom(nextZoom);
+    },
+    [maxTime, zoom]
+  );
+
+  useLayoutEffect(() => {
+    if (!pendingScrollRef.current) return;
+    const { anchorRatio, cursorInViewport } = pendingScrollRef.current;
+    pendingScrollRef.current = null;
+
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content) return;
+
+    const maxScroll = Math.max(0, content.offsetWidth - viewport.clientWidth);
+    viewport.scrollLeft = Math.max(
+      0,
+      Math.min(maxScroll, anchorRatio * content.offsetWidth - cursorInViewport)
+    );
+  }, [zoom]);
+
+  useLayoutEffect(() => {
+    if (zoom <= 1) return;
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content || !maxTime) return;
+
+    const playheadX = (currentTime / maxTime) * content.offsetWidth;
+    const left = viewport.scrollLeft;
+    const right = left + viewport.clientWidth;
+    const margin = 48;
+
+    if (playheadX < left + margin) {
+      viewport.scrollLeft = Math.max(0, playheadX - margin);
+    } else if (playheadX > right - margin) {
+      viewport.scrollLeft = Math.min(
+        content.offsetWidth - viewport.clientWidth,
+        playheadX - viewport.clientWidth + margin
+      );
+    }
+  }, [currentTime, maxTime, zoom]);
 
   const sortedSubmission = useMemo(
     () =>
@@ -139,16 +247,20 @@ export default function ReviewTimeline({
   }, [referenceOnFrame, submissionOnFrame]);
 
   const ticks = useMemo(() => {
-    const count = 5;
+    if (!maxTime) return [];
+    const count = Math.min(80, Math.max(5, Math.round(5 * zoom)));
     return Array.from({ length: count + 1 }, (_, i) => ({
       time: (maxTime / count) * i,
       percent: (i / count) * 100,
     }));
-  }, [maxTime]);
+  }, [maxTime, zoom]);
 
   const seekFromLane = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
+    const content = contentRef.current;
+    if (!content || !maxTime) return;
+    const rect = content.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / rect.width));
     onSeek(ratio * maxTime);
   };
 
@@ -156,6 +268,59 @@ export default function ReviewTimeline({
   const primaryRow = primarySubmission
     ? eventRowsByIndex.get(primarySubmission.index)
     : null;
+
+  const renderSubmissionEditActions = (eventIndex) => (
+    <div className="review-frame-actions review-frame-actions-submission">
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => onChangeSubmissionEventType?.(eventIndex)}
+        disabled={saving}
+      >
+        Change type
+      </button>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => onNudgeSubmissionEvent?.(-1, eventIndex)}
+        disabled={saving}
+      >
+        −1f
+      </button>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => onNudgeSubmissionEvent?.(1, eventIndex)}
+        disabled={saving}
+      >
+        +1f
+      </button>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => onNudgeSubmissionEvent?.(-5, eventIndex)}
+        disabled={saving}
+      >
+        −5f
+      </button>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => onNudgeSubmissionEvent?.(5, eventIndex)}
+        disabled={saving}
+      >
+        +5f
+      </button>
+      <button
+        type="button"
+        className="btn btn-danger btn-sm"
+        onClick={() => onDeleteSubmissionEvent?.(eventIndex)}
+        disabled={saving}
+      >
+        Delete
+      </button>
+    </div>
+  );
 
   return (
     <div className="review-timeline">
@@ -239,6 +404,39 @@ export default function ReviewTimeline({
         <span className="review-timeline-current">
           Frame {Math.round(currentTime * fps)} · {formatTime(currentTime)}
         </span>
+        <div className="review-timeline-zoom-controls">
+          <span className="review-timeline-zoom-hint">Scroll to zoom</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm review-timeline-zoom-btn"
+            onClick={() => zoomAroundPlayhead(clampZoom(zoom / (1 + ZOOM_WHEEL_FACTOR)))}
+            disabled={zoom <= MIN_ZOOM}
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <span className="review-timeline-zoom-level">{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm review-timeline-zoom-btn"
+            onClick={() => zoomAroundPlayhead(clampZoom(zoom * (1 + ZOOM_WHEEL_FACTOR)))}
+            disabled={zoom >= MAX_ZOOM}
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={resetZoom}
+            disabled={zoom <= MIN_ZOOM}
+            title="Reset zoom"
+          >
+            Fit
+          </button>
+        </div>
       </div>
 
       <div className="review-timeline-shell">
@@ -250,8 +448,17 @@ export default function ReviewTimeline({
           <div className="review-timeline-label review-timeline-label-reference">Reference</div>
         </div>
 
-        <div className="review-timeline-lanes">
-          <div className="review-timeline-ruler">
+        <div
+          className="review-timeline-viewport"
+          ref={viewportRef}
+          onWheel={handleTimelineWheel}
+        >
+          <div
+            className="review-timeline-lanes"
+            ref={contentRef}
+            style={{ width: `${zoom * 100}%` }}
+          >
+          <div className="review-timeline-ruler" onClick={seekFromLane} role="presentation">
             {ticks.map((tick) => (
               <span
                 key={tick.time}
@@ -302,6 +509,7 @@ export default function ReviewTimeline({
             </div>
           </div>
         </div>
+        </div>
       </div>
 
       <div className="review-frame-panel">
@@ -309,71 +517,42 @@ export default function ReviewTimeline({
         <div className="review-frame-compare">
           <div className="review-frame-card review-frame-card-submission">
             <span className="review-frame-card-label">Submitter</span>
-            {primarySubmission ? (
-              <>
-                <strong className="review-frame-event-name">{primarySubmission.event.eventType}</strong>
-                <span className="review-frame-event-time">
-                  {formatTime(primarySubmission.event.frameTime)}
-                </span>
-                {primaryRow?.comparisonStatus && (
-                  <span className={`comparison-badge comparison-${primaryRow.comparisonStatus}`}>
-                    {comparisonLabel(primaryRow.comparisonStatus)}
-                    {primaryRow.match?.timeDiffMs != null && ` ±${primaryRow.match.timeDiffMs}ms`}
+            {submissionOnFrame.length > 0 ? (
+              submissionOnFrame.length === 1 ? (
+                <>
+                  <strong className="review-frame-event-name">{primarySubmission.event.eventType}</strong>
+                  <span className="review-frame-event-time">
+                    {formatTime(primarySubmission.event.frameTime)}
                   </span>
-                )}
-                {canEditSubmission && (
-                  <div className="review-frame-actions review-frame-actions-submission">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={onChangeSubmissionEventType}
-                      disabled={saving}
-                    >
-                      Change type
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onNudgeSubmissionEvent?.(-1)}
-                      disabled={saving}
-                    >
-                      −1f
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onNudgeSubmissionEvent?.(1)}
-                      disabled={saving}
-                    >
-                      +1f
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onNudgeSubmissionEvent?.(-5)}
-                      disabled={saving}
-                    >
-                      −5f
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onNudgeSubmissionEvent?.(5)}
-                      disabled={saving}
-                    >
-                      +5f
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={onDeleteSubmissionEvent}
-                      disabled={saving}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </>
+                  {primaryRow?.comparisonStatus && (
+                    <span className={`comparison-badge comparison-${primaryRow.comparisonStatus}`}>
+                      {comparisonLabel(primaryRow.comparisonStatus)}
+                      {primaryRow.match?.timeDiffMs != null && ` ±${primaryRow.match.timeDiffMs}ms`}
+                    </span>
+                  )}
+                  {canEditSubmission && renderSubmissionEditActions(primarySubmission.index)}
+                </>
+              ) : (
+                <div className="review-frame-event-list">
+                  {submissionOnFrame.map(({ event, index }) => {
+                    const row = eventRowsByIndex.get(index);
+                    return (
+                      <div key={`sub-frame-${index}-${event.eventType}`} className="review-frame-event-item">
+                        <strong className="review-frame-event-name">{event.eventType}</strong>
+                        <span className="review-frame-event-time">
+                          {formatTime(event.frameTime)}
+                        </span>
+                        {row?.comparisonStatus && (
+                          <span className={`comparison-badge comparison-${row.comparisonStatus}`}>
+                            {comparisonLabel(row.comparisonStatus)}
+                          </span>
+                        )}
+                        {canEditSubmission && renderSubmissionEditActions(index)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             ) : (
               <>
                 <span className="review-frame-empty">No submitter event</span>

@@ -65,18 +65,18 @@ const testQuestions = [
     options: ['Clearance', 'Recovery', 'Pass', 'Block'],
     correctAnswer: 'Clearance',
     explanation:
-      'Clearance is judged by removing immediate threat toward own goal — not where the ball ends up or who gets it next.',
+      'Clearance is judged by removing immediate threat toward own goal inside the goal section — not where the ball ends up or who gets it next.',
     difficulty: 'hard',
   },
 
   // ── Clearance vs Pass ──
   {
     scenario:
-      'Pressed on the byline, a fullback lashes the ball toward the halfway line with no teammate in that direction.',
+      'Pressed outside the penalty area in their own half, a fullback hoofs the ball toward the halfway line with no teammate in that direction.',
     options: ['Clearance', 'Pass', 'Recovery', 'Ball Out of Play'],
-    correctAnswer: 'Clearance',
+    correctAnswer: 'Pass',
     explanation:
-      'No deliberate target teammate — intent is to relieve pressure, not pass. Common mistake: labeling pressured hoofs as passes.',
+      'Clearance only applies in the goal section (penalty area). Outside the box, a hoof upfield without a teammate is not clearance — use Pass if deliberate, or mark subsequent possession events.',
     difficulty: 'hard',
   },
   {
@@ -85,7 +85,7 @@ const testQuestions = [
     options: ['Pass', 'Clearance', 'Recovery', 'Take on'],
     correctAnswer: 'Pass',
     explanation:
-      'Deliberate ball to a identified teammate is a pass, even under pressure. Clearance requires no target and removing danger.',
+      'Deliberate ball to an identified teammate is a pass, even under pressure. Clearance requires removing danger inside the goal section with no target.',
     difficulty: 'hard',
   },
   {
@@ -266,7 +266,7 @@ const testQuestions = [
     options: ['Pass', 'Aerial Duel', 'Clearance', 'Shot'],
     correctAnswer: 'Pass',
     explanation:
-      'Intentional header to a teammate without aerial contest is a pass. Aerial duel requires competing for the same ball in the air.',
+      'Intentional header to a teammate without aerial contest is a pass. Aerial duel requires competing for the same ball in the air with at least one jump.',
     difficulty: 'hard',
   },
   {
@@ -275,7 +275,7 @@ const testQuestions = [
     options: ['Aerial Duel', 'Pass', 'Clearance', 'Recovery'],
     correctAnswer: 'Aerial Duel',
     explanation:
-      'Competing for the same ball in the air — record aerial duel for each player involved.',
+      'Competing for the same ball in the air with at least one jump — record aerial duel for each player involved.',
     difficulty: 'medium',
   },
   {
@@ -284,7 +284,7 @@ const testQuestions = [
     options: ['Pass', 'Aerial Duel', 'Recovery', 'Clearance'],
     correctAnswer: 'Pass',
     explanation:
-      'No contest in the air — intentional header to teammate is pass, not aerial duel.',
+      'No contest in the air and no jump — intentional header to teammate is pass, not aerial duel.',
     difficulty: 'hard',
   },
 
@@ -344,7 +344,7 @@ const testQuestions = [
     options: ['Goal', 'Shot', 'Ball Out of Play', 'Save'],
     correctAnswer: 'Goal',
     explanation:
-      'Whole ball crossed the line between posts and under the bar — Goal at −1f (and Shot at 0f on contact).',
+      'Whole ball crossed the line between posts and under the bar — Goal at −2f (and Shot at 0f on contact). Add Referee at 0f if the whistle is shown.',
     difficulty: 'medium',
   },
   {
@@ -418,11 +418,11 @@ const testQuestions = [
   // ── Clearance vs Block ──
   {
     scenario:
-      'A defender facing their own goal kicks the ball upfield while an attacker closes down. No shot was taken.',
+      'A defender inside the penalty area facing their own goal kicks the ball upfield while an attacker closes down. No shot was taken.',
     options: ['Clearance', 'Block', 'Recovery', 'Pass'],
     correctAnswer: 'Clearance',
     explanation:
-      'Removing pressure/threat toward own goal without a shot to block — clearance.',
+      'Removing pressure/threat toward own goal inside the goal section without a shot to block — clearance.',
     difficulty: 'hard',
   },
 
@@ -433,7 +433,7 @@ const testQuestions = [
     options: ['Foul', 'Tackle', 'Recovery', 'Interception'],
     correctAnswer: 'Foul',
     explanation:
-      'Referee stops play for the infringement — mark Foul (+1 frame from contact). Use Referee for the confirming whistle. Advantage situations are excluded.',
+      'Referee stops play for the infringement — mark Foul (+2 frames from contact). Use Referee for the confirming whistle. Advantage situations are excluded.',
     difficulty: 'medium',
   },
 
@@ -462,7 +462,7 @@ const testQuestions = [
     options: ['Goal', 'Block', 'Shot', 'Recovery'],
     correctAnswer: 'Goal',
     explanation:
-      'Whole ball crossed the goal line between the posts — Goal at −1 frame, with Shot at 0f on contact.',
+      'Whole ball crossed the goal line between the posts — Goal at −2 frames, with Shot at 0f on contact.',
     difficulty: 'hard',
   },
   {
@@ -491,7 +491,7 @@ const testQuestions = [
     options: ['Pass Received', 'Pass', 'Shot', 'Tackle'],
     correctAnswer: 'Pass Received',
     explanation:
-      'Pass Received, Recovery, Interception, Ball Out of Play, Save, and Goal use −1 frame. Pass, Shot, and Tackle use 0 frames at contact.',
+      'Pass Received, Recovery, Interception, Ball Out of Play, and Save use −1 frame. Goal uses −2 frames. Pass, Shot, and Tackle use 0 frames at contact.',
     difficulty: 'medium',
   },
   {
@@ -507,7 +507,7 @@ const testQuestions = [
       'A striker beats a defender one frame after taking first touch. Which event marks the beat?',
     options: ['Take on', 'Pass Received', 'Tackle', 'Recovery'],
     correctAnswer: 'Take on',
-    explanation: 'Take on uses +1 frame — mark one frame after the visible beat past the opponent.',
+    explanation: 'Take on uses +2 frames — mark two frames after the visible beat past the opponent.',
     difficulty: 'hard',
   },
   {
@@ -526,7 +526,7 @@ const testQuestions = [
     options: ['Referee', 'Foul', 'Ball Out of Play', 'Substitution'],
     correctAnswer: 'Referee',
     explanation:
-      'Referee marks the confirming whistle at 0 frames. Foul marks the infringement at +1 frame — a separate earlier event.',
+      'Referee marks the confirming whistle at 0 frames. Foul marks the infringement at +2 frames — a separate earlier event. Referee also pairs with Ball Out of Play and Goal.',
     difficulty: 'medium',
   },
   {
@@ -535,7 +535,7 @@ const testQuestions = [
     options: ['Invalid', 'Ball Out of Play', 'Pass Received', 'Substitution'],
     correctAnswer: 'Invalid',
     explanation:
-      'Ball exchanged with a non-player (staff, ball crew) is Invalid at 0 frames — not a pass or out-of-play line crossing.',
+      'Ball exchanged with a non-player (staff, ball crew) is Invalid at 0 frames. Pair with Ball Out of Play at −1f if the ball crosses the line.',
     difficulty: 'hard',
   },
   {
@@ -561,7 +561,43 @@ const testQuestions = [
     options: ['Foul', 'Referee', 'Tackle', 'Recovery'],
     correctAnswer: 'Foul',
     explanation:
-      'Mark Foul at +1 frame from the infringement contact. Add Referee later if the whistle is shown.',
+      'Mark Foul at +2 frames from the infringement contact. Add Referee later if the whistle is shown.',
+    difficulty: 'hard',
+  },
+  {
+    scenario:
+      'A high ball drops between two midfielders. Both stay on the ground and neither jumps, though the ball is clearly in the air.',
+    options: ['Aerial Duel', 'Pass Received', 'Recovery', 'Pass'],
+    correctAnswer: 'Recovery',
+    explanation:
+      'Do not mark Aerial Duel if no player jumps or clearly attempts to jump, even when the ball is in the air. Mark possession (Recovery/Pass Received) if clear.',
+    difficulty: 'hard',
+  },
+  {
+    scenario:
+      'After a three-player scramble, one midfielder cleanly traps the ball at their feet while the others are no longer contesting.',
+    options: ['Recovery', 'Pass Received', 'Tackle', 'Interception'],
+    correctAnswer: 'Recovery',
+    explanation:
+      'When more than two players are together, only mark Recovery or Pass Received once it is clear which player possessed the ball.',
+    difficulty: 'hard',
+  },
+  {
+    scenario:
+      'The referee blows the whistle to restart play after the ball went out for a throw-in.',
+    options: ['Referee', 'Ball Out of Play', 'Foul', 'Substitution'],
+    correctAnswer: 'Referee',
+    explanation:
+      'Referee at 0f confirms the stoppage. Pair with Ball Out of Play (−1f when the ball crossed the line).',
+    difficulty: 'medium',
+  },
+  {
+    scenario:
+      'A ball boy kicks a replacement ball onto the pitch and it rolls over the touchline before any player touches it.',
+    options: ['Invalid', 'Ball Out of Play', 'Pass', 'Recovery'],
+    correctAnswer: 'Invalid',
+    explanation:
+      'Non-player involvement is Invalid at 0f. Also mark Ball Out of Play at −1f when the ball crosses the line.',
     difficulty: 'hard',
   },
   {

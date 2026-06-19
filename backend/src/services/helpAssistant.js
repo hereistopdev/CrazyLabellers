@@ -105,6 +105,10 @@ function loadFrameOffsetContext() {
     frameOffsetSummary,
     ...groupLines,
     'Immediate follow-up: after Pass Received / Recovery / Interception with no pause, the second event (Pass, Shot, Clearance, Take on) uses 0 frames instead of its normal offset.',
+    'Clearance only applies inside the goal section (penalty area). Do not mark Clearance outside it.',
+    'Do not mark Aerial Duel if no player jumps, even when the ball is in the air.',
+    'Recovery / Pass Received: when more than two players are together, only mark if possession is clear.',
+    'Event pairs: Invalid + Ball Out of Play; Referee + Foul, Ball Out of Play, or Goal.',
   ].join('\n');
 }
 

@@ -66,6 +66,7 @@ export default function ReviewSubmission() {
   const [submissionDirty, setSubmissionDirty] = useState(false);
   const [showSubmissionEventPicker, setShowSubmissionEventPicker] = useState(false);
   const [submissionPickerMode, setSubmissionPickerMode] = useState('add');
+  const [submissionEditIndex, setSubmissionEditIndex] = useState(null);
   const [savingSubmission, setSavingSubmission] = useState(false);
 
   const assignment = reviewData?.assignment;
@@ -187,18 +188,16 @@ export default function ReviewSubmission() {
   }, [canEditReference]);
 
   useEffect(() => {
-    if (!canEditReference) return;
+    if (!canEditReference || referenceDirty) return;
     const events = reviewData?.reference?.events || [];
     setEditableReferenceEvents(events);
-    setReferenceDirty(false);
-  }, [canEditReference, reviewData?.reference?.events, reviewData?.reference?.annotationCount, assignment?._id]);
+  }, [canEditReference, referenceDirty, reviewData?.reference?.events, reviewData?.reference?.annotationCount, assignment?._id]);
 
   useEffect(() => {
-    if (!canEditSubmission) return;
+    if (!canEditSubmission || submissionDirty) return;
     const events = reviewData?.submission?.events || [];
     setEditableSubmissionEvents(events);
-    setSubmissionDirty(false);
-  }, [canEditSubmission, reviewData?.submission?.events, reviewData?.submission?.updatedAt, submission?._id]);
+  }, [canEditSubmission, submissionDirty, reviewData?.submission?.events, reviewData?.submission?.updatedAt, submission?._id]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -421,11 +420,15 @@ export default function ReviewSubmission() {
     setShowSubmissionEventPicker(true);
   }, [pauseAll]);
 
-  const openChangeSubmissionEventPicker = useCallback(() => {
-    pauseAll();
-    setSubmissionPickerMode('change');
-    setShowSubmissionEventPicker(true);
-  }, [pauseAll]);
+  const openChangeSubmissionEventPicker = useCallback(
+    (eventIndex) => {
+      pauseAll();
+      setSubmissionEditIndex(typeof eventIndex === 'number' ? eventIndex : null);
+      setSubmissionPickerMode('change');
+      setShowSubmissionEventPicker(true);
+    },
+    [pauseAll]
+  );
 
   const addReferenceEvent = useCallback(
     (eventType) => {
@@ -503,10 +506,16 @@ export default function ReviewSubmission() {
     (eventType) => {
       pauseAll();
       const frame = Math.round(currentTime * fps);
+      const targetIndex = submissionEditIndex;
       let changed = false;
+      let changedTime = currentTime;
       const next = editableSubmissionEvents
-        .map((event) => {
-          if (Math.round(event.frameTime * fps) !== frame) return event;
+        .map((event, index) => {
+          const matchesIndex =
+            targetIndex != null
+              ? index === targetIndex
+              : Math.round(event.frameTime * fps) === frame;
+          if (!matchesIndex) return event;
           changed = true;
           const playheadTime = event.playheadTime ?? event.frameTime;
           const followUpRule = lastSubmissionEvent
@@ -519,6 +528,7 @@ export default function ReviewSubmission() {
           };
           const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
           const offset = resolveFrameOffset(eventType, options);
+          changedTime = adjustedTime;
           return {
             ...event,
             eventType,
@@ -533,16 +543,18 @@ export default function ReviewSubmission() {
 
       if (!changed) {
         setShowSubmissionEventPicker(false);
+        setSubmissionEditIndex(null);
         return;
       }
 
       setEditableSubmissionEvents(next);
       setSubmissionDirty(true);
       setShowSubmissionEventPicker(false);
-      setMessage(`Changed to ${eventType} at ${formatTime(next.find((e) => Math.round(e.frameTime * fps) === frame)?.frameTime ?? currentTime)} (unsaved)`);
+      setSubmissionEditIndex(null);
+      setMessage(`Changed to ${eventType} at ${formatTime(changedTime)} (unsaved)`);
       setTimeout(() => setMessage(''), 2500);
     },
-    [pauseAll, currentTime, fps, lastSubmissionEvent, editableSubmissionEvents]
+    [pauseAll, currentTime, fps, lastSubmissionEvent, editableSubmissionEvents, submissionEditIndex]
   );
 
   const handleSubmissionEventSelect = useCallback(
@@ -556,25 +568,35 @@ export default function ReviewSubmission() {
     [submissionPickerMode, changeSubmissionEventTypeAtFrame, addSubmissionEvent]
   );
 
-  const deleteSubmissionEventAtFrame = useCallback(() => {
-    const frame = Math.round(currentTime * fps);
-    const next = editableSubmissionEvents.filter(
-      (event) => Math.round(event.frameTime * fps) !== frame
-    );
-    if (next.length === editableSubmissionEvents.length) return;
-    setEditableSubmissionEvents(next);
-    setSubmissionDirty(true);
-    setMessage('Removed submission event on this frame (unsaved)');
-    setTimeout(() => setMessage(''), 2000);
-  }, [currentTime, fps, editableSubmissionEvents]);
+  const deleteSubmissionEventAtFrame = useCallback(
+    (eventIndex) => {
+      const frame = Math.round(currentTime * fps);
+      const next =
+        typeof eventIndex === 'number'
+          ? editableSubmissionEvents.filter((_, index) => index !== eventIndex)
+          : editableSubmissionEvents.filter(
+              (event) => Math.round(event.frameTime * fps) !== frame
+            );
+      if (next.length === editableSubmissionEvents.length) return;
+      setEditableSubmissionEvents(next);
+      setSubmissionDirty(true);
+      setMessage('Removed submission event (unsaved)');
+      setTimeout(() => setMessage(''), 2000);
+    },
+    [currentTime, fps, editableSubmissionEvents]
+  );
 
   const nudgeSubmissionEventAtFrame = useCallback(
-    (frameDelta) => {
+    (frameDelta, eventIndex) => {
       const frame = Math.round(currentTime * fps);
       let changed = false;
       const next = editableSubmissionEvents
-        .map((event) => {
-          if (Math.round(event.frameTime * fps) !== frame) return event;
+        .map((event, index) => {
+          const matchesIndex =
+            typeof eventIndex === 'number'
+              ? index === eventIndex
+              : Math.round(event.frameTime * fps) === frame;
+          if (!matchesIndex) return event;
           changed = true;
           return {
             ...event,
@@ -1043,7 +1065,7 @@ export default function ReviewSubmission() {
             labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
             hasReference={reference?.hasReference || (canEditReference && referenceEvents.length > 0)}
             previewMode={isPreview}
-            saving={saving || savingReference || savingSubmission || submissionDirty}
+            saving={saving || savingReference || savingSubmission}
             canEditReference={canEditReference}
             referenceDirty={referenceDirty}
             onAddReferenceEvent={openReferenceEventPicker}

@@ -12,7 +12,7 @@ export const eventPairs = [
     title: 'Shot → Goal',
     description: 'Goal always comes with a Shot when the ball crosses the line.',
     events: ['Shot', 'Goal'],
-    rule: 'Shot at 0f on contact. Goal at −1f when the whole ball crosses the line (same play).',
+    rule: 'Shot at 0f on contact. Goal at −2f when the whole ball crosses the line (same play). Pair Referee at 0f when the whistle confirms the goal.',
   },
   {
     id: 'shot-outcome',
@@ -26,7 +26,28 @@ export const eventPairs = [
     title: 'Foul → Referee',
     description: 'When shown, mark the infringement and the confirming whistle separately.',
     events: ['Foul', 'Referee'],
-    rule: 'Foul at +1f on contact. Referee at 0f when the whistle stops play.',
+    rule: 'Foul at +2f on contact. Referee at 0f when the whistle stops play.',
+  },
+  {
+    id: 'out-referee',
+    title: 'Ball Out of Play → Referee',
+    description: 'When the whistle confirms the restart after the ball left the field.',
+    events: ['Ball Out of Play', 'Referee'],
+    rule: 'Ball Out of Play at −1f when the ball crosses the line. Referee at 0f on the confirming whistle.',
+  },
+  {
+    id: 'goal-referee',
+    title: 'Goal → Referee',
+    description: 'When the whistle confirms a goal after the ball crossed the line.',
+    events: ['Goal', 'Referee'],
+    rule: 'Goal at −2f on the line crossing. Referee at 0f when the whistle confirms the goal.',
+  },
+  {
+    id: 'invalid-out',
+    title: 'Invalid → Ball Out of Play',
+    description: 'When a non-player exchange causes the ball to leave the field.',
+    events: ['Invalid', 'Ball Out of Play'],
+    rule: 'Invalid at 0f on the exchange with staff/ball crew. Ball Out of Play at −1f when the ball crosses the line.',
   },
 ];
 
@@ -38,9 +59,10 @@ export const sequenceFlows = [
     steps: [
       { event: 'Pass', note: '0f — ball leaves passer' },
       { event: 'Pass Received', note: '−1f — teammate gains control' },
-      { event: 'Take on', note: 'Optional +1f — beat defender', optional: true },
+      { event: 'Take on', note: 'Optional +2f — beat defender', optional: true },
       { event: 'Shot', note: '0f — shooting contact' },
-      { event: 'Save / Goal', note: 'Save −1f or Goal −1f on line', branch: true },
+      { event: 'Save / Goal', note: 'Save −1f or Goal −2f on line', branch: true },
+      { event: 'Referee', note: '0f — whistle confirms goal', optional: true },
     ],
   },
   {
@@ -63,8 +85,9 @@ export const sequenceFlows = [
     steps: [
       { event: 'Tackle / Interception', note: 'Tackle 0f; Interception −1f', branch: true },
       { event: 'Block', note: '0f — stop opposing shot', optional: true },
-      { event: 'Clearance', note: '0f — clear danger' },
+      { event: 'Clearance', note: '0f — clear danger in goal section only' },
       { event: 'Ball Out of Play', note: '−1f if ball leaves pitch', optional: true },
+      { event: 'Referee', note: '0f — whistle confirms restart', optional: true },
     ],
   },
   {
@@ -73,7 +96,8 @@ export const sequenceFlows = [
     subtitle: 'Dead ball or contested high ball',
     steps: [
       { event: 'Ball Out of Play', note: '−1f — ball crossed line' },
-      { event: 'Aerial Duel', note: 'Each contesting player gets an event' },
+      { event: 'Referee', note: '0f — whistle confirms restart', optional: true },
+      { event: 'Aerial Duel', note: 'Each jumping/contesting player — skip if no one jumps' },
       { event: 'Pass / Clearance / Shot', note: 'Outcome of duel', branch: true },
       { event: 'Pass Received', note: 'If teammate gains control', optional: true },
     ],
@@ -83,7 +107,7 @@ export const sequenceFlows = [
     title: 'Foul & Stoppage',
     subtitle: 'Infringement and restart',
     steps: [
-      { event: 'Foul', note: '+1f — infringement contact' },
+      { event: 'Foul', note: '+2f — infringement contact' },
       { event: 'Referee', note: '0f — whistle confirms foul', optional: true },
       { event: 'Ball Out of Play', note: '−1f if ball leaves pitch', optional: true },
       { event: 'Substitution', note: 'During stoppage in play', optional: true },
@@ -96,7 +120,7 @@ export const sequenceFlows = [
     steps: [
       { event: 'Highlight Start', note: '0f — leave main live board' },
       { event: 'Highlight End', note: '0f — main board resumes' },
-      { event: 'Invalid', note: '0f — ball to/from non-player', optional: true },
+      { event: 'Invalid', note: '0f — ball to/from non-player; pair Ball Out of Play if ball leaves field', optional: true },
     ],
   },
 ];
@@ -140,9 +164,9 @@ export const decisionTrees = [
         example: 'Leg or body stops a shot — block is for shots only',
       },
       {
-        condition: 'Clears immediate threat toward own goal',
+        condition: 'Clears immediate threat toward own goal inside the penalty area',
         answer: 'Clearance',
-        example: 'Kick or header to safety under pressure',
+        example: 'Kick or header to safety under pressure in the goal section',
       },
     ],
   },
@@ -157,9 +181,14 @@ export const decisionTrees = [
         example: 'Through ball, cross to striker, short pass',
       },
       {
-        condition: 'Eliminates immediate threat to own goal',
+        condition: 'Eliminates immediate threat to own goal inside the goal section',
         answer: 'Clearance',
-        example: 'Defender clears under pressure — who gets it next does not matter',
+        example: 'Defender clears under pressure in the penalty area — who gets it next does not matter',
+      },
+      {
+        condition: 'Similar action outside the goal section',
+        answer: 'Pass / Recovery',
+        example: 'Do not mark Clearance outside the penalty area',
       },
     ],
   },
@@ -174,9 +203,9 @@ export const decisionTrees = [
         example: 'Corner or long ball — label each contesting player',
       },
       {
-        condition: 'Unchallenged control in the air',
-        answer: 'Pass / Pass Received',
-        example: 'Free header or chest control with no contest',
+        condition: 'Unchallenged control in the air, or ball in air but no jump',
+        answer: 'Pass / Pass Received / nothing',
+        example: 'Free header with no contest, or airborne ball with players on the ground — do not mark Aerial Duel',
       },
     ],
   },
@@ -188,12 +217,12 @@ export const decisionTrees = [
       {
         condition: 'Player commits the infringement (trip, push, etc.)',
         answer: 'Foul',
-        example: 'Mark Foul at +1 frame from the contact you pause on',
+        example: 'Mark Foul at +2 frames from the contact you pause on',
       },
       {
-        condition: 'Referee blows the whistle to confirm the foul',
+        condition: 'Referee blows the whistle to confirm foul, ball out, or goal',
         answer: 'Referee',
-        example: 'Separate event at 0f on the whistle — not a substitute for Foul',
+        example: 'Separate event at 0f on the whistle — pair with Foul, Ball Out of Play, or Goal',
       },
     ],
   },
@@ -205,12 +234,12 @@ export const decisionTrees = [
       {
         condition: 'Ball crosses the touchline or goal line and play stops',
         answer: 'Ball Out of Play',
-        example: 'Mark −1f when the whole ball has crossed the line',
+        example: 'Mark −1f when the whole ball has crossed the line; add Referee at 0f if whistle shown',
       },
       {
         condition: 'Player gives or receives the ball from a non-player (staff, ball crew)',
         answer: 'Invalid',
-        example: 'Sideline exchange with non-participants — not a normal throw-in to a teammate',
+        example: 'Sideline exchange with non-participants — pair with Ball Out of Play if the ball leaves the field',
       },
     ],
   },
@@ -254,15 +283,21 @@ export const timingRules = [
   },
   {
     rule: '−1 frame — slightly before moment',
-    events: ['Pass Received', 'Recovery', 'Interception', 'Ball Out of Play', 'Save', 'Goal'],
-    detail: 'Mark one frame before the moment (control gained, ball out, save, goal line).',
+    events: ['Pass Received', 'Recovery', 'Interception', 'Ball Out of Play', 'Save'],
+    detail: 'Mark one frame before control gained, ball out, or save contact.',
     offset: -1,
   },
   {
-    rule: '+1 frame — slightly after moment',
+    rule: '−2 frames — two frames before moment',
+    events: ['Goal'],
+    detail: 'Mark two frames before the whole ball crosses the goal line.',
+    offset: -2,
+  },
+  {
+    rule: '+2 frames — two frames after moment',
     events: ['Take on', 'Foul'],
-    detail: 'Mark one frame after the take-on beat or foul contact.',
-    offset: 1,
+    detail: 'Mark two frames after the take-on beat or foul contact.',
+    offset: 2,
   },
   {
     rule: 'Immediate follow-up (0 frames)',

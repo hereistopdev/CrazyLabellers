@@ -10,14 +10,14 @@ const OFFICIAL_DEFINITIONS = {
   Interception: 'A player intercepts an opposing team pass between two opposing players.',
   'Ball Out of Play': 'The ball goes out of play.',
   Clearance:
-    'A player clears the ball to safety by kick or header and eliminates immediate threat towards his/her own goal, regardless of who gains possession afterwards.',
+    'A player clears the ball to safety by kick or header and eliminates immediate threat toward his/her own goal within the goal section (penalty area / defensive box). Do not mark Clearance outside the goal section — use Pass, Recovery, or Ball Out of Play instead.',
   'Take on':
     'Situations in which a player in control of the ball moves past an opponent player. Awarded to the offensive player who performs the take-on.',
   Substitution:
     'Refers to the event when a player enters the match to replace a teammate. This occurs during a stoppage in play.',
   Block: 'A player blocks a shot by an opposing player.',
   'Aerial Duel':
-    'An aerial duel occurs when two or more players attempt to gain possession of the ball in the air, typically using their head, for example after a long goal kick or a cross. At least one player must jump or clearly attempt to jump in order to contest the ball in the air. The key criterion is that the players are competing for the same ball, with physical contact or a visible attempt to win the ball. A separate event is recorded for each player involved in the duel.',
+    'An aerial duel occurs when two or more players attempt to gain possession of the ball in the air, typically using their head, for example after a long goal kick or a cross. At least one player must jump or clearly attempt to jump in order to contest the ball in the air. Do not mark Aerial Duel if no player jumps or clearly attempts to jump, even when the ball is in the air. The key criterion is that the players are competing for the same ball, with physical contact or a visible attempt to win the ball. A separate event is recorded for each player involved in the duel.',
   Shot:
     'A Shot is an attempt made by a player to score a goal by striking or directing the ball towards the opponent\'s goal.',
   Save: 'When the goalkeeper stops the ball from entering the net after a shot.',
@@ -30,9 +30,9 @@ const OFFICIAL_DEFINITIONS = {
   'Highlight End':
     'Mark when non-main-board footage ends and live match action resumes on the main game board.',
   Referee:
-    'Mark when the referee blows the whistle to confirm a foul and stop play. Use after the Foul event when the infringement is confirmed by the official whistle (not for advantage or offside).',
+    'Mark when the referee blows the whistle to confirm a stoppage in play. Pair with Foul (infringement confirmed), Ball Out of Play (restart after the ball left the field), or Goal (goal confirmed). Use at 0 frames on the whistle — not for advantage or offside.',
   Invalid:
-    'Mark when a player receives or throws/kicks the ball to or from someone who is not an on-pitch player — e.g. ball to/from coaching staff, ball boy, or other non-player personnel at the touchline.',
+    'Mark when a player receives or throws/kicks the ball to or from someone who is not an on-pitch player — e.g. ball to/from coaching staff, ball boy, or other non-player personnel at the touchline. Pair with Ball Out of Play when the ball leaves the field as part of that exchange.',
 };
 
 const terminologies = [
@@ -49,16 +49,16 @@ const terminologies = [
     title: 'Pass Received',
     order: 2,
     definition: OFFICIAL_DEFINITIONS['Pass Received'],
-    criteria: ['Teammate deliberately passed the ball', 'Receiver gains control'],
-    commonMistakes: ['Marking at the same frame as Pass', 'Marking when the pass is played, not received'],
+    criteria: ['Teammate deliberately passed the ball', 'Receiver gains control', 'When more than two players are together, only mark if it is clear which player possessed the ball'],
+    commonMistakes: ['Marking at the same frame as Pass', 'Marking when the pass is played, not received', 'Marking when possession is unclear in a crowded contest'],
   },
   {
     eventType: 'Recovery',
     title: 'Recovery',
     order: 3,
     definition: OFFICIAL_DEFINITIONS.Recovery,
-    criteria: ['No team had possession, or ball came from an opponent without a tackle contest'],
-    commonMistakes: ['Labeling an interception as recovery', 'Labeling a tackle as recovery'],
+    criteria: ['No team had possession, or ball came from an opponent without a tackle contest', 'When more than two players are together, only mark if it is clear which player possessed the ball'],
+    commonMistakes: ['Labeling an interception as recovery', 'Labeling a tackle as recovery', 'Marking when possession is unclear in a crowded contest'],
   },
   {
     eventType: 'Tackle',
@@ -81,16 +81,16 @@ const terminologies = [
     title: 'Ball Out of Play',
     order: 6,
     definition: OFFICIAL_DEFINITIONS['Ball Out of Play'],
-    criteria: ['Ball has left the field of play'],
-    commonMistakes: ['Marking when the player kicks it instead of when it goes out'],
+    criteria: ['Ball has left the field of play', 'Pair with Referee when the whistle confirms the restart'],
+    commonMistakes: ['Marking when the player kicks it instead of when it goes out', 'Forgetting Referee when the whistle is shown'],
   },
   {
     eventType: 'Clearance',
     title: 'Clearance',
     order: 7,
     definition: OFFICIAL_DEFINITIONS.Clearance,
-    criteria: ['Immediate threat to own goal is removed', 'Who gains possession afterwards does not matter'],
-    commonMistakes: ['Labeling a targeted pass as clearance', 'Labeling a block as clearance'],
+    criteria: ['Immediate threat to own goal is removed', 'Action occurs within the goal section (penalty area)', 'Who gains possession afterwards does not matter'],
+    commonMistakes: ['Labeling a targeted pass as clearance', 'Labeling a block as clearance', 'Marking clearance outside the goal section'],
   },
   {
     eventType: 'Take on',
@@ -124,9 +124,10 @@ const terminologies = [
     criteria: [
       'Two or more players compete for the same ball in the air',
       'At least one player jumps or clearly attempts to jump',
+      'Do not mark if no one jumps, even when the ball is in the air',
       'Record a separate event for each player involved',
     ],
-    commonMistakes: ['Marking an unchallenged header as aerial duel', 'Recording only one player in a contested duel'],
+    commonMistakes: ['Marking an unchallenged header as aerial duel', 'Recording only one player in a contested duel', 'Marking aerial duel when players stay on the ground'],
   },
   {
     eventType: 'Shot',
@@ -167,6 +168,7 @@ const terminologies = [
     criteria: [
       'Whole ball crosses goal line between posts and under crossbar',
       'Always label Shot at the same time as Goal',
+      'Pair with Referee when the whistle confirms the goal',
     ],
     commonMistakes: ['Marking only Goal without Shot', 'Marking celebration instead of ball crossing line'],
   },
@@ -201,13 +203,13 @@ const terminologies = [
     order: 18,
     definition: OFFICIAL_DEFINITIONS.Referee,
     criteria: [
-      'Referee whistle confirms a foul',
-      'Play is stopped for the infringement',
+      'Referee whistle confirms a stoppage',
+      'Pair with Foul, Ball Out of Play, or Goal when the whistle confirms that event',
       'Not used for advantage or offside',
     ],
     commonMistakes: [
       'Marking Referee instead of Foul at the contact frame',
-      'Marking for every whistle including restarts without a foul',
+      'Omitting Referee after Ball Out of Play or Goal when the whistle is shown',
     ],
   },
   {
@@ -218,10 +220,11 @@ const terminologies = [
     criteria: [
       'Ball goes to or from a non-player (staff, ball crew, etc.)',
       'Exchange is at the touchline or sideline with non-participants',
+      'Pair with Ball Out of Play when the ball leaves the field in that exchange',
     ],
     commonMistakes: [
       'Labeling a normal throw-in to a teammate as Invalid',
-      'Confusing with Ball Out of Play when the ball leaves the field',
+      'Marking only Invalid without Ball Out of Play when the ball crosses the line',
     ],
   },
 ];

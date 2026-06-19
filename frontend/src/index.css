@@ -2481,10 +2481,56 @@ tbody tr:hover {
 
 .review-timeline-lanes {
   position: relative;
-  min-width: 0;
+  min-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+}
+
+.review-timeline-viewport {
+  position: relative;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  border-radius: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.review-timeline-viewport::-webkit-scrollbar {
+  height: 8px;
+}
+
+.review-timeline-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+}
+
+.review-timeline-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.review-timeline-zoom-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-right: 0.15rem;
+}
+
+.review-timeline-zoom-level {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  min-width: 2.75rem;
+  text-align: center;
+}
+
+.review-timeline-zoom-btn {
+  min-width: 1.75rem;
+  padding-inline: 0.45rem;
 }
 
 .review-timeline-lanes-col {

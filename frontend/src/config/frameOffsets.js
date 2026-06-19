@@ -18,9 +18,9 @@ export const FRAME_OFFSETS = {
   Interception: -1,
   'Ball Out of Play': -1,
   Save: -1,
-  Goal: -1,
-  'Take on': 1,
-  Foul: 1,
+  Goal: -2,
+  'Take on': 2,
+  Foul: 2,
 };
 
 export const FRAME_OFFSET_DEFAULT = 0;
@@ -61,7 +61,7 @@ export const immediateFollowUpRules = [
     secondOffset: 0,
     title: 'Receive → immediate take on',
     detail:
-      'Receiver takes first touch straight at a defender. Pass Received at −1; Take on at first touch (0), not +1.',
+      'Receiver takes first touch straight at a defender. Pass Received at −1; Take on at first touch (0), not +2.',
   },
   {
     id: 'recovery-pass',
@@ -91,7 +91,7 @@ export const immediateFollowUpRules = [
     secondOffset: 0,
     title: 'Recovery → immediate clearance',
     detail:
-      'Loose ball cleared on first touch. Recovery at −1; Clearance at contact (0).',
+      'Loose ball cleared on first touch in the goal section. Recovery at −1; Clearance at contact (0).',
   },
   {
     id: 'interception-shot',
@@ -160,11 +160,16 @@ export const frameOffsetRules = [
   {
     event: '−1 frame — slightly before moment',
     offset: -1,
-    detail: 'Pass Received, Recovery, Interception, Ball Out of Play, Save, Goal',
+    detail: 'Pass Received, Recovery, Interception, Ball Out of Play, Save',
   },
   {
-    event: '+1 frame — slightly after moment',
-    offset: 1,
+    event: '−2 frames — two frames before moment',
+    offset: -2,
+    detail: 'Goal',
+  },
+  {
+    event: '+2 frames — two frames after moment',
+    offset: 2,
     detail: 'Take on, Foul',
     exception:
       'Immediate follow-up after Pass Received / Recovery / Interception uses 0 for the second event (Pass, Shot, Clearance, Take on).',
@@ -172,12 +177,13 @@ export const frameOffsetRules = [
 ];
 
 export const frameOffsetSummary =
-  '0f: Pass, Tackle, Clearance, Block, Aerial Duel, Shot · −1f: Pass Received, Recovery, Interception, Ball Out of Play, Save, Goal · +1f: Take on, Foul';
+  '0f: Pass, Tackle, Clearance, Block, Aerial Duel, Shot · −1f: Pass Received, Recovery, Interception, Ball Out of Play, Save · −2f: Goal · +2f: Take on, Foul';
 
 const OFFSET_GROUP_META = {
+  [-2]: 'Two frames before the moment',
   [-1]: 'One frame before the moment',
   0: 'Contact / visible action',
-  1: 'One frame after the moment',
+  2: 'Two frames after the moment',
 };
 
 /** Per-event rows for diagrams and terminology (single source from FRAME_OFFSETS). */
@@ -189,7 +195,7 @@ export const frameOffsetEventTable = Object.entries(FRAME_OFFSETS)
   }))
   .sort((a, b) => a.offset - b.offset || a.eventType.localeCompare(b.eventType));
 
-export const frameOffsetGroups = [-1, 0, 1].map((offset) => ({
+export const frameOffsetGroups = [-2, -1, 0, 2].map((offset) => ({
   offset,
   label: OFFSET_GROUP_META[offset],
   events: frameOffsetEventTable.filter((row) => row.offset === offset).map((row) => row.eventType),
