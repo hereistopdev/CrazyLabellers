@@ -5,6 +5,7 @@ import { formatMoney } from '../utils/money';
 import StarRating from '../components/StarRating';
 import PaymentAddressesForm from '../components/PaymentAddressesSection';
 import LabellerBadges from '../components/LabellerBadges';
+import LabellerEarningsSection from '../components/LabellerEarningsSection';
 
 function formatBadgeDate(value) {
   if (!value) return '—';
@@ -50,36 +51,38 @@ export default function Earnings() {
 
       <div className="stat-grid">
         <div className="stat-card highlight-earnings">
-          <div className="value">{formatMoney(data.summary.totalEarnings, currency)}</div>
-          <div className="label">Total earned</div>
+          <div className="value">{formatMoney(data.summary.pendingBalance, currency)}</div>
+          <div className="label">Current balance (unpaid)</div>
         </div>
         <div className="stat-card">
-          <div className="value">{formatMoney(data.summary.taskEarnings ?? 0, currency)}</div>
-          <div className="label">From tasks</div>
+          <div className="value">{formatMoney(data.summary.lifetimeEarned, currency)}</div>
+          <div className="label">Lifetime earned</div>
         </div>
         <div className="stat-card">
-          <div className="value">{formatMoney(data.summary.badgeEarnings ?? 0, currency)}</div>
-          <div className="label">From badges</div>
+          <div className="value">{formatMoney(data.summary.lifetimePaidOut, currency)}</div>
+          <div className="label">Lifetime paid out</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{formatMoney(data.summary.pendingTaskEarnings ?? 0, currency)}</div>
+          <div className="label">Pending from tasks</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{formatMoney(data.summary.pendingBadgeEarnings ?? 0, currency)}</div>
+          <div className="label">Pending from badges</div>
         </div>
         <div className="stat-card">
           <div className="value">{data.summary.totalPoints}</div>
           <div className="label">Total review points</div>
         </div>
-        <div className="stat-card">
-          <div className="value">{data.summary.tasksCompleted}</div>
-          <div className="label">Tasks approved</div>
-        </div>
-        <div className="stat-card">
-          <div className="value">{data.summary.badgesEarned ?? 0}</div>
-          <div className="label">Badges earned</div>
-        </div>
       </div>
 
       {data.summary.pendingReview > 0 && (
         <div className="alert alert-info">
-          {data.summary.pendingReview} task(s) submitted and awaiting admin review.
+          {data.summary.pendingReview} task(s) submitted and awaiting review.
         </div>
       )}
+
+      <LabellerEarningsSection className="card" earnings={data} currency={currency} />
 
       {badgeData && (
         <section className="card labeller-badges-panel">
@@ -138,6 +141,11 @@ export default function Earnings() {
                   </span>
                   <span>{t.eventsCount} events</span>
                   {t.taskPrice != null && <span>Up to {formatMoney(t.taskPrice, currency)}</span>}
+                  {t.earningsPaidOutAt ? (
+                    <span className="status-badge status-approved">paid out</span>
+                  ) : (
+                    t.earnings > 0 && <span className="status-badge status-pending">unpaid</span>
+                  )}
                   {t.reviewPoints != null && <span>{t.reviewPoints} review pts</span>}
                   {t.earnings > 0 && (
                     <span className="earnings-cell">{formatMoney(t.earnings, currency)}</span>

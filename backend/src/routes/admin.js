@@ -675,7 +675,7 @@ router.patch('/assignments/:id/price', auth, requireRole('admin'), async (req, r
       { new: true, runValidators: false }
     ).populate('assignedTo', 'name email status');
 
-    return res.json(assignment);
+    return res.json(updated);
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }

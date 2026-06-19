@@ -46,6 +46,8 @@ const labelSubmissionSchema = new mongoose.Schema(
     },
     reviewPoints: { type: Number, min: 0, max: 100 },
     earnings: { type: Number, default: 0 },
+    earningsPaidOutAt: { type: Date, default: null },
+    earningsPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'EarningsPayment', default: null },
     reviewedAt: { type: Date },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reviewerNotes: { type: String, default: '' },

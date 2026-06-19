@@ -249,6 +249,11 @@ export const api = {
   updateFinanceSettings: (body) =>
     request('/admin/finance/settings', { method: 'PATCH', body: JSON.stringify(body) }),
   getFinanceLabeller: (id) => request(`/admin/finance/labellers/${id}`),
+  clearLabellerEarnings: (id, body = {}) =>
+    request(`/admin/finance/labellers/${id}/clear-earnings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   getFinanceLabellers: () => request('/admin/finance/labellers'),
   getMyEarnings: () => request('/earnings/me'),
   getMyPaymentAddresses: () => request('/labellers/me/payment-addresses'),

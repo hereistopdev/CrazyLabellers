@@ -340,7 +340,8 @@ export default function ManageTasks() {
   const [tab, setTab] = useState(adminUser ? 'tutorial' : 'groups');
   const [groups, setGroups] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -348,33 +349,76 @@ export default function ManageTasks() {
   const [groupForm, setGroupForm] = useState({ name: '', description: '', sortOrder: 0 });
   const [editingGroupId, setEditingGroupId] = useState(null);
 
-  const loadGroups = () =>
-    api.getTaskGroups().then(setGroups).catch((err) => setError(err.message));
-
-  const loadTasks = (kind) => {
-    if (kind === 'groups') return Promise.resolve([]);
-    return api.getAdminTasks({ kind }).then(setTasks).catch((err) => setError(err.message));
+  const loadGroups = ({ silent = false } = {}) => {
+    if (!silent) {
+      setGroupsLoading(true);
+    }
+    return api
+      .getTaskGroups()
+      .then(setGroups)
+      .catch((err) => setError(err.message))
+      .finally(() => {
+        if (!silent) {
+          setGroupsLoading(false);
+        }
+      });
   };
 
-  const load = () => {
-    setLoading(true);
-    setError('');
-    Promise.all([loadGroups(), loadTasks(tab === 'groups' ? null : tab)])
-      .finally(() => setLoading(false));
+  const loadTasks = (kind, { silent = false } = {}) => {
+    if (kind === 'groups') return Promise.resolve([]);
+    if (!silent) {
+      setTasksLoading(true);
+    }
+    return api
+      .getAdminTasks({ kind })
+      .then(setTasks)
+      .catch((err) => setError(err.message))
+      .finally(() => {
+        if (!silent) {
+          setTasksLoading(false);
+        }
+      });
   };
 
   useEffect(() => {
-    load();
+    loadGroups({ silent: true });
+  }, []);
+
+  useEffect(() => {
+    setError('');
+    if (tab === 'groups') {
+      loadGroups();
+    } else {
+      loadTasks(tab);
+    }
   }, [tab]);
 
   const handleSaveTask = async (body) => {
     setSaving(true);
     setError('');
     try {
-      await api.updateAdminTask(editingId, body);
+      const updated = await api.updateAdminTask(editingId, body);
+      setTasks((prev) => {
+        const existing = prev.find((task) => task._id === editingId);
+        if (!existing) return prev;
+
+        const merged = {
+          ...existing,
+          ...updated,
+          hasReference: existing.hasReference,
+          submissionCount: existing.submissionCount,
+        };
+
+        if (merged.kind !== tab) {
+          return prev.filter((task) => task._id !== editingId);
+        }
+        return prev.map((task) => (task._id === editingId ? merged : task));
+      });
       setMessage('Task updated');
       setEditingId(null);
-      await loadTasks(tab);
+      if (body.groupId !== undefined) {
+        loadGroups({ silent: true });
+      }
       setTimeout(() => setMessage(''), 2500);
     } catch (err) {
       setError(err.message);
@@ -410,8 +454,20 @@ export default function ManageTasks() {
     if (!window.confirm('Delete this group? Tasks will be ungrouped.')) return;
     try {
       await api.deleteTaskGroup(id);
+      setGroups((prev) => prev.filter((group) => group._id !== id));
+      if (tab === 'production') {
+        setTasks((prev) =>
+          prev.map((task) => {
+            const groupKey = task.groupId?._id || task.groupId;
+            if (groupKey === id) {
+              return { ...task, groupId: null };
+            }
+            return task;
+          })
+        );
+      }
       setMessage('Group deleted');
-      load();
+      setTimeout(() => setMessage(''), 2500);
     } catch (err) {
       setError(err.message);
     }
@@ -454,7 +510,7 @@ export default function ManageTasks() {
 
   const taskTable = tab === 'production' ? productionTable : simpleTaskTable;
 
-  if (loading && tab !== 'groups' && tasks.length === 0 && groups.length === 0) {
+  if (tasksLoading && tab !== 'groups' && tasks.length === 0 && groups.length === 0) {
     return <div className="loading">Loading tasks...</div>;
   }
 
@@ -502,6 +558,10 @@ export default function ManageTasks() {
 
       {tab === 'groups' ? (
         <div className="manage-groups">
+          {groupsLoading && groups.length === 0 ? (
+            <p className="empty-cell">Loading groups…</p>
+          ) : (
+            <>
           <form className="card group-form" onSubmit={handleCreateGroup}>
             <h3>{editingGroupId ? 'Edit group' : 'New production group'}</h3>
             <div className="form-grid">
@@ -624,6 +684,8 @@ export default function ManageTasks() {
               totalCount={groupTable.totalCount}
             />
           </div>
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -735,7 +797,7 @@ export default function ManageTasks() {
               )}
             </TableToolbar>
 
-            {loading ? (
+            {tasksLoading ? (
               <p className="empty-cell">Loading tasks…</p>
             ) : tasks.length === 0 ? (
               <p className="empty-cell">

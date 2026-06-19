@@ -6,6 +6,7 @@ import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
 import { PaymentAddressesDisplay } from '../components/PaymentAddressesSection';
+import LabellerEarningsSection from '../components/LabellerEarningsSection';
 
 function payoutNetworksLabel(paymentAddresses) {
   if (!paymentAddresses) return 'None';
@@ -61,6 +62,22 @@ export default function FinanceDashboard() {
     }
   };
 
+  const refreshSelectedLabeller = async (labellerId) => {
+    const detail = await api.getFinanceLabeller(labellerId);
+    setSelectedLabeller(detail);
+    load();
+    return detail;
+  };
+
+  const handleClearEarnings = async (note) => {
+    if (!selectedLabeller?.labeller?._id) {
+      throw new Error('No labeller selected');
+    }
+    const result = await api.clearLabellerEarnings(selectedLabeller.labeller._id, { note });
+    await refreshSelectedLabeller(selectedLabeller.labeller._id);
+    return result;
+  };
+
   if (loading) return <div className="loading">Loading finance dashboard...</div>;
 
   const currency = data?.settings?.currency || 'USD';
@@ -69,7 +86,7 @@ export default function FinanceDashboard() {
     <div>
       <div className="page-header">
         <h1>Finance Dashboard</h1>
-        <p>Track labeller earnings, review points, and payment rates per task.</p>
+        <p>Track pending balances, payout history, and payment rates per task.</p>
         <Link to="/admin/labellers" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
           ← Manage labellers
         </Link>
@@ -78,17 +95,17 @@ export default function FinanceDashboard() {
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="stat-grid">
-        <div className="stat-card">
-          <div className="value">{formatMoney(data?.totalPaid, currency)}</div>
+        <div className="stat-card highlight-earnings">
+          <div className="value">{formatMoney(data?.totalPaidOut, currency)}</div>
           <div className="label">Total paid out</div>
+        </div>
+        <div className="stat-card">
+          <div className="value">{formatMoney(data?.lifetimeTaskEarnings, currency)}</div>
+          <div className="label">Lifetime task earnings</div>
         </div>
         <div className="stat-card">
           <div className="value">{data?.totalPointsAwarded || 0}</div>
           <div className="label">Total review points</div>
-        </div>
-        <div className="stat-card">
-          <div className="value">{data?.tasksReviewed || 0}</div>
-          <div className="label">Tasks reviewed</div>
         </div>
         <div className="stat-card">
           <div className="value">{data?.pendingReviews || 0}</div>
@@ -122,7 +139,7 @@ export default function FinanceDashboard() {
 
       <div className="finance-layout">
         <div className="card table-wrap">
-          <h3 style={{ padding: '1rem 1rem 0' }}>Labeller earnings</h3>
+          <h3 style={{ padding: '1rem 1rem 0' }}>Pending labeller balances</h3>
           <TableToolbar
             search={earningsTable.search}
             onSearchChange={earningsTable.setSearch}
@@ -150,7 +167,7 @@ export default function FinanceDashboard() {
                 <th>Tasks</th>
                 <th>Avg points</th>
                 <th>Total points</th>
-                <th>Earnings</th>
+                <th>Pending balance</th>
                 <th>Payout</th>
               </tr>
             </thead>
@@ -158,7 +175,7 @@ export default function FinanceDashboard() {
               {(data?.earningsByLabeller || []).length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
-                    No reviewed tasks yet
+                    No pending balances
                   </td>
                 </tr>
               ) : earningsTable.totalCount === 0 ? (
@@ -183,7 +200,7 @@ export default function FinanceDashboard() {
                     <td>{l.tasksCompleted}</td>
                     <td>{l.avgPoints}</td>
                     <td>{l.totalPoints}</td>
-                    <td className="earnings-cell">{formatMoney(l.totalEarnings, currency)}</td>
+                    <td className="earnings-cell">{formatMoney(l.pendingBalance, currency)}</td>
                     <td>
                       <span
                         className={`status-badge ${
@@ -212,32 +229,29 @@ export default function FinanceDashboard() {
 
         <div className="card labeller-finance-detail">
           {!selectedLabeller ? (
-            <p className="empty-detail">Select a labeller to see per-task earnings</p>
+            <p className="empty-detail">Select a labeller to manage payouts</p>
           ) : (
             <>
               <h3>{selectedLabeller.labeller.name}</h3>
               <p className="detail-email">{selectedLabeller.labeller.email}</p>
-              <div className="detail-stats">
-                <div>
-                  <strong>{formatMoney(selectedLabeller.summary.totalEarnings, currency)}</strong>
-                  <span>Total earned</span>
-                </div>
-                <div>
-                  <strong>{selectedLabeller.summary.totalPoints}</strong>
-                  <span>Total points</span>
-                </div>
-                <div>
-                  <strong>{selectedLabeller.summary.avgPoints}</strong>
-                  <span>Avg points</span>
-                </div>
-              </div>
               <div className="payment-addresses-admin" style={{ marginTop: '1rem', marginBottom: '1rem' }}>
                 <PaymentAddressesDisplay
                   paymentAddresses={selectedLabeller.labeller.paymentAddresses}
                   updatedAt={selectedLabeller.labeller.paymentAddressesUpdatedAt}
                 />
               </div>
-              <h4>Per-task breakdown</h4>
+
+              <LabellerEarningsSection
+                earnings={{
+                  summary: selectedLabeller.summary,
+                  paymentHistory: selectedLabeller.paymentHistory,
+                }}
+                currency={currency}
+                showAdminActions
+                onClearEarnings={handleClearEarnings}
+              />
+
+              <h4>Task breakdown</h4>
               <ul className="finance-task-list">
                 {selectedLabeller.tasks.map((t) => (
                   <li key={t.id} className={`finance-task finance-task-${t.status}`}>
@@ -246,12 +260,15 @@ export default function FinanceDashboard() {
                       <span className={`status-badge status-${t.status === 'submitted' ? 'passed_test' : t.status}`}>
                         {t.status}
                       </span>
+                      {t.earningsPaidOutAt ? (
+                        <span className="status-badge status-approved">paid out</span>
+                      ) : (
+                        t.earnings > 0 && <span className="status-badge status-pending">unpaid</span>
+                      )}
                       {t.reviewPoints != null && <span>{t.reviewPoints} pts</span>}
                       {t.earnings > 0 && <span className="earnings-cell">{formatMoney(t.earnings, currency)}</span>}
                     </div>
-                    {t.reviewerNotes && (
-                      <p className="finance-task-notes">{t.reviewerNotes}</p>
-                    )}
+                    {t.reviewerNotes && <p className="finance-task-notes">{t.reviewerNotes}</p>}
                   </li>
                 ))}
               </ul>

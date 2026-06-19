@@ -248,15 +248,31 @@ export default function ManageVideos() {
     api.getTaskGroups().then(setTaskGroups).catch(() => setTaskGroups([]));
   };
 
-  const load = () => {
-    setTableLoading(true);
+  const patchVideo = (videoId, patch) => {
+    setVideos((prev) =>
+      prev.map((video) =>
+        video._id === videoId
+          ? { ...video, ...patch, updatedAt: patch.updatedAt ?? video.updatedAt ?? new Date().toISOString() }
+          : video
+      )
+    );
+  };
+
+  const load = ({ silent = false } = {}) => {
+    if (!silent) {
+      setTableLoading(true);
+    }
     Promise.all([api.getAdminAssignments(), api.getStorageStatus()])
       .then(([videosData, storageData]) => {
         setVideos(videosData);
         setStorage(storageData);
       })
       .catch((err) => setError(err.message))
-      .finally(() => setTableLoading(false));
+      .finally(() => {
+        if (!silent) {
+          setTableLoading(false);
+        }
+      });
   };
 
   const videoTable = useTableData(videos, {
@@ -521,8 +537,9 @@ export default function ManageVideos() {
 
     try {
       await api.deleteVideo(video._id, Boolean(video.clipId));
+      setVideos((prev) => prev.filter((item) => item._id !== video._id));
+      setSelectedIds((prev) => prev.filter((id) => id !== video._id));
       setMessage('Video removed');
-      load();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message);
@@ -534,14 +551,11 @@ export default function ManageVideos() {
     setError('');
     try {
       await api.updateAdminTask(videoId, { kind });
-      setVideos((prev) =>
-        prev.map((v) => (v._id === videoId ? { ...v, kind } : v))
-      );
+      patchVideo(videoId, { kind });
       setMessage(`Marked as ${TASK_KIND_LABELS[kind] || kind}`);
       setTimeout(() => setMessage(''), 2500);
     } catch (err) {
       setError(err.message);
-      load();
     } finally {
       setSavingKind(null);
     }
@@ -552,11 +566,7 @@ export default function ManageVideos() {
     setError('');
     try {
       await api.updateAdminTask(video._id, { allowLabellerReference: enabled });
-      setVideos((prev) =>
-        prev.map((v) =>
-          v._id === video._id ? { ...v, allowLabellerReference: enabled } : v
-        )
-      );
+      patchVideo(video._id, { allowLabellerReference: enabled });
       setMessage(
         enabled
           ? 'Labellers can now view reference on this task'
@@ -581,9 +591,13 @@ export default function ManageVideos() {
       await Promise.all(
         selectedIds.map((id) => api.updateAdminTask(id, { kind: bulkKind }))
       );
+      setVideos((prev) =>
+        prev.map((video) =>
+          selectedIds.includes(video._id) ? { ...video, kind: bulkKind } : video
+        )
+      );
       setMessage(`Set ${selectedIds.length} video(s) to ${TASK_KIND_LABELS[bulkKind]}`);
       setSelectedIds([]);
-      load();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message);
@@ -596,8 +610,11 @@ export default function ManageVideos() {
     setSavingPrice(videoId);
     setError('');
     try {
-      await api.updateAssignmentPrice(videoId, { taskPrice, challengeNote });
-      load();
+      const updated = await api.updateAssignmentPrice(videoId, { taskPrice, challengeNote });
+      patchVideo(videoId, {
+        taskPrice: updated.taskPrice ?? taskPrice,
+        challengeNote: updated.challengeNote ?? challengeNote,
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -618,9 +635,15 @@ export default function ManageVideos() {
         taskPrice: bulkPrice,
         challengeNote: bulkChallenge,
       });
+      setVideos((prev) =>
+        prev.map((video) =>
+          selectedIds.includes(video._id) && !isFreeTaskKind(video.kind)
+            ? { ...video, taskPrice: bulkPrice, challengeNote: bulkChallenge }
+            : video
+        )
+      );
       setSelectedIds([]);
       setMessage(`Updated price for ${selectedIds.length} video(s)`);
-      load();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message);
@@ -637,8 +660,8 @@ export default function ManageVideos() {
       const formData = new FormData();
       formData.append('reference', refFile);
       await api.uploadAssignmentReference(video._id, formData);
+      patchVideo(video._id, { hasReference: true });
       setMessage('Reference JSON saved');
-      load();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message);

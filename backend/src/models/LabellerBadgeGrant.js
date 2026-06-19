@@ -10,6 +10,8 @@ const labellerBadgeGrantSchema = new mongoose.Schema(
     tier: { type: String, required: true },
     bonusAmount: { type: Number, required: true },
     jobsCompletedAtGrant: { type: Number, required: true },
+    paidOutAt: { type: Date, default: null },
+    earningsPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'EarningsPayment', default: null },
   },
   { timestamps: true }
 );

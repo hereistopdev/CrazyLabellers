@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import LabellerBadges from '../components/LabellerBadges';
+import LabellerEarningsSection from '../components/LabellerEarningsSection';
 import { formatMoney } from '../utils/money';
 import PaymentAddressesForm, { PaymentAddressesDisplay } from '../components/PaymentAddressesSection';
 import { isAdmin } from '../utils/roles';
@@ -24,27 +25,43 @@ export default function LabellerProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const loadProfile = () => {
     setLoading(true);
     const load = id ? api.getLabellerProfile(id) : api.getMyProfile();
-    load
+    return load
       .then(setProfile)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadProfile();
   }, [id]);
 
   if (loading) return <div className="loading">Loading profile...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!profile) return null;
 
-  const { labeller, reviews, workHistory, badges = [], badgeSummary } = profile;
+  const { labeller, reviews, workHistory, badges = [], badgeSummary, earnings } = profile;
   const isOwnProfile = !id || id === user?.id;
+  const currency = earnings?.settings?.currency || 'USD';
+
+  const handleClearEarnings = async (note) => {
+    const result = await api.clearLabellerEarnings(labeller._id, { note });
+    await loadProfile();
+    return result;
+  };
 
   return (
     <div className="labeller-profile-page">
       <div className="page-header">
         <h1>{isOwnProfile ? 'My work profile' : `${labeller.name}'s profile`}</h1>
-        <p>Work history and client reviews — similar to a freelancer marketplace profile.</p>
+        <p>Work history, earnings, and client reviews.</p>
+        {isOwnProfile && (
+          <Link to="/earnings" className="btn btn-secondary btn-sm" style={{ marginTop: '0.5rem' }}>
+            Full earnings page
+          </Link>
+        )}
       </div>
 
       <div className="profile-hero card">
@@ -63,6 +80,12 @@ export default function LabellerProfile() {
         </div>
 
         <div className="profile-stats-row">
+          {earnings?.summary && (
+            <div className="profile-stat highlight-earnings">
+              <strong>{formatMoney(earnings.summary.pendingBalance, currency)}</strong>
+              <span>Current balance</span>
+            </div>
+          )}
           <div className="profile-stat">
             <StarRating value={Math.round(labeller.avgRating || 0)} readOnly size="sm" />
             <strong>{labeller.avgRating || '—'}</strong>
@@ -84,10 +107,6 @@ export default function LabellerProfile() {
             <strong>{labeller.earnedBadgeCount ?? badgeSummary?.earnedCount ?? 0}</strong>
             <span>Badges earned</span>
           </div>
-          <div className="profile-stat">
-            <strong>{formatMoney(labeller.totalBadgeEarnings ?? badgeSummary?.totalBadgeEarnings ?? 0)}</strong>
-            <span>Badge bonuses</span>
-          </div>
         </div>
 
         {labeller.aspectAverages && (
@@ -98,6 +117,16 @@ export default function LabellerProfile() {
           </div>
         )}
       </div>
+
+      {earnings && (
+        <LabellerEarningsSection
+          className="card"
+          earnings={earnings}
+          currency={currency}
+          showAdminActions={!isOwnProfile && isAdmin(user)}
+          onClearEarnings={!isOwnProfile && isAdmin(user) ? handleClearEarnings : undefined}
+        />
+      )}
 
       <section className="card labeller-badges-panel">
         <h3>Work badges</h3>
@@ -165,6 +194,11 @@ export default function LabellerProfile() {
                     <span className={`status-badge status-${task.status === 'submitted' ? 'passed_test' : task.status}`}>
                       {task.status === 'submitted' ? 'pending review' : task.status}
                     </span>
+                    {task.earningsPaidOutAt ? (
+                      <span className="status-badge status-approved">paid out</span>
+                    ) : (
+                      task.earnings > 0 && <span className="status-badge status-pending">unpaid</span>
+                    )}
                     {task.taskPrice != null && <span>Pays up to {formatMoney(task.taskPrice)}</span>}
                     {task.reviewPoints != null && <span>{task.reviewPoints} pts</span>}
                     {task.earnings > 0 && <span>{formatMoney(task.earnings)} earned</span>}

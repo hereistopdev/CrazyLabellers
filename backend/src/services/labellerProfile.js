@@ -3,6 +3,7 @@ const LabelSubmission = require('../models/LabelSubmission');
 const LabellerReview = require('../models/LabellerReview');
 const { summarizePaymentAddresses } = require('../utils/paymentAddresses');
 const { getLabellerBadgeSummary } = require('./labellerBadges');
+const { getLabellerEarningsSummary } = require('./labellerEarnings');
 
 async function getLabellerStats(labellerId) {
   const [reviews, badgeSummary] = await Promise.all([
@@ -104,6 +105,12 @@ async function buildLabellerProfile(labellerId, { viewer } = {}) {
 
   const reviewBySubmission = new Map(reviews.map((r) => [String(r.submissionId), r]));
 
+  const includeEarnings =
+    viewer &&
+    (String(viewer._id) === String(labellerId) || viewer.role === 'admin');
+
+  const earnings = includeEarnings ? await getLabellerEarningsSummary(labellerId) : null;
+
   return {
     labeller: {
       _id: labeller._id,
@@ -153,6 +160,7 @@ async function buildLabellerProfile(labellerId, { viewer } = {}) {
         status: s.status,
         reviewPoints: s.reviewPoints,
         earnings: s.earnings,
+        earningsPaidOutAt: s.earningsPaidOutAt,
         eventsCount: s.events?.length || 0,
         rating: review?.rating ?? null,
         reviewComment: review?.comment || '',
@@ -160,6 +168,16 @@ async function buildLabellerProfile(labellerId, { viewer } = {}) {
         submittedAt: s.updatedAt,
       };
     }),
+    ...(earnings
+      ? {
+          earnings: {
+            summary: earnings.summary,
+            settings: earnings.settings,
+            paymentHistory: earnings.paymentHistory,
+            badgeGrants: earnings.badgeGrants,
+          },
+        }
+      : {}),
   };
 }
 
