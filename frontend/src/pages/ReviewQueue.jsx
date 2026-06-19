@@ -195,13 +195,13 @@ export default function ReviewQueue() {
           >
             <input
               type="date"
-              className="table-filter-input"
+              className="table-filter-input table-filter-input--date"
               value={submissionTable.filters.dateFrom}
               onChange={(e) => submissionTable.updateFilter('dateFrom', e.target.value)}
             />
             <input
               type="date"
-              className="table-filter-input"
+              className="table-filter-input table-filter-input--date"
               value={submissionTable.filters.dateTo}
               onChange={(e) => submissionTable.updateFilter('dateTo', e.target.value)}
             />

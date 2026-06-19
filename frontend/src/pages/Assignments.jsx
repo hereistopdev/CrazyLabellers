@@ -161,29 +161,27 @@ export default function Assignments() {
           </select>
           <input
             type="number"
-            className="table-filter-input"
-            placeholder="Min $"
+            className="table-filter-input table-filter-input--price"
+            placeholder="Min"
             value={taskTable.filters.priceMin}
             onChange={(e) => taskTable.updateFilter('priceMin', e.target.value)}
-            style={{ width: 72 }}
           />
           <input
             type="number"
-            className="table-filter-input"
-            placeholder="Max $"
+            className="table-filter-input table-filter-input--price"
+            placeholder="Max"
             value={taskTable.filters.priceMax}
             onChange={(e) => taskTable.updateFilter('priceMax', e.target.value)}
-            style={{ width: 72 }}
           />
           <input
             type="date"
-            className="table-filter-input"
+            className="table-filter-input table-filter-input--date"
             value={taskTable.filters.dateFrom}
             onChange={(e) => taskTable.updateFilter('dateFrom', e.target.value)}
           />
           <input
             type="date"
-            className="table-filter-input"
+            className="table-filter-input table-filter-input--date"
             value={taskTable.filters.dateTo}
             onChange={(e) => taskTable.updateFilter('dateTo', e.target.value)}
           />

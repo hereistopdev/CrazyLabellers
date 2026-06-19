@@ -56,8 +56,8 @@ textarea {
 }
 
 /* ── Unified form controls ── */
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']),
-select,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']):not(.table-filter-input):not(.table-search-input),
+select:not(.table-filter-select),
 textarea {
   appearance: none;
   width: 100%;
@@ -81,15 +81,15 @@ textarea::placeholder {
   opacity: 0.8;
 }
 
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']):hover:not(:disabled),
-select:hover:not(:disabled),
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']):not(.table-filter-input):not(.table-search-input):hover:not(:disabled),
+select:not(.table-filter-select):hover:not(:disabled),
 textarea:hover:not(:disabled) {
   border-color: var(--input-border-hover);
   background-color: var(--input-bg-hover);
 }
 
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']):focus,
-select:focus,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']):not(.table-filter-input):not(.table-search-input):focus,
+select:not(.table-filter-select):focus,
 textarea:focus {
   outline: none;
   border-color: var(--accent);
@@ -3685,7 +3685,7 @@ tbody tr:hover {
 }
 
 .table-toolbar {
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.85rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2, rgba(255, 255, 255, 0.02));
 }
@@ -3693,55 +3693,57 @@ tbody tr:hover {
 .table-toolbar-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   width: 100%;
   min-width: 0;
-}
-
-.table-toolbar-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.65rem;
-  flex: 1;
+  flex-wrap: nowrap;
 }
 
 .table-toolbar-filters {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  flex: 1;
+  gap: 0.4rem;
+  flex: 0 1 auto;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  padding-bottom: 1px;
+  flex-wrap: nowrap;
 }
 
 .table-search {
   flex: 0 0 auto;
 }
 
+.table-search-input,
 .table-search input {
-  min-width: 200px;
-  width: 200px;
-  padding: 0.42rem 0.65rem;
-  font-size: 0.84rem;
+  box-sizing: border-box;
+  width: 9.5rem;
+  min-width: 9.5rem;
+  max-width: 9.5rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.82rem;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
 }
 
 .table-toolbar-meta {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   white-space: nowrap;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   margin-left: auto;
+  padding-left: 0.35rem;
 }
 
 .table-filter-select,
 .table-filter-input {
+  box-sizing: border-box;
+  flex: 0 0 auto;
   min-width: 0;
-  flex-shrink: 0;
-  padding: 0.42rem 0.55rem;
-  font-size: 0.82rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.8rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -3749,15 +3751,18 @@ tbody tr:hover {
 }
 
 .table-filter-select {
-  max-width: 140px;
+  width: 6.75rem;
+  max-width: 6.75rem;
 }
 
 .table-filter-input--price {
-  width: 72px;
+  width: 3.5rem;
+  max-width: 3.5rem;
 }
 
 .table-filter-input--date {
-  width: 132px;
+  width: 7.1rem;
+  max-width: 7.1rem;
 }
 
 .table-pagination {
@@ -4187,44 +4192,39 @@ a.video-label-link.btn:hover {
   }
 
   .table-toolbar-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.65rem;
-  }
-
-  .table-toolbar-main {
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .table-toolbar-filters {
     flex-wrap: wrap;
-    overflow-x: visible;
-  }
-
-  .table-search {
     width: 100%;
   }
 
+  .table-search-input,
   .table-search input {
-    min-width: 0;
     width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 
   .table-filter-select,
   .table-filter-input {
-    width: 100%;
+    flex: 1 1 calc(50% - 0.25rem);
+    width: auto;
     max-width: none;
   }
 
-  .table-filter-input--price,
+  .table-filter-input--price {
+    flex: 1 1 calc(25% - 0.25rem);
+  }
+
   .table-filter-input--date {
-    width: 100%;
+    flex: 1 1 calc(50% - 0.25rem);
   }
 
   .table-toolbar-meta {
-    white-space: normal;
+    width: 100%;
     margin-left: 0;
     text-align: right;
   }

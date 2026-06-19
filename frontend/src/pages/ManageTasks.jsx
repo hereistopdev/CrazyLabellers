@@ -665,14 +665,14 @@ export default function ManageTasks() {
                   <input
                     type="number"
                     className="table-filter-input table-filter-input--price"
-                    placeholder="Min $"
+                    placeholder="Min"
                     value={taskTable.filters.priceMin}
                     onChange={(e) => taskTable.updateFilter('priceMin', e.target.value)}
                   />
                   <input
                     type="number"
                     className="table-filter-input table-filter-input--price"
-                    placeholder="Max $"
+                    placeholder="Max"
                     value={taskTable.filters.priceMax}
                     onChange={(e) => taskTable.updateFilter('priceMax', e.target.value)}
                   />
@@ -693,10 +693,10 @@ export default function ManageTasks() {
                     value={taskTable.filters.sortBy}
                     onChange={(e) => taskTable.updateFilter('sortBy', e.target.value)}
                   >
-                    <option value="createdAt">Sort: created</option>
-                    <option value="updatedAt">Sort: updated</option>
-                    <option value="price">Sort: price</option>
-                    <option value="title">Sort: title</option>
+                    <option value="createdAt">Created</option>
+                    <option value="updatedAt">Updated</option>
+                    <option value="price">Price</option>
+                    <option value="title">Title</option>
                   </select>
                   <select
                     className="table-filter-select"

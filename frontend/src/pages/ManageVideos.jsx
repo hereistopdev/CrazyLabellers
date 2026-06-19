@@ -137,14 +137,14 @@ function VideoTableFilters({ table, groups, adminUser }) {
           <input
             type="number"
             className="table-filter-input table-filter-input--price"
-            placeholder="Min $"
+            placeholder="Min"
             value={table.filters.priceMin}
             onChange={(e) => table.updateFilter('priceMin', e.target.value)}
           />
           <input
             type="number"
             className="table-filter-input table-filter-input--price"
-            placeholder="Max $"
+            placeholder="Max"
             value={table.filters.priceMax}
             onChange={(e) => table.updateFilter('priceMax', e.target.value)}
           />
@@ -170,10 +170,10 @@ function VideoTableFilters({ table, groups, adminUser }) {
         onChange={(e) => table.updateFilter('sortBy', e.target.value)}
         title="Sort field"
       >
-        <option value="createdAt">Sort: created</option>
-        <option value="updatedAt">Sort: updated</option>
-        {adminUser && <option value="price">Sort: price</option>}
-        <option value="title">Sort: title</option>
+        <option value="createdAt">Created</option>
+        <option value="updatedAt">Updated</option>
+        {adminUser && <option value="price">Price</option>}
+        <option value="title">Title</option>
       </select>
       <select
         className="table-filter-select"

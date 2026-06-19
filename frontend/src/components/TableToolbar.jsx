@@ -16,6 +16,7 @@ export default function TableToolbar({
           <span className="sr-only">Search</span>
           <input
             type="search"
+            className="table-search-input"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
