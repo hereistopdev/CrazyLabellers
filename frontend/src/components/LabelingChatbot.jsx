@@ -140,12 +140,11 @@ export default function LabelingChatbot({ open, onClose, assignment, lastEventTy
           {messages.length === 0 && (
             <div className="labeling-chatbot-welcome">
               <p>
-                I help with <strong>official football event labeling</strong> for this project —
-                terminology, frame timing, and uncertain clip situations.
+                I help with <strong>official football event labeling</strong> — terminology, frame
+                timing, and uncertain clip situations. Ask follow-up questions anytime.
               </p>
               <p className="labeling-chatbot-welcome-hint">
-                I cannot answer general questions, coding, or topics unrelated to labeling. I may
-                ask follow-up options before giving a recommendation.
+                I may ask clarifying options before giving a labeling recommendation.
               </p>
               <Link to="/faq" className="labeling-chatbot-faq-link" onClick={handleClose}>
                 Browse Frequent Q&amp;A →
@@ -159,7 +158,6 @@ export default function LabelingChatbot({ open, onClose, assignment, lastEventTy
               className={[
                 'labeling-chatbot-message',
                 `labeling-chatbot-message-${msg.role}`,
-                msg.messageType === 'refuse' ? 'labeling-chatbot-message-refused' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -170,10 +168,7 @@ export default function LabelingChatbot({ open, onClose, assignment, lastEventTy
               </div>
               <div className="labeling-chatbot-message-body">{msg.content}</div>
               {msg.role === 'assistant' && msg.messageType === 'answer' && (
-                <span className="labeling-chatbot-answer-badge">Final recommendation</span>
-              )}
-              {msg.role === 'assistant' && msg.messageType === 'refuse' && (
-                <span className="labeling-chatbot-refuse-badge">Out of scope</span>
+                <span className="labeling-chatbot-answer-badge">Reply</span>
               )}
             </div>
           ))}
