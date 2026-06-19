@@ -3685,14 +3685,17 @@ tbody tr:hover {
 }
 
 .table-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2, rgba(255, 255, 255, 0.02));
+}
+
+.table-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .table-toolbar-main {
@@ -3703,19 +3706,58 @@ tbody tr:hover {
   flex: 1;
 }
 
+.table-toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 1px;
+}
+
+.table-search {
+  flex: 0 0 auto;
+}
+
 .table-search input {
-  min-width: 220px;
+  min-width: 200px;
+  width: 200px;
+  padding: 0.42rem 0.65rem;
+  font-size: 0.84rem;
 }
 
 .table-toolbar-meta {
   font-size: 0.82rem;
   color: var(--text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .table-filter-select,
 .table-filter-input {
   min-width: 0;
+  flex-shrink: 0;
+  padding: 0.42rem 0.55rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.table-filter-select {
+  max-width: 140px;
+}
+
+.table-filter-input--price {
+  width: 72px;
+}
+
+.table-filter-input--date {
+  width: 132px;
 }
 
 .table-pagination {
@@ -3756,6 +3798,11 @@ tbody tr:hover {
   color: var(--text-muted);
   min-width: 5.5rem;
   text-align: center;
+}
+
+.video-mgmt-tabs {
+  width: 100%;
+  max-width: 420px;
 }
 
 .bulk-upload-highlight {
@@ -4136,14 +4183,24 @@ a.video-label-link.btn:hover {
   }
 
   .table-toolbar {
+    padding: 0.75rem;
+  }
+
+  .table-toolbar-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.65rem;
   }
 
   .table-toolbar-main {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
+  }
+
+  .table-toolbar-filters {
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
 
   .table-search {
@@ -4158,10 +4215,18 @@ a.video-label-link.btn:hover {
   .table-filter-select,
   .table-filter-input {
     width: 100%;
+    max-width: none;
+  }
+
+  .table-filter-input--price,
+  .table-filter-input--date {
+    width: 100%;
   }
 
   .table-toolbar-meta {
     white-space: normal;
+    margin-left: 0;
+    text-align: right;
   }
 
   .bulk-actions-row {

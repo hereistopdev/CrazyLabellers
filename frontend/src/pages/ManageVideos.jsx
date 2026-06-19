@@ -15,6 +15,8 @@ import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
 import UploadGroupSelect, { appendGroupFields, GROUP_NEW } from '../components/UploadGroupSelect';
 
+import { matchesDateRange } from '../utils/tableFilter';
+
 const UPLOAD_CONCURRENCY = 2;
 
 const MIN_PRICE = 0.3;
@@ -36,6 +38,155 @@ const STATUS_LABELS = {
   approved: 'Approved',
   rejected: 'Rejected',
 };
+
+const VIDEO_FILTERS = {
+  kind: 'all',
+  group: 'all',
+  status: 'all',
+  priceMin: '',
+  priceMax: '',
+  dateFrom: '',
+  dateTo: '',
+  sortBy: 'createdAt',
+  sortDir: 'desc',
+};
+
+function filterVideos(items, filters) {
+  return items.filter((video) => {
+    const kind = video.kind || 'production';
+    if (filters.kind !== 'all' && kind !== filters.kind) return false;
+
+    const groupKey = video.groupId?._id || video.groupId || 'ungrouped';
+    if (filters.group !== 'all') {
+      if (filters.group === 'ungrouped' && groupKey !== 'ungrouped') return false;
+      if (filters.group !== 'ungrouped' && String(groupKey) !== filters.group) return false;
+    }
+
+    if (filters.status !== 'all' && video.status !== filters.status) return false;
+
+    const price = video.taskPrice ?? 0;
+    if (filters.priceMin !== '' && price < parseFloat(filters.priceMin)) return false;
+    if (filters.priceMax !== '' && price > parseFloat(filters.priceMax)) return false;
+    if (!matchesDateRange(video.createdAt, filters.dateFrom, filters.dateTo)) return false;
+
+    return true;
+  });
+}
+
+function sortVideos(items, filters) {
+  const dir = filters.sortDir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    if (filters.sortBy === 'price') {
+      return ((a.taskPrice ?? 0) - (b.taskPrice ?? 0)) * dir;
+    }
+    if (filters.sortBy === 'title') {
+      return (a.title || '').localeCompare(b.title || '') * dir;
+    }
+    if (filters.sortBy === 'updatedAt') {
+      return (new Date(a.updatedAt) - new Date(b.updatedAt)) * dir;
+    }
+    return (new Date(a.createdAt) - new Date(b.createdAt)) * dir;
+  });
+}
+
+function VideoTableFilters({ table, groups, adminUser }) {
+  return (
+    <>
+      <select
+        className="table-filter-select"
+        value={table.filters.group}
+        onChange={(e) => table.updateFilter('group', e.target.value)}
+        title="Group"
+      >
+        <option value="all">All groups</option>
+        <option value="ungrouped">Ungrouped</option>
+        {groups.map((g) => (
+          <option key={g._id} value={g._id}>
+            {g.name}
+          </option>
+        ))}
+      </select>
+      <select
+        className="table-filter-select"
+        value={table.filters.kind}
+        onChange={(e) => table.updateFilter('kind', e.target.value)}
+        title="Task type"
+      >
+        <option value="all">All types</option>
+        {TASK_KINDS.map((k) => (
+          <option key={k.value} value={k.value}>
+            {k.label}
+          </option>
+        ))}
+      </select>
+      <select
+        className="table-filter-select"
+        value={table.filters.status}
+        onChange={(e) => table.updateFilter('status', e.target.value)}
+        title="Status"
+      >
+        <option value="all">All statuses</option>
+        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+      {adminUser && (
+        <>
+          <input
+            type="number"
+            className="table-filter-input table-filter-input--price"
+            placeholder="Min $"
+            value={table.filters.priceMin}
+            onChange={(e) => table.updateFilter('priceMin', e.target.value)}
+          />
+          <input
+            type="number"
+            className="table-filter-input table-filter-input--price"
+            placeholder="Max $"
+            value={table.filters.priceMax}
+            onChange={(e) => table.updateFilter('priceMax', e.target.value)}
+          />
+        </>
+      )}
+      <input
+        type="date"
+        className="table-filter-input table-filter-input--date"
+        value={table.filters.dateFrom}
+        onChange={(e) => table.updateFilter('dateFrom', e.target.value)}
+        title="From date"
+      />
+      <input
+        type="date"
+        className="table-filter-input table-filter-input--date"
+        value={table.filters.dateTo}
+        onChange={(e) => table.updateFilter('dateTo', e.target.value)}
+        title="To date"
+      />
+      <select
+        className="table-filter-select"
+        value={table.filters.sortBy}
+        onChange={(e) => table.updateFilter('sortBy', e.target.value)}
+        title="Sort field"
+      >
+        <option value="createdAt">Sort: created</option>
+        <option value="updatedAt">Sort: updated</option>
+        {adminUser && <option value="price">Sort: price</option>}
+        <option value="title">Sort: title</option>
+      </select>
+      <select
+        className="table-filter-select"
+        value={table.filters.sortDir}
+        onChange={(e) => table.updateFilter('sortDir', e.target.value)}
+        title="Sort direction"
+      >
+        <option value="desc">Desc</option>
+        <option value="asc">Asc</option>
+      </select>
+    </>
+  );
+}
 
 function userLabel(user) {
   return user?.name || user?.email || '—';
@@ -89,6 +240,7 @@ export default function ManageVideos() {
   const [uploadNewGroupName, setUploadNewGroupName] = useState('');
   const [bulkGroupChoice, setBulkGroupChoice] = useState('');
   const [bulkNewGroupName, setBulkNewGroupName] = useState('');
+  const [pageTab, setPageTab] = useState('library');
 
   const loadGroups = () => {
     api.getTaskGroups().then(setTaskGroups).catch(() => setTaskGroups([]));
@@ -106,16 +258,11 @@ export default function ManageVideos() {
   };
 
   const videoTable = useTableData(videos, {
-    searchKeys: ['title', 'clipId', 'assignedTo.name', 'status', 'challengeNote'],
+    searchKeys: ['title', 'clipId', 'assignedTo.name', 'status', 'challengeNote', 'groupId.name'],
     pageSize: 25,
-    filterFn: (items, filters) =>
-      items.filter((video) => {
-        const kind = video.kind || 'production';
-        if (filters.kind !== 'all' && kind !== filters.kind) return false;
-        if (filters.status !== 'all' && video.status !== filters.status) return false;
-        return true;
-      }),
-    initialFilters: { kind: 'all', status: 'all' },
+    filterFn: filterVideos,
+    sortFn: sortVideos,
+    initialFilters: VIDEO_FILTERS,
   });
 
   useEffect(load, []);
@@ -123,10 +270,18 @@ export default function ManageVideos() {
   useEffect(loadGroups, []);
 
   useEffect(() => {
-    if (window.location.hash === '#bulk-upload') {
-      document.getElementById('bulk-upload')?.scrollIntoView({ behavior: 'smooth' });
+    const hash = window.location.hash.replace('#', '');
+    if (hash === 'bulk-upload' || hash === 'upload') {
+      setPageTab('upload');
+    } else if (hash === 'library') {
+      setPageTab('library');
     }
   }, []);
+
+  const switchPageTab = (tab) => {
+    setPageTab(tab);
+    window.history.replaceState(null, '', tab === 'upload' ? '#bulk-upload' : '#library');
+  };
 
   const uploadVideo = async (e) => {
     e.preventDefault();
@@ -478,8 +633,8 @@ export default function ManageVideos() {
       <div className="page-header">
         <h1>Manage Videos</h1>
         <p>
-          Upload, import, or remove football clips. Use <strong>Bulk upload</strong> to import a
-          whole folder of videos and reference JSON at once.
+          Upload, import, or remove football clips. Use the <strong>Upload</strong> tab for bulk or
+          single uploads, and the <strong>Video library</strong> tab to browse and manage clips.
         </p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
           {adminUser ? (
@@ -491,9 +646,6 @@ export default function ManageVideos() {
               Back to dashboard
             </Link>
           )}
-          <a href="#bulk-upload" className="btn btn-primary btn-sm">
-            Jump to bulk upload
-          </a>
           <Link to="/admin/tasks" className="btn btn-secondary btn-sm">
             Tasks & groups
           </Link>
@@ -503,6 +655,25 @@ export default function ManageVideos() {
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-success">{message}</div>}
 
+      <div className="tab-bar video-mgmt-tabs">
+        <button
+          type="button"
+          className={`tab-btn${pageTab === 'upload' ? ' active' : ''}`}
+          onClick={() => switchPageTab('upload')}
+        >
+          Upload
+        </button>
+        <button
+          type="button"
+          className={`tab-btn${pageTab === 'library' ? ' active' : ''}`}
+          onClick={() => switchPageTab('library')}
+        >
+          Video library ({videos.length})
+        </button>
+      </div>
+
+      {pageTab === 'upload' && (
+        <>
       {storage && (
         <div className={`alert ${storage.ok ? 'alert-info' : 'alert-error'}`}>
           {storage.enabled ? (
@@ -875,11 +1046,11 @@ export default function ManageVideos() {
           </div>
         </form>
       </div>
+        </>
+      )}
 
-      <h2 style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>
-        Videos ({videoTable.totalCount} shown / {videos.length} total)
-      </h2>
-
+      {pageTab === 'library' && (
+        <>
       {adminUser && videos.length > 0 && (
         <div className="card bulk-actions-bar">
           <strong className="bulk-actions-title">Bulk actions</strong>
@@ -949,34 +1120,11 @@ export default function ManageVideos() {
         <TableToolbar
           search={videoTable.search}
           onSearchChange={videoTable.setSearch}
-          searchPlaceholder="Search title, clip ID, assignee, status…"
+          searchPlaceholder="Search title, clip ID, group…"
           totalCount={videos.length}
           filteredCount={videoTable.totalCount}
         >
-          <select
-            className="table-filter-select"
-            value={videoTable.filters.kind}
-            onChange={(e) => videoTable.updateFilter('kind', e.target.value)}
-          >
-            <option value="all">All types</option>
-            {TASK_KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="table-filter-select"
-            value={videoTable.filters.status}
-            onChange={(e) => videoTable.updateFilter('status', e.target.value)}
-          >
-            <option value="all">All statuses</option>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <VideoTableFilters table={videoTable} groups={taskGroups} adminUser={adminUser} />
         </TableToolbar>
 
         {tableLoading ? (
@@ -985,7 +1133,11 @@ export default function ManageVideos() {
           </p>
         ) : videos.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
-            No videos yet. Use bulk upload above or upload a single clip.
+            No videos yet.{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => switchPageTab('upload')}>
+              Go to Upload
+            </button>{' '}
+            to add clips.
           </p>
         ) : videoTable.totalCount === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', padding: '1rem' }}>
@@ -1144,6 +1296,8 @@ export default function ManageVideos() {
           </>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

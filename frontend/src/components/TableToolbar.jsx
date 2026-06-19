@@ -11,7 +11,7 @@ export default function TableToolbar({
 
   return (
     <div className="table-toolbar">
-      <div className="table-toolbar-main">
+      <div className="table-toolbar-row">
         <label className="table-search">
           <span className="sr-only">Search</span>
           <input
@@ -21,10 +21,10 @@ export default function TableToolbar({
             placeholder={searchPlaceholder}
           />
         </label>
-        {children}
-      </div>
-      <div className="table-toolbar-meta">
-        Showing {showing} of {total}
+        {children ? <div className="table-toolbar-filters">{children}</div> : null}
+        <div className="table-toolbar-meta">
+          Showing {showing} of {total}
+        </div>
       </div>
     </div>
   );
