@@ -12,7 +12,11 @@ import { isVideoFilename } from '../utils/clipId';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
-import UploadGroupSelect, { appendGroupFields, GROUP_NEW } from '../components/UploadGroupSelect';
+import UploadGroupSelect, {
+  appendGroupFields,
+  GROUP_NEW,
+  validateGroupChoice,
+} from '../components/UploadGroupSelect';
 import AssignmentStatusBadge from '../components/AssignmentStatusBadge';
 import { ASSIGNMENT_STATUS_LABELS } from '../utils/assignmentStatus';
 
@@ -184,13 +188,6 @@ function userLabel(user) {
   return user?.name || user?.email || '—';
 }
 
-function validateGroupChoice(choice, newName) {
-  if (choice === GROUP_NEW && !newName?.trim()) {
-    return 'Enter a name for the new production group';
-  }
-  return null;
-}
-
 export default function ManageVideos() {
   const { user } = useAuth();
   const adminUser = isAdmin(user);
@@ -233,6 +230,9 @@ export default function ManageVideos() {
   const [uploadNewGroupName, setUploadNewGroupName] = useState('');
   const [bulkGroupChoice, setBulkGroupChoice] = useState('');
   const [bulkNewGroupName, setBulkNewGroupName] = useState('');
+  const [bulkLibraryGroupChoice, setBulkLibraryGroupChoice] = useState('');
+  const [bulkLibraryNewGroupName, setBulkLibraryNewGroupName] = useState('');
+  const [savingBulkGroup, setSavingBulkGroup] = useState(false);
   const [pageTab, setPageTab] = useState('library');
 
   const loadGroups = () => {
@@ -657,6 +657,62 @@ export default function ManageVideos() {
     }
   };
 
+  const applyBulkGroup = async () => {
+    if (selectedIds.length === 0) {
+      setError('Select at least one video');
+      return;
+    }
+
+    const groupError = validateGroupChoice(bulkLibraryGroupChoice, bulkLibraryNewGroupName);
+    if (groupError) {
+      setError(groupError);
+      return;
+    }
+
+    const targetIds = selectedIds.filter((id) => {
+      const video = videos.find((item) => item._id === id);
+      return video && (video.kind || 'production') === 'production';
+    });
+
+    if (targetIds.length === 0) {
+      setError('Select production videos to assign a group');
+      return;
+    }
+
+    setSavingBulkGroup(true);
+    setError('');
+    try {
+      let groupId = null;
+      let groupMeta = null;
+
+      if (bulkLibraryGroupChoice === GROUP_NEW && bulkLibraryNewGroupName.trim()) {
+        const created = await api.createTaskGroup({ name: bulkLibraryNewGroupName.trim() });
+        groupId = created._id;
+        groupMeta = { _id: created._id, name: created.name };
+        loadGroups();
+      } else if (bulkLibraryGroupChoice && bulkLibraryGroupChoice !== GROUP_NEW) {
+        groupId = bulkLibraryGroupChoice;
+        const existing = taskGroups.find((group) => group._id === groupId);
+        groupMeta = existing ? { _id: existing._id, name: existing.name } : { _id: groupId };
+      }
+
+      await Promise.all(targetIds.map((id) => api.updateAdminTask(id, { groupId })));
+
+      setVideos((prev) =>
+        prev.map((video) =>
+          targetIds.includes(video._id) ? { ...video, groupId: groupMeta } : video
+        )
+      );
+      setSelectedIds([]);
+      setMessage(`Updated group for ${targetIds.length} video(s)`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingBulkGroup(false);
+    }
+  };
+
   const uploadReference = async (video, refFile) => {
     if (!refFile) return;
     setSavingPrice(video._id);
@@ -679,6 +735,18 @@ export default function ManageVideos() {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
+  };
+
+  const pageVideoIds = videoTable.paginated.map((video) => video._id);
+  const allPageSelected =
+    pageVideoIds.length > 0 && pageVideoIds.every((id) => selectedIds.includes(id));
+
+  const toggleSelectAllPage = () => {
+    if (allPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageVideoIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => [...new Set([...prev, ...pageVideoIds])]);
+    }
   };
 
   return (
@@ -1133,66 +1201,120 @@ export default function ManageVideos() {
 
       {pageTab === 'library' && (
         <>
-      {adminUser && videos.length > 0 && (
+      {managerUser && videos.length > 0 && (
         <div className="card bulk-actions-bar">
-          <strong className="bulk-actions-title">Bulk actions</strong>
+          <strong className="bulk-actions-title">
+            Bulk actions {selectedIds.length > 0 && `(${selectedIds.length} selected)`}
+          </strong>
+          {adminUser && (
+            <>
+              <div className="bulk-actions-row">
+                <div className="bulk-actions-field">
+                  <span>Task type</span>
+                  <select
+                    value={bulkKind}
+                    onChange={(e) => setBulkKind(e.target.value)}
+                    className="kind-select field-input--inline"
+                  >
+                    {TASK_KINDS.map((k) => (
+                      <option key={k.value} value={k.value}>
+                        {k.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="bulk-actions-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={applyBulkKind}
+                    disabled={savingKind === 'bulk' || selectedIds.length === 0}
+                  >
+                    {savingKind === 'bulk' ? 'Saving...' : 'Apply task type'}
+                  </button>
+                </div>
+              </div>
+              <div className="bulk-actions-row">
+                <div className="bulk-actions-field">
+                  <span>Price ($)</span>
+                  <input
+                    type="number"
+                    min={MIN_PRICE}
+                    max={MAX_PRICE}
+                    step="0.1"
+                    value={bulkPrice}
+                    onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 1)}
+                    className="field-input--inline field-input--number"
+                  />
+                </div>
+                <div className="bulk-actions-field bulk-actions-field--grow">
+                  <span>Challenge note</span>
+                  <input
+                    value={bulkChallenge}
+                    onChange={(e) => setBulkChallenge(e.target.value)}
+                    placeholder="Optional note for labellers"
+                    className="field-input--inline field-input--grow"
+                  />
+                </div>
+                <div className="bulk-actions-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={applyBulkPrice}
+                    disabled={savingPrice === 'bulk' || selectedIds.length === 0}
+                  >
+                    {savingPrice === 'bulk' ? 'Saving...' : 'Apply price & note'}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           <div className="bulk-actions-row">
             <div className="bulk-actions-field">
-              <span>Task type</span>
+              <span>Production group</span>
               <select
-                value={bulkKind}
-                onChange={(e) => setBulkKind(e.target.value)}
-                className="kind-select field-input--inline"
+                value={bulkLibraryGroupChoice}
+                onChange={(e) => setBulkLibraryGroupChoice(e.target.value)}
+                className="field-input--inline"
               >
-                {TASK_KINDS.map((k) => (
-                  <option key={k.value} value={k.value}>
-                    {k.label}
+                <option value="">No group</option>
+                {taskGroups.map((group) => (
+                  <option key={group._id} value={group._id}>
+                    {group.name}
                   </option>
                 ))}
+                <option value={GROUP_NEW}>+ Create new group…</option>
               </select>
             </div>
+            {bulkLibraryGroupChoice === GROUP_NEW && (
+              <div className="bulk-actions-field bulk-actions-field--grow">
+                <span>New group name</span>
+                <input
+                  value={bulkLibraryNewGroupName}
+                  onChange={(e) => setBulkLibraryNewGroupName(e.target.value)}
+                  placeholder="Group name"
+                  className="field-input--inline field-input--grow"
+                />
+              </div>
+            )}
             <div className="bulk-actions-actions">
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={applyBulkKind}
-                disabled={savingKind === 'bulk' || selectedIds.length === 0}
+                onClick={applyBulkGroup}
+                disabled={savingBulkGroup || selectedIds.length === 0}
               >
-                {savingKind === 'bulk' ? 'Saving...' : `Set type for ${selectedIds.length} selected`}
+                {savingBulkGroup ? 'Saving...' : 'Apply group'}
               </button>
-            </div>
-          </div>
-          <div className="bulk-actions-row">
-            <div className="bulk-actions-field">
-              <span>Price ($)</span>
-              <input
-                type="number"
-                min={MIN_PRICE}
-                max={MAX_PRICE}
-                step="0.1"
-                value={bulkPrice}
-                onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 1)}
-                className="field-input--inline field-input--number"
-              />
-            </div>
-            <div className="bulk-actions-field bulk-actions-field--grow">
-              <span>Challenge note</span>
-              <input
-                value={bulkChallenge}
-                onChange={(e) => setBulkChallenge(e.target.value)}
-                placeholder="Optional note for labellers"
-                className="field-input--inline field-input--grow"
-              />
-            </div>
-            <div className="bulk-actions-actions">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={applyBulkPrice}
-                disabled={savingPrice === 'bulk' || selectedIds.length === 0}
-              >
-                {savingPrice === 'bulk' ? 'Saving...' : `Apply to ${selectedIds.length} selected`}
-              </button>
+              {selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setSelectedIds([])}
+                >
+                  Clear selection
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1230,7 +1352,16 @@ export default function ManageVideos() {
             <table>
               <thead>
                 <tr>
-                  {adminUser && <th></th>}
+                  {managerUser && (
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={allPageSelected}
+                        onChange={toggleSelectAllPage}
+                        title="Select all on this page"
+                      />
+                    </th>
+                  )}
                   <th>Clip ID</th>
                   <th>Title</th>
                   {adminUser && <th>Price</th>}
@@ -1251,7 +1382,7 @@ export default function ManageVideos() {
               <tbody>
                 {videoTable.paginated.map((video) => (
                 <tr key={video._id}>
-                  {adminUser && (
+                  {managerUser && (
                     <td>
                       <input
                         type="checkbox"

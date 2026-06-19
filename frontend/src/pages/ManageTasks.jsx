@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { isAdmin } from '../utils/roles';
+import { isAdmin, isVideoManager } from '../utils/roles';
 import { api } from '../api';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { formatMoney, isFreeTaskKind } from '../utils/money';
@@ -12,7 +12,19 @@ import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
 import AssignmentStatusBadge from '../components/AssignmentStatusBadge';
 import { ASSIGNMENT_STATUS_LABELS } from '../utils/assignmentStatus';
+import { GROUP_NEW, validateGroupChoice } from '../components/UploadGroupSelect';
 import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
+
+const MIN_PRICE = 0.3;
+const MAX_PRICE = 2;
+
+const TASK_KINDS = [
+  { value: 'tutorial', label: 'Tutorial' },
+  { value: 'pretest', label: 'Pre-test' },
+  { value: 'production', label: 'Real task' },
+];
+
+const TASK_KIND_LABELS = Object.fromEntries(TASK_KINDS.map((k) => [k.value, k.label]));
 
 const KIND_TABS = [
   { id: 'groups', label: 'Groups' },
@@ -68,9 +80,18 @@ function sortProductionTasks(items, filters) {
   });
 }
 
-function TaskRow({ task, tab, navigate, onEdit }) {
+function TaskRow({ task, tab, navigate, onEdit, selectable = false, selected = false, onToggleSelect }) {
   return (
     <tr className="table-row-link" onClick={(e) => openLabelerRow(navigate, task._id, e)}>
+      {selectable && (
+        <td onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(task._id)}
+          />
+        </td>
+      )}
       <td>
         <VideoLabelLink assignmentId={task._id}>
           <strong>{task.title}</strong>
@@ -340,6 +361,7 @@ export default function ManageTasks() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const adminUser = isAdmin(user);
+  const managerUser = isAdmin(user) || isVideoManager(user);
   const tabOptions = adminUser ? KIND_TABS : MANAGER_TABS;
   const [tab, setTab] = useState(adminUser ? 'tutorial' : 'groups');
   const [groups, setGroups] = useState([]);
@@ -352,6 +374,15 @@ export default function ManageTasks() {
   const [saving, setSaving] = useState(false);
   const [groupForm, setGroupForm] = useState({ name: '', description: '', sortOrder: 0 });
   const [editingGroupId, setEditingGroupId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkKind, setBulkKind] = useState('production');
+  const [bulkPrice, setBulkPrice] = useState(1);
+  const [bulkChallenge, setBulkChallenge] = useState('');
+  const [bulkGroupChoice, setBulkGroupChoice] = useState('');
+  const [bulkNewGroupName, setBulkNewGroupName] = useState('');
+  const [savingBulkKind, setSavingBulkKind] = useState(false);
+  const [savingBulkPrice, setSavingBulkPrice] = useState(false);
+  const [savingBulkGroup, setSavingBulkGroup] = useState(false);
 
   const loadGroups = ({ silent = false } = {}) => {
     if (!silent) {
@@ -397,6 +428,10 @@ export default function ManageTasks() {
     }
   }, [tab]);
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [tab]);
+
   const handleSaveTask = async (body) => {
     setSaving(true);
     setError('');
@@ -428,6 +463,119 @@ export default function ManageTasks() {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const applyBulkKind = async () => {
+    if (selectedIds.length === 0) {
+      setError('Select at least one task');
+      return;
+    }
+    setSavingBulkKind(true);
+    setError('');
+    try {
+      await Promise.all(selectedIds.map((id) => api.updateAdminTask(id, { kind: bulkKind })));
+      setTasks((prev) => {
+        const next = prev.map((task) =>
+          selectedIds.includes(task._id)
+            ? {
+                ...task,
+                kind: bulkKind,
+                taskPrice: isFreeTaskKind(bulkKind) ? 0 : task.taskPrice,
+              }
+            : task
+        );
+        return next.filter((task) => !selectedIds.includes(task._id) || task.kind === tab);
+      });
+      setSelectedIds([]);
+      setMessage(`Set ${selectedIds.length} task(s) to ${TASK_KIND_LABELS[bulkKind] || bulkKind}`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingBulkKind(false);
+    }
+  };
+
+  const applyBulkPrice = async () => {
+    if (selectedIds.length === 0) {
+      setError('Select at least one task');
+      return;
+    }
+    setSavingBulkPrice(true);
+    setError('');
+    try {
+      await api.bulkUpdateAssignmentPrice({
+        assignmentIds: selectedIds,
+        taskPrice: bulkPrice,
+        challengeNote: bulkChallenge,
+      });
+      setTasks((prev) =>
+        prev.map((task) =>
+          selectedIds.includes(task._id) && !isFreeTaskKind(task.kind)
+            ? { ...task, taskPrice: bulkPrice, challengeNote: bulkChallenge }
+            : task
+        )
+      );
+      setSelectedIds([]);
+      setMessage(`Updated price for ${selectedIds.length} task(s)`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingBulkPrice(false);
+    }
+  };
+
+  const applyBulkGroup = async () => {
+    if (selectedIds.length === 0) {
+      setError('Select at least one task');
+      return;
+    }
+
+    const groupError = validateGroupChoice(bulkGroupChoice, bulkNewGroupName);
+    if (groupError) {
+      setError(groupError);
+      return;
+    }
+
+    setSavingBulkGroup(true);
+    setError('');
+    try {
+      let groupId = null;
+      let groupMeta = null;
+
+      if (bulkGroupChoice === GROUP_NEW && bulkNewGroupName.trim()) {
+        const created = await api.createTaskGroup({ name: bulkNewGroupName.trim() });
+        groupId = created._id;
+        groupMeta = { _id: created._id, name: created.name };
+        loadGroups({ silent: true });
+      } else if (bulkGroupChoice && bulkGroupChoice !== GROUP_NEW) {
+        groupId = bulkGroupChoice;
+        const existing = groups.find((group) => group._id === groupId);
+        groupMeta = existing ? { _id: existing._id, name: existing.name } : { _id: groupId };
+      }
+
+      await Promise.all(selectedIds.map((id) => api.updateAdminTask(id, { groupId })));
+
+      setTasks((prev) =>
+        prev.map((task) =>
+          selectedIds.includes(task._id) ? { ...task, groupId: groupMeta } : task
+        )
+      );
+      setSelectedIds([]);
+      setMessage(`Updated group for ${selectedIds.length} task(s)`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingBulkGroup(false);
     }
   };
 
@@ -514,6 +662,20 @@ export default function ManageTasks() {
 
   const taskTable = tab === 'production' ? productionTable : simpleTaskTable;
 
+  const pageTaskIds = taskTable.paginated.map((task) => task._id);
+  const allPageSelected =
+    pageTaskIds.length > 0 && pageTaskIds.every((id) => selectedIds.includes(id));
+
+  const toggleSelectAllPage = () => {
+    if (allPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageTaskIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => [...new Set([...prev, ...pageTaskIds])]);
+    }
+  };
+
+  const showBulkActions = tab !== 'groups' && tasks.length > 0;
+
   if (tasksLoading && tab !== 'groups' && tasks.length === 0 && groups.length === 0) {
     return <div className="loading">Loading tasks...</div>;
   }
@@ -553,6 +715,7 @@ export default function ManageTasks() {
             onClick={() => {
               setTab(t.id);
               setEditingId(null);
+              setSelectedIds([]);
             }}
           >
             {t.label}
@@ -704,6 +867,129 @@ export default function ManageTasks() {
             />
           )}
 
+          {showBulkActions && (
+            <div className="card bulk-actions-bar" style={{ marginBottom: '1rem' }}>
+              <strong className="bulk-actions-title">
+                Bulk actions {selectedIds.length > 0 && `(${selectedIds.length} selected)`}
+              </strong>
+              {adminUser && (
+                <>
+                  <div className="bulk-actions-row">
+                    <div className="bulk-actions-field">
+                      <span>Task type</span>
+                      <select
+                        value={bulkKind}
+                        onChange={(e) => setBulkKind(e.target.value)}
+                        className="kind-select field-input--inline"
+                      >
+                        {TASK_KINDS.map((k) => (
+                          <option key={k.value} value={k.value}>
+                            {k.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="bulk-actions-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={applyBulkKind}
+                        disabled={savingBulkKind || selectedIds.length === 0}
+                      >
+                        {savingBulkKind ? 'Saving...' : 'Apply task type'}
+                      </button>
+                    </div>
+                  </div>
+                  {tab === 'production' && (
+                    <div className="bulk-actions-row">
+                      <div className="bulk-actions-field">
+                        <span>Price ($)</span>
+                        <input
+                          type="number"
+                          min={MIN_PRICE}
+                          max={MAX_PRICE}
+                          step="0.1"
+                          value={bulkPrice}
+                          onChange={(e) => setBulkPrice(parseFloat(e.target.value) || 1)}
+                          className="field-input--inline field-input--number"
+                        />
+                      </div>
+                      <div className="bulk-actions-field bulk-actions-field--grow">
+                        <span>Challenge note</span>
+                        <input
+                          value={bulkChallenge}
+                          onChange={(e) => setBulkChallenge(e.target.value)}
+                          placeholder="Optional note for labellers"
+                          className="field-input--inline field-input--grow"
+                        />
+                      </div>
+                      <div className="bulk-actions-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={applyBulkPrice}
+                          disabled={savingBulkPrice || selectedIds.length === 0}
+                        >
+                          {savingBulkPrice ? 'Saving...' : 'Apply price & note'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {tab === 'production' && managerUser && (
+                <div className="bulk-actions-row">
+                  <div className="bulk-actions-field">
+                    <span>Production group</span>
+                    <select
+                      value={bulkGroupChoice}
+                      onChange={(e) => setBulkGroupChoice(e.target.value)}
+                      className="field-input--inline"
+                    >
+                      <option value="">No group</option>
+                      {groups.map((group) => (
+                        <option key={group._id} value={group._id}>
+                          {group.name}
+                        </option>
+                      ))}
+                      <option value={GROUP_NEW}>+ Create new group…</option>
+                    </select>
+                  </div>
+                  {bulkGroupChoice === GROUP_NEW && (
+                    <div className="bulk-actions-field bulk-actions-field--grow">
+                      <span>New group name</span>
+                      <input
+                        value={bulkNewGroupName}
+                        onChange={(e) => setBulkNewGroupName(e.target.value)}
+                        placeholder="Group name"
+                        className="field-input--inline field-input--grow"
+                      />
+                    </div>
+                  )}
+                  <div className="bulk-actions-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={applyBulkGroup}
+                      disabled={savingBulkGroup || selectedIds.length === 0}
+                    >
+                      {savingBulkGroup ? 'Saving...' : 'Apply group'}
+                    </button>
+                    {selectedIds.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setSelectedIds([])}
+                      >
+                        Clear selection
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="card table-wrap" style={{ marginTop: editingId ? '1rem' : 0 }}>
             <TableToolbar
               search={taskTable.search}
@@ -823,6 +1109,16 @@ export default function ManageTasks() {
                       <table className="admin-table">
                         <thead>
                           <tr>
+                            {showBulkActions && (
+                              <th>
+                                <input
+                                  type="checkbox"
+                                  checked={allPageSelected}
+                                  onChange={toggleSelectAllPage}
+                                  title="Select all on this page"
+                                />
+                              </th>
+                            )}
                             <th>Title</th>
                             <th>Clip</th>
                             <th>Price</th>
@@ -843,6 +1139,9 @@ export default function ManageTasks() {
                               tab={tab}
                               navigate={navigate}
                               onEdit={setEditingId}
+                              selectable={showBulkActions}
+                              selected={selectedIds.includes(t._id)}
+                              onToggleSelect={toggleSelect}
                             />
                           ))}
                         </tbody>
@@ -865,6 +1164,16 @@ export default function ManageTasks() {
                   <table className="admin-table">
                     <thead>
                       <tr>
+                        {showBulkActions && (
+                          <th>
+                            <input
+                              type="checkbox"
+                              checked={allPageSelected}
+                              onChange={toggleSelectAllPage}
+                              title="Select all on this page"
+                            />
+                          </th>
+                        )}
                         <th>Title</th>
                         <th>Clip</th>
                         {tab === 'tutorial' && <th>Steps</th>}
@@ -885,6 +1194,9 @@ export default function ManageTasks() {
                           tab={tab}
                           navigate={navigate}
                           onEdit={setEditingId}
+                          selectable={showBulkActions}
+                          selected={selectedIds.includes(t._id)}
+                          onToggleSelect={toggleSelect}
                         />
                       ))}
                     </tbody>

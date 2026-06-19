@@ -1,5 +1,12 @@
 export const GROUP_NEW = '__new__';
 
+export function validateGroupChoice(choice, newName) {
+  if (choice === GROUP_NEW && !newName?.trim()) {
+    return 'Enter a name for the new production group';
+  }
+  return null;
+}
+
 export function appendGroupFields(formData, { choice, newName, kind = 'production' }) {
   if (kind !== 'production') return;
   if (choice === GROUP_NEW && newName?.trim()) {
