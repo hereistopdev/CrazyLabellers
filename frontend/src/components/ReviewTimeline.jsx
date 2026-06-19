@@ -92,6 +92,7 @@ export default function ReviewTimeline({
   canEditSubmission = false,
   submissionDirty = false,
   onAddSubmissionEvent,
+  onChangeSubmissionEventType,
   onDeleteSubmissionEvent,
   onNudgeSubmissionEvent,
   onSaveSubmission,
@@ -214,13 +215,16 @@ export default function ReviewTimeline({
         )}
         {canEditSubmission && (
           <div className="review-timeline-toolbar review-timeline-toolbar-submission">
+            <span className="review-timeline-edit-hint">
+              Correct labeller labels: change type, nudge frames, add/remove events
+            </span>
             <button
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={onAddSubmissionEvent}
               disabled={saving}
             >
-              Add submitter event
+              Add event
             </button>
             <button
               type="button"
@@ -322,10 +326,10 @@ export default function ReviewTimeline({
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={onAddSubmissionEvent}
+                      onClick={onChangeSubmissionEventType}
                       disabled={saving}
                     >
-                      Add
+                      Change type
                     </button>
                     <button
                       type="button"
@@ -342,6 +346,22 @@ export default function ReviewTimeline({
                       disabled={saving}
                     >
                       +1f
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNudgeSubmissionEvent?.(-5)}
+                      disabled={saving}
+                    >
+                      −5f
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNudgeSubmissionEvent?.(5)}
+                      disabled={saving}
+                    >
+                      +5f
                     </button>
                     <button
                       type="button"

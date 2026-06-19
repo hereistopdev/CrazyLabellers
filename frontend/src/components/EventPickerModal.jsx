@@ -27,6 +27,8 @@ export default function EventPickerModal({
   currentTime,
   onSelect,
   onClose,
+  title,
+  subtitle,
 }) {
   useEffect(() => {
     if (!open) return;
@@ -56,8 +58,10 @@ export default function EventPickerModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card event-picker-modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Mark event at {formatTime(currentTime)}</h3>
-        <p className="modal-sub">Press a number key or click an event. Esc to cancel.</p>
+        <h3>{title || `Mark event at ${formatTime(currentTime)}`}</h3>
+        <p className="modal-sub">
+          {subtitle || 'Press a number key or click an event. Esc to cancel.'}
+        </p>
         <div className="event-picker-grid">
           {eventTypes.map((eventType, index) => {
             const followUpRule = lastEvent

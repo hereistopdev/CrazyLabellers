@@ -2404,6 +2404,25 @@ tbody tr:hover {
   flex-wrap: wrap;
   gap: 0.4rem;
   flex: 1;
+  align-items: center;
+}
+
+.review-timeline-toolbar-submission {
+  justify-content: flex-end;
+}
+
+.review-timeline-edit-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-right: 0.25rem;
+}
+
+.review-frame-actions-submission,
+.review-frame-actions-reference {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
 }
 
 .review-timeline-title {

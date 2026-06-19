@@ -65,6 +65,7 @@ export default function ReviewSubmission() {
   const [editableSubmissionEvents, setEditableSubmissionEvents] = useState([]);
   const [submissionDirty, setSubmissionDirty] = useState(false);
   const [showSubmissionEventPicker, setShowSubmissionEventPicker] = useState(false);
+  const [submissionPickerMode, setSubmissionPickerMode] = useState('add');
   const [savingSubmission, setSavingSubmission] = useState(false);
 
   const assignment = reviewData?.assignment;
@@ -416,6 +417,13 @@ export default function ReviewSubmission() {
 
   const openSubmissionEventPicker = useCallback(() => {
     pauseAll();
+    setSubmissionPickerMode('add');
+    setShowSubmissionEventPicker(true);
+  }, [pauseAll]);
+
+  const openChangeSubmissionEventPicker = useCallback(() => {
+    pauseAll();
+    setSubmissionPickerMode('change');
     setShowSubmissionEventPicker(true);
   }, [pauseAll]);
 
@@ -489,6 +497,63 @@ export default function ReviewSubmission() {
       setTimeout(() => setMessage(''), 2500);
     },
     [pauseAll, currentTime, lastSubmissionEvent, editableSubmissionEvents]
+  );
+
+  const changeSubmissionEventTypeAtFrame = useCallback(
+    (eventType) => {
+      pauseAll();
+      const frame = Math.round(currentTime * fps);
+      let changed = false;
+      const next = editableSubmissionEvents
+        .map((event) => {
+          if (Math.round(event.frameTime * fps) !== frame) return event;
+          changed = true;
+          const playheadTime = event.playheadTime ?? event.frameTime;
+          const followUpRule = lastSubmissionEvent
+            ? getImmediateFollowUpRule(lastSubmissionEvent.eventType, eventType)
+            : null;
+          const useFollowUp = Boolean(followUpRule);
+          const options = {
+            immediateFollowUp: useFollowUp,
+            afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : null,
+          };
+          const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+          const offset = resolveFrameOffset(eventType, options);
+          return {
+            ...event,
+            eventType,
+            frameTime: adjustedTime,
+            playheadTime: parseFloat(playheadTime.toFixed(3)),
+            frameOffset: offset,
+            immediateFollowUp: useFollowUp,
+            afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : undefined,
+          };
+        })
+        .sort((a, b) => a.frameTime - b.frameTime);
+
+      if (!changed) {
+        setShowSubmissionEventPicker(false);
+        return;
+      }
+
+      setEditableSubmissionEvents(next);
+      setSubmissionDirty(true);
+      setShowSubmissionEventPicker(false);
+      setMessage(`Changed to ${eventType} at ${formatTime(next.find((e) => Math.round(e.frameTime * fps) === frame)?.frameTime ?? currentTime)} (unsaved)`);
+      setTimeout(() => setMessage(''), 2500);
+    },
+    [pauseAll, currentTime, fps, lastSubmissionEvent, editableSubmissionEvents]
+  );
+
+  const handleSubmissionEventSelect = useCallback(
+    (eventType) => {
+      if (submissionPickerMode === 'change') {
+        changeSubmissionEventTypeAtFrame(eventType);
+      } else {
+        addSubmissionEvent(eventType);
+      }
+    },
+    [submissionPickerMode, changeSubmissionEventTypeAtFrame, addSubmissionEvent]
   );
 
   const deleteSubmissionEventAtFrame = useCallback(() => {
@@ -824,7 +889,19 @@ export default function ReviewSubmission() {
             )}
           </p>
         )}
-        {canEditSubmission && reference?.hasReference && submissionDirty && (
+        {canEditSubmission && reference?.hasReference && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            You can correct the labeller&apos;s submission — change event types, nudge frame positions,
+            add missing events, or remove wrong ones, then <strong>Save submission</strong>.
+            {submissionDirty && (
+              <>
+                {' '}
+                · <strong>Unsaved submission edits</strong>
+              </>
+            )}
+          </p>
+        )}
+        {canEditReference && reference?.hasReference && submissionDirty && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             <strong>Unsaved submission edits</strong> — save before approving.
           </p>
@@ -976,6 +1053,7 @@ export default function ReviewSubmission() {
             canEditSubmission={canEditSubmission}
             submissionDirty={submissionDirty}
             onAddSubmissionEvent={openSubmissionEventPicker}
+            onChangeSubmissionEventType={openChangeSubmissionEventPicker}
             onDeleteSubmissionEvent={deleteSubmissionEventAtFrame}
             onNudgeSubmissionEvent={nudgeSubmissionEventAtFrame}
             onSaveSubmission={saveSubmissionEvents}
@@ -1113,7 +1191,17 @@ export default function ReviewSubmission() {
           eventTypes={eventTypes}
           lastEvent={lastSubmissionEvent}
           currentTime={currentTime}
-          onSelect={addSubmissionEvent}
+          title={
+            submissionPickerMode === 'change'
+              ? `Change event type · frame ${Math.round(currentTime * fps)}`
+              : undefined
+          }
+          subtitle={
+            submissionPickerMode === 'change'
+              ? 'Pick the corrected event type for this frame.'
+              : undefined
+          }
+          onSelect={handleSubmissionEventSelect}
           onClose={() => setShowSubmissionEventPicker(false)}
         />
       )}
