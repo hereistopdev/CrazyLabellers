@@ -9,7 +9,7 @@ const {
   refreshLabelingTestPassed,
 } = require('./onboarding');
 
-async function gradeSubmissionAgainstReference(submission, assignment) {
+async function gradeEventsAgainstReference(events, assignment) {
   if (!assignment?.clipId) {
     throw new Error('Assignment has no clipId for auto scoring');
   }
@@ -20,16 +20,22 @@ async function gradeSubmissionAgainstReference(submission, assignment) {
   }
 
   const scoreResult = computeLabelingScore(
-    normalizeLabelEvents(submission.events),
+    normalizeLabelEvents(events),
     normalizeLabelEvents(reference.events),
     assignment.fps || 25
   );
+
+  return { scoreResult, reference };
+}
+
+async function gradeSubmissionAgainstReference(submission, assignment) {
+  const { scoreResult } = await gradeEventsAgainstReference(submission.events, assignment);
 
   submission.autoScore = scoreResult.totalScore;
   submission.autoScoreBreakdown = scoreResult.breakdown;
   await submission.save();
 
-  return { scoreResult, reference };
+  return { scoreResult, reference: (await loadReferenceForClip(assignment.clipId, 'post')) };
 }
 
 async function ensureSubmissionAutoScore(submission, assignment) {
@@ -75,6 +81,7 @@ async function recordLabelingTestAttempt(userId, assignmentId, submission, score
 }
 
 module.exports = {
+  gradeEventsAgainstReference,
   gradeSubmissionAgainstReference,
   ensureSubmissionAutoScore,
   recordLabelingTestAttempt,

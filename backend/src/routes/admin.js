@@ -22,6 +22,7 @@ const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotati
 const { importClipsFromDir } = require('../services/clipImport');
 const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
 const { importClipFromUpload } = require('../services/clipUpload');
+const { resolveUploadGroupId } = require('../services/taskGroups');
 const { isRemoteVideoStorage, getStorageStatus } = require('../services/videoStorage');
 const { isVideoFilename } = require('../utils/clipId');
 const { saveReferenceForClip, deleteReferenceForClip, hasReferenceForClip } = require('../services/referenceStorage');
@@ -737,12 +738,19 @@ router.post('/videos/bulk-clip', auth, requireVideoManagerAccess, uploadBulkClip
       });
     }
 
+    const kind = req.body.kind || 'production';
+    const groupId = await resolveUploadGroupId({
+      groupId: req.body.groupId,
+      newGroupName: req.body.newGroupName,
+      kind,
+    });
+
     const result = await importClipFromUpload({
       videoFile,
       referencePostFile: req.files?.referencePost?.[0],
       referenceRawFile: req.files?.referenceRaw?.[0],
       clipId: req.body.clipId,
-      kind: req.body.kind,
+      kind,
       taskPrice: req.body.taskPrice,
       skipExisting: req.body.skipExisting !== 'false',
       title: req.body.title,
@@ -752,6 +760,7 @@ router.post('/videos/bulk-clip', auth, requireVideoManagerAccess, uploadBulkClip
       challengeNote: req.body.challengeNote,
       uploadedBy: req.user._id,
       referenceUpdatedBy: req.user._id,
+      groupId,
     });
 
     return res.status(result.skipped ? 200 : 201).json({
@@ -778,10 +787,17 @@ router.post('/videos', auth, requireVideoManagerAccess, uploadVideoWithReference
       });
     }
 
+    const kind = req.body.kind || 'production';
+    const groupId = await resolveUploadGroupId({
+      groupId: req.body.groupId,
+      newGroupName: req.body.newGroupName,
+      kind,
+    });
+
     const result = await importClipFromUpload({
       videoFile,
       referencePostFile: referenceFile,
-      kind: req.body.kind,
+      kind,
       taskPrice: req.body.taskPrice,
       skipExisting: false,
       title: req.body.title,
@@ -791,6 +807,7 @@ router.post('/videos', auth, requireVideoManagerAccess, uploadVideoWithReference
       challengeNote: req.body.challengeNote,
       uploadedBy: req.user._id,
       referenceUpdatedBy: req.user._id,
+      groupId,
     });
 
     return res.status(201).json({

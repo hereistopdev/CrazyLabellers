@@ -326,12 +326,18 @@ router.put('/:id/labels', auth, async (req, res) => {
 
     const normalizedEvents = normalizeLabelEvents(events || []);
 
+    const updatePayload = {
+      events: normalizedEvents,
+      status: status || 'draft',
+    };
+
+    if (status === 'submitted') {
+      updatePayload.originalEvents = normalizedEvents;
+    }
+
     const submission = await LabelSubmission.findOneAndUpdate(
       { assignmentId: req.params.id, userId: req.user._id },
-      {
-        events: normalizedEvents,
-        status: status || 'draft',
-      },
+      updatePayload,
       { upsert: true, new: true, runValidators: true }
     );
 

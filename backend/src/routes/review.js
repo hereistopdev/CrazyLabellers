@@ -10,7 +10,9 @@ const { processApprovalBadges } = require('../services/labellerBadges');
 const { loadReferenceForClip, saveReferenceEventsForClip } = require('../services/referenceStorage');
 const { compareAnnotations } = require('../utils/compareAnnotations');
 const { buildScoreReviewPayload } = require('../services/scoreReview');
-const { gradeSubmissionAgainstReference } = require('../services/grading');
+const { gradeSubmissionAgainstReference, gradeEventsAgainstReference } = require('../services/grading');
+const { applyCorrectionScore, buildCorrectionBreakdown } = require('../services/submissionCorrections');
+const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { EVENT_TYPES } = require('../config/events');
 
 const router = express.Router();
@@ -202,6 +204,77 @@ router.patch('/assignments/:id/reference', auth, requireReviewerRole, async (req
         ensureScore: false,
       })
     );
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.patch('/submissions/:id/events', auth, requireReviewerRole, async (req, res) => {
+  try {
+    const { events } = req.body;
+    if (!Array.isArray(events)) {
+      return res.status(400).json({ message: 'events must be an array' });
+    }
+
+    for (const event of events) {
+      if (!EVENT_TYPES.includes(event.eventType)) {
+        return res.status(400).json({ message: `Invalid event type: ${event.eventType}` });
+      }
+      if (!Number.isFinite(event.frameTime)) {
+        return res.status(400).json({ message: 'Each event must have a numeric frameTime' });
+      }
+    }
+
+    const submission = await LabelSubmission.findById(req.params.id)
+      .populate('userId', 'name email status')
+      .populate('reviewedBy', 'name email');
+
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const assignment = await loadAssignmentForReview(submission.assignmentId);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (!submission.originalEvents?.length) {
+      submission.originalEvents = normalizeLabelEvents(submission.events || []);
+    }
+
+    const normalizedEvents = normalizeLabelEvents(events);
+    const originalEvents = submission.originalEvents?.length
+      ? submission.originalEvents
+      : normalizeLabelEvents(submission.events || []);
+
+    submission.events = normalizedEvents;
+    submission.correctedBy = req.user._id;
+    submission.correctedAt = new Date();
+
+    const reference = assignment.clipId
+      ? await loadReferenceForClip(assignment.clipId, 'post')
+      : { hasReference: false };
+
+    const correction = buildCorrectionBreakdown(originalEvents, normalizedEvents, assignment?.fps || 25);
+    submission.correctionBreakdown = {
+      frameAdjustments: correction.frameAdjustments,
+      missedAdded: correction.missedAdded,
+      wrongRemoved: correction.wrongRemoved,
+      totalCorrections: correction.totalCorrections,
+    };
+
+    if (reference.hasReference) {
+      const { scoreResult } = await gradeEventsAgainstReference(originalEvents, assignment);
+      submission.autoScore = scoreResult.totalScore;
+      submission.autoScoreBreakdown = scoreResult.breakdown;
+    } else {
+      applyCorrectionScore(submission, normalizedEvents, assignment);
+    }
+
+    await submission.save();
+
+    const payload = await buildReviewPayload(submission, assignment, 'post', { ensureScore: false });
+    return res.json(payload);
   } catch (error) {
     return res.status(400).json({ message: error.message });
   }

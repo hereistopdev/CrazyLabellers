@@ -62,6 +62,10 @@ export default function ReviewSubmission() {
   const [referenceDirty, setReferenceDirty] = useState(false);
   const [showReferenceEventPicker, setShowReferenceEventPicker] = useState(false);
   const [savingReference, setSavingReference] = useState(false);
+  const [editableSubmissionEvents, setEditableSubmissionEvents] = useState([]);
+  const [submissionDirty, setSubmissionDirty] = useState(false);
+  const [showSubmissionEventPicker, setShowSubmissionEventPicker] = useState(false);
+  const [savingSubmission, setSavingSubmission] = useState(false);
 
   const assignment = reviewData?.assignment;
   const submission = reviewData?.submission;
@@ -75,7 +79,10 @@ export default function ReviewSubmission() {
   const currentFrame = Math.round(currentTime * fps);
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
-  const submissionEvents = submission?.events || [];
+  const canEditSubmission = canEditReference && !isPreview;
+  const submissionEvents = canEditSubmission
+    ? editableSubmissionEvents
+    : submission?.events || [];
   const referenceEvents = canEditReference
     ? editableReferenceEvents
     : reference?.hasReference
@@ -86,6 +93,11 @@ export default function ReviewSubmission() {
     if (!referenceEvents.length) return null;
     return [...referenceEvents].sort((a, b) => a.frameTime - b.frameTime).at(-1);
   }, [referenceEvents]);
+
+  const lastSubmissionEvent = useMemo(() => {
+    if (!submissionEvents.length) return null;
+    return [...submissionEvents].sort((a, b) => a.frameTime - b.frameTime).at(-1);
+  }, [submissionEvents]);
 
   const eventFrames = useMemo(
     () => buildSortedEventFrames(submissionEvents, referenceEvents, fps),
@@ -179,6 +191,13 @@ export default function ReviewSubmission() {
     setEditableReferenceEvents(events);
     setReferenceDirty(false);
   }, [canEditReference, reviewData?.reference?.events, reviewData?.reference?.annotationCount, assignment?._id]);
+
+  useEffect(() => {
+    if (!canEditSubmission) return;
+    const events = reviewData?.submission?.events || [];
+    setEditableSubmissionEvents(events);
+    setSubmissionDirty(false);
+  }, [canEditSubmission, reviewData?.submission?.events, reviewData?.submission?.updatedAt, submission?._id]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -395,6 +414,11 @@ export default function ReviewSubmission() {
     setShowReferenceEventPicker(true);
   }, [pauseAll]);
 
+  const openSubmissionEventPicker = useCallback(() => {
+    pauseAll();
+    setShowSubmissionEventPicker(true);
+  }, [pauseAll]);
+
   const addReferenceEvent = useCallback(
     (eventType) => {
       pauseAll();
@@ -430,6 +454,102 @@ export default function ReviewSubmission() {
     },
     [pauseAll, currentTime, lastReferenceEvent, editableReferenceEvents]
   );
+
+  const addSubmissionEvent = useCallback(
+    (eventType) => {
+      pauseAll();
+      const playheadTime = videoRef.current?.currentTime ?? currentTime;
+      const followUpRule = lastSubmissionEvent
+        ? getImmediateFollowUpRule(lastSubmissionEvent.eventType, eventType)
+        : null;
+      const useFollowUp = Boolean(followUpRule);
+      const options = {
+        immediateFollowUp: useFollowUp,
+        afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : null,
+      };
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+      const offset = resolveFrameOffset(eventType, options);
+
+      const newEvents = [
+        ...editableSubmissionEvents,
+        {
+          eventType,
+          frameTime: adjustedTime,
+          playheadTime: parseFloat(playheadTime.toFixed(3)),
+          frameOffset: offset,
+          immediateFollowUp: useFollowUp,
+          afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : undefined,
+        },
+      ].sort((a, b) => a.frameTime - b.frameTime);
+
+      setEditableSubmissionEvents(newEvents);
+      setSubmissionDirty(true);
+      setShowSubmissionEventPicker(false);
+      setMessage(`Added submission ${eventType} at ${formatTime(adjustedTime)} (unsaved)`);
+      setTimeout(() => setMessage(''), 2500);
+    },
+    [pauseAll, currentTime, lastSubmissionEvent, editableSubmissionEvents]
+  );
+
+  const deleteSubmissionEventAtFrame = useCallback(() => {
+    const frame = Math.round(currentTime * fps);
+    const next = editableSubmissionEvents.filter(
+      (event) => Math.round(event.frameTime * fps) !== frame
+    );
+    if (next.length === editableSubmissionEvents.length) return;
+    setEditableSubmissionEvents(next);
+    setSubmissionDirty(true);
+    setMessage('Removed submission event on this frame (unsaved)');
+    setTimeout(() => setMessage(''), 2000);
+  }, [currentTime, fps, editableSubmissionEvents]);
+
+  const nudgeSubmissionEventAtFrame = useCallback(
+    (frameDelta) => {
+      const frame = Math.round(currentTime * fps);
+      let changed = false;
+      const next = editableSubmissionEvents
+        .map((event) => {
+          if (Math.round(event.frameTime * fps) !== frame) return event;
+          changed = true;
+          return {
+            ...event,
+            frameTime: Math.max(0, event.frameTime + frameDelta * frameDuration),
+          };
+        })
+        .sort((a, b) => a.frameTime - b.frameTime);
+      if (!changed) return;
+      setEditableSubmissionEvents(next);
+      setSubmissionDirty(true);
+    },
+    [currentTime, fps, editableSubmissionEvents, frameDuration]
+  );
+
+  const saveSubmissionEvents = async () => {
+    if (!submissionId) return;
+    setSavingSubmission(true);
+    setError('');
+    try {
+      const data = await api.updateReviewSubmissionEvents(submissionId, {
+        events: editableSubmissionEvents,
+      });
+      setReviewData(data);
+      setEditableSubmissionEvents(data.submission?.events || editableSubmissionEvents);
+      setSubmissionDirty(false);
+      if (data.submission?.autoScore != null) {
+        setReviewPoints(data.submission.reviewPoints || data.submission.autoScore);
+      }
+      setMessage(
+        reference?.hasReference
+          ? 'Submission corrections saved'
+          : 'Submission saved — score updated from corrections'
+      );
+      setTimeout(() => setMessage(''), 2500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingSubmission(false);
+    }
+  };
 
   const deleteReferenceEventAtFrame = useCallback(() => {
     const frame = Math.round(currentTime * fps);
@@ -582,7 +702,12 @@ export default function ReviewSubmission() {
   const maxPayout = calcTaskEarnings(100, taskPrice, ratePerPoint, assignment?.kind);
   const autoScore = reviewData?.autoScore ?? submission?.autoScore;
   const autoScoreBreakdown = reviewData?.autoScoreBreakdown ?? submission?.autoScoreBreakdown;
+  const correctionBreakdown = reviewData?.correctionBreakdown ?? submission?.correctionBreakdown;
   const validatedCount = eventRows.filter((row) => row.validation.status !== 'pending').length;
+  const hasUnsavedEdits = referenceDirty || submissionDirty;
+  const scoreLabel = reference?.hasReference
+    ? 'Auto score (reference comparison)'
+    : 'Correction score (manual review)';
 
   return (
     <div className="labeling-page review-page">
@@ -605,7 +730,7 @@ export default function ReviewSubmission() {
             <Link to={`/profile/${submission?.userId?._id || submission?.userId}`}>
               <strong>{submission?.userId?.name}</strong>
             </Link>{' '}
-            · {submission?.events?.length || 0} events · Validated {validatedCount}/{eventRows.length}{' '}
+            · {submissionEvents.length} events · Validated {validatedCount}/{eventRows.length}{' '}
             · Status: <strong>{submission?.status}</strong>
           </p>
         )}
@@ -644,7 +769,7 @@ export default function ReviewSubmission() {
         )}
         {autoScore != null && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Auto score (reference comparison): <strong>{autoScore}/100</strong>
+            {scoreLabel}: <strong>{autoScore}/100</strong>
             {!isPreview && submission?.status === 'submitted' && autoScore !== reviewPoints && (
               <>
                 {' '}
@@ -655,10 +780,17 @@ export default function ReviewSubmission() {
                   style={{ marginLeft: 4, verticalAlign: 'baseline' }}
                   onClick={() => setReviewPoints(autoScore)}
                 >
-                  Use auto score
+                  Use {reference?.hasReference ? 'auto' : 'correction'} score
                 </button>
               </>
             )}
+          </p>
+        )}
+        {correctionBreakdown?.totalCorrections > 0 && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Validator corrections: {correctionBreakdown.frameAdjustments} frame adjustment
+            {correctionBreakdown.frameAdjustments !== 1 ? 's' : ''}, {correctionBreakdown.missedAdded}{' '}
+            missed added, {correctionBreakdown.wrongRemoved} wrong removed
           </p>
         )}
         {reference?.hasReference && comparison?.summary && (
@@ -676,13 +808,25 @@ export default function ReviewSubmission() {
         )}
         {canEditReference && !reference?.hasReference && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            No reference yet — add events on the timeline and save.
+            No reference — review the submitter&apos;s events, correct them on the timeline, then save
+            submission. Score reflects frame adjustments, missed events added, and wrong events removed.
+            {submissionDirty && (
+              <>
+                {' '}
+                · <strong>Unsaved submission edits</strong>
+              </>
+            )}
             {referenceDirty && (
               <>
                 {' '}
                 · <strong>Unsaved reference edits</strong>
               </>
             )}
+          </p>
+        )}
+        {canEditSubmission && reference?.hasReference && submissionDirty && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <strong>Unsaved submission edits</strong> — save before approving.
           </p>
         )}
         <Link to="/review" style={{ fontSize: '0.88rem' }}>
@@ -701,7 +845,7 @@ export default function ReviewSubmission() {
             isPaused={isPaused}
             enabled={magnifyEnabled}
             onEnabledChange={setMagnifyEnabled}
-            submissionEvents={submission?.events || []}
+            submissionEvents={submissionEvents}
             referenceEvents={referenceEvents}
             fps={fps}
           >
@@ -816,19 +960,25 @@ export default function ReviewSubmission() {
             currentTime={currentTime}
             maxTime={maxTime}
             fps={fps}
-            submissionEvents={submission?.events || []}
+            submissionEvents={submissionEvents}
             referenceEvents={referenceEvents}
             eventRows={eventRows}
             labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
             hasReference={reference?.hasReference || (canEditReference && referenceEvents.length > 0)}
             previewMode={isPreview}
-            saving={saving || savingReference}
+            saving={saving || savingReference || savingSubmission || submissionDirty}
             canEditReference={canEditReference}
             referenceDirty={referenceDirty}
             onAddReferenceEvent={openReferenceEventPicker}
             onDeleteReferenceEvent={deleteReferenceEventAtFrame}
             onNudgeReferenceEvent={nudgeReferenceEventAtFrame}
             onSaveReference={saveReferenceEvents}
+            canEditSubmission={canEditSubmission}
+            submissionDirty={submissionDirty}
+            onAddSubmissionEvent={openSubmissionEventPicker}
+            onDeleteSubmissionEvent={deleteSubmissionEventAtFrame}
+            onNudgeSubmissionEvent={nudgeSubmissionEventAtFrame}
+            onSaveSubmission={saveSubmissionEvents}
             onSeek={handleScrub}
             onValidateEvent={validateEvent}
             onValidateAll={validateAll}
@@ -837,9 +987,17 @@ export default function ReviewSubmission() {
 
           {!isPreview && submission?.status === 'submitted' && (
             <div className="review-final-bar">
+              {!reference?.hasReference && autoScore == null && (
+                <p className="alert alert-info" style={{ marginBottom: '1rem' }}>
+                  No reference for this clip — correct the submitter&apos;s events and save submission to
+                  compute a correction score.
+                </p>
+              )}
               {autoScoreBreakdown?.length > 0 && (
                 <div className="labeling-score-breakdown" style={{ marginBottom: '1rem' }}>
-                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Auto score breakdown</h4>
+                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                    {reference?.hasReference ? 'Auto score breakdown' : 'Correction score breakdown'}
+                  </h4>
                   {autoScoreBreakdown.map((item) => (
                     <div key={`${item.eventType}-${item.referenceIndex}`} className="labeling-score-row">
                       <span className="type">{item.eventType}</span>
@@ -911,12 +1069,17 @@ export default function ReviewSubmission() {
                 placeholder="Review notes..."
                 className="review-final-notes"
               />
+              {hasUnsavedEdits && (
+                <p className="alert alert-info" style={{ marginBottom: '1rem' }}>
+                  Save submission or reference edits before approving.
+                </p>
+              )}
               <div className="review-final-actions">
                 <button
                   type="button"
                   className="btn btn-danger btn-sm"
                   onClick={() => submitReview('rejected')}
-                  disabled={saving}
+                  disabled={saving || hasUnsavedEdits}
                 >
                   Reject
                 </button>
@@ -924,7 +1087,7 @@ export default function ReviewSubmission() {
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={() => submitReview('approved')}
-                  disabled={saving}
+                  disabled={saving || hasUnsavedEdits}
                 >
                   Approve — {formatMoney(earnings, currency)}
                 </button>
@@ -942,6 +1105,16 @@ export default function ReviewSubmission() {
           currentTime={currentTime}
           onSelect={addReferenceEvent}
           onClose={() => setShowReferenceEventPicker(false)}
+        />
+      )}
+      {canEditSubmission && (
+        <EventPickerModal
+          open={showSubmissionEventPicker}
+          eventTypes={eventTypes}
+          lastEvent={lastSubmissionEvent}
+          currentTime={currentTime}
+          onSelect={addSubmissionEvent}
+          onClose={() => setShowSubmissionEventPicker(false)}
         />
       )}
     </div>

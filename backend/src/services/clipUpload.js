@@ -32,6 +32,7 @@ async function importClipFromUpload({
   challengeNote = '',
   uploadedBy,
   referenceUpdatedBy,
+  groupId,
 }) {
   if (!videoFile) {
     throw new Error('Video file is required');
@@ -52,17 +53,26 @@ async function importClipFromUpload({
       ? validateTaskPrice(taskPrice, { kind: taskKind })
       : DEFAULT_TASK_PRICE;
 
+  const resolvedGroupId = taskKind === 'production' && groupId ? groupId : null;
+
   const existing = await VideoAssignment.findOne({ clipId });
   if (existing && skipExisting) {
     let refsImported = 0;
     if (await saveReferenceFile(clipId, referencePostFile, 'post')) refsImported += 1;
     if (await saveReferenceFile(clipId, referenceRawFile, 'raw')) refsImported += 1;
+
+    const skipUpdate = {};
     if (refsImported > 0 && referenceUpdatedBy) {
-      await VideoAssignment.findByIdAndUpdate(existing._id, {
-        referenceUpdatedBy,
-        referenceUpdatedAt: new Date(),
-      });
+      skipUpdate.referenceUpdatedBy = referenceUpdatedBy;
+      skipUpdate.referenceUpdatedAt = new Date();
     }
+    if (resolvedGroupId) {
+      skipUpdate.groupId = resolvedGroupId;
+    }
+    if (Object.keys(skipUpdate).length > 0) {
+      await VideoAssignment.findByIdAndUpdate(existing._id, skipUpdate);
+    }
+
     return {
       skipped: true,
       clipId,
@@ -87,6 +97,8 @@ async function importClipFromUpload({
         taskPrice: resolvedPrice,
         challengeNote: challengeNote || existing.challengeNote,
         videoUrl,
+        ...(resolvedGroupId ? { groupId: resolvedGroupId } : {}),
+        ...(taskKind !== 'production' ? { groupId: null } : {}),
       },
       { new: true }
     );
@@ -103,6 +115,7 @@ async function importClipFromUpload({
       videoUrl,
       videoExtension,
       uploadedBy,
+      groupId: resolvedGroupId,
     });
   }
 
@@ -110,11 +123,13 @@ async function importClipFromUpload({
   if (await saveReferenceFile(clipId, referencePostFile, 'post')) hasReference = true;
   if (await saveReferenceFile(clipId, referenceRawFile, 'raw')) hasReference = true;
 
+  const postUpdate = {};
   if (hasReference && referenceUpdatedBy) {
-    await VideoAssignment.findByIdAndUpdate(assignment._id, {
-      referenceUpdatedBy,
-      referenceUpdatedAt: new Date(),
-    });
+    postUpdate.referenceUpdatedBy = referenceUpdatedBy;
+    postUpdate.referenceUpdatedAt = new Date();
+  }
+  if (Object.keys(postUpdate).length > 0) {
+    await VideoAssignment.findByIdAndUpdate(assignment._id, postUpdate);
   }
 
   return {

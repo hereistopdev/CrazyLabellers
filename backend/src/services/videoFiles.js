@@ -44,6 +44,7 @@ async function createVideoAssignment({
   sortOrder,
   videoExtension,
   uploadedBy,
+  groupId,
 }) {
   const existing = await VideoAssignment.findOne({ clipId });
   if (existing) {
@@ -74,6 +75,7 @@ async function createVideoAssignment({
     challengeNote: challengeNote || '',
     status: 'available',
     uploadedBy: uploadedBy || null,
+    groupId: kind === 'production' && groupId ? groupId : null,
   });
 }
 

@@ -13,6 +13,7 @@ import { openLabelerRow } from '../utils/labelerAccess';
 import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
+import UploadGroupSelect, { appendGroupFields, GROUP_NEW } from '../components/UploadGroupSelect';
 
 const UPLOAD_CONCURRENCY = 2;
 
@@ -38,6 +39,13 @@ const STATUS_LABELS = {
 
 function userLabel(user) {
   return user?.name || user?.email || '—';
+}
+
+function validateGroupChoice(choice, newName) {
+  if (choice === GROUP_NEW && !newName?.trim()) {
+    return 'Enter a name for the new production group';
+  }
+  return null;
 }
 
 export default function ManageVideos() {
@@ -76,6 +84,15 @@ export default function ManageVideos() {
   const [uploadingBulk, setUploadingBulk] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [bulkUploadResult, setBulkUploadResult] = useState(null);
+  const [taskGroups, setTaskGroups] = useState([]);
+  const [uploadGroupChoice, setUploadGroupChoice] = useState('');
+  const [uploadNewGroupName, setUploadNewGroupName] = useState('');
+  const [bulkGroupChoice, setBulkGroupChoice] = useState('');
+  const [bulkNewGroupName, setBulkNewGroupName] = useState('');
+
+  const loadGroups = () => {
+    api.getTaskGroups().then(setTaskGroups).catch(() => setTaskGroups([]));
+  };
 
   const load = () => {
     setTableLoading(true);
@@ -103,6 +120,8 @@ export default function ManageVideos() {
 
   useEffect(load, []);
 
+  useEffect(loadGroups, []);
+
   useEffect(() => {
     if (window.location.hash === '#bulk-upload') {
       document.getElementById('bulk-upload')?.scrollIntoView({ behavior: 'smooth' });
@@ -118,6 +137,12 @@ export default function ManageVideos() {
 
     setUploading(true);
     setError('');
+    const groupError = validateGroupChoice(uploadGroupChoice, uploadNewGroupName);
+    if (groupError) {
+      setError(groupError);
+      setUploading(false);
+      return;
+    }
     try {
       let durationSeconds = meta.durationSeconds;
       try {
@@ -139,6 +164,11 @@ export default function ManageVideos() {
       formData.append('kind', meta.kind);
       if (meta.challengeNote) formData.append('challengeNote', meta.challengeNote);
       if (referenceFile) formData.append('reference', referenceFile);
+      appendGroupFields(formData, {
+        choice: uploadGroupChoice,
+        newName: uploadNewGroupName,
+        kind: meta.kind,
+      });
 
       const result = await api.uploadVideo(formData);
       setFile(null);
@@ -157,6 +187,7 @@ export default function ManageVideos() {
           ? `Video uploaded to VPS${result.hasReference ? ' with reference JSON' : ''}`
           : `Video added${result.hasReference ? ' with reference JSON' : ''}`
       );
+      loadGroups();
       load();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
@@ -226,6 +257,13 @@ export default function ManageVideos() {
     setMessage('');
     setBulkUploadResult(null);
 
+    const groupError = validateGroupChoice(bulkGroupChoice, bulkNewGroupName);
+    if (groupError) {
+      setError(groupError);
+      setUploadingBulk(false);
+      return;
+    }
+
     const totals = { created: 0, skipped: 0, updated: 0, errors: 0 };
     const errorDetails = [];
     let completed = 0;
@@ -244,6 +282,11 @@ export default function ManageVideos() {
       formData.append('kind', uploadBulkKind);
       formData.append('taskPrice', String(isFreeTaskKind(uploadBulkKind) ? 0 : uploadBulkTaskPrice));
       formData.append('skipExisting', String(uploadSkipExisting));
+      appendGroupFields(formData, {
+        choice: bulkGroupChoice,
+        newName: bulkNewGroupName,
+        kind: uploadBulkKind,
+      });
 
       const result = await api.uploadBulkClip(formData);
       if (result.skipped) totals.skipped += 1;
@@ -298,6 +341,7 @@ export default function ManageVideos() {
         setError(`Bulk upload failed — ${summary}`);
       }
 
+      loadGroups();
       load();
       setTimeout(() => setMessage(''), 10000);
     } catch (err) {
@@ -539,6 +583,18 @@ export default function ManageVideos() {
           </div>
         )}
 
+        {(!adminUser || uploadBulkKind === 'production') && (
+          <UploadGroupSelect
+            groups={taskGroups}
+            value={bulkGroupChoice}
+            newName={bulkNewGroupName}
+            onChange={setBulkGroupChoice}
+            onNewNameChange={setBulkNewGroupName}
+            disabled={uploadingBulk}
+            kind={uploadBulkKind}
+          />
+        )}
+
         <label className="review-playback-toggle" style={{ display: 'block', marginBottom: '1rem' }}>
           <input
             type="checkbox"
@@ -734,6 +790,17 @@ export default function ManageVideos() {
               onChange={(e) => setMeta({ ...meta, durationSeconds: parseInt(e.target.value, 10) || 30 })}
             />
           </div>
+          {(!adminUser || meta.kind === 'production') && (
+            <UploadGroupSelect
+              groups={taskGroups}
+              value={uploadGroupChoice}
+              newName={uploadNewGroupName}
+              onChange={setUploadGroupChoice}
+              onNewNameChange={setUploadNewGroupName}
+              disabled={uploading}
+              kind={meta.kind}
+            />
+          )}
           {adminUser && (
             <>
               <div className="form-group">
@@ -936,6 +1003,7 @@ export default function ManageVideos() {
                   {adminUser && <th>Challenge</th>}
                   {adminUser && <th>Task type</th>}
                   <th>Status</th>
+                  <th>Group</th>
                   <th>Ref</th>
                   <th>Uploaded by</th>
                   <th>Validated by</th>
@@ -1027,6 +1095,7 @@ export default function ManageVideos() {
                       {STATUS_LABELS[video.status] || video.status}
                     </span>
                   </td>
+                  <td>{video.groupId?.name || '—'}</td>
                   <td>{video.hasReference ? 'Yes' : '—'}</td>
                   <td>{userLabel(video.uploadedBy)}</td>
                   <td>{userLabel(video.reviewedBy)}</td>

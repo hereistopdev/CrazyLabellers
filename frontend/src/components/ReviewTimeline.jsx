@@ -89,6 +89,12 @@ export default function ReviewTimeline({
   onDeleteReferenceEvent,
   onNudgeReferenceEvent,
   onSaveReference,
+  canEditSubmission = false,
+  submissionDirty = false,
+  onAddSubmissionEvent,
+  onDeleteSubmissionEvent,
+  onNudgeSubmissionEvent,
+  onSaveSubmission,
 }) {
   const playheadPercent = toPercent(currentTime, maxTime);
 
@@ -206,6 +212,26 @@ export default function ReviewTimeline({
             </button>
           </div>
         )}
+        {canEditSubmission && (
+          <div className="review-timeline-toolbar review-timeline-toolbar-submission">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onAddSubmissionEvent}
+              disabled={saving}
+            >
+              Add submitter event
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={onSaveSubmission}
+              disabled={saving || !submissionDirty}
+            >
+              Save submission
+            </button>
+          </div>
+        )}
         <span className="review-timeline-current">
           Frame {Math.round(currentTime * fps)} · {formatTime(currentTime)}
         </span>
@@ -291,9 +317,59 @@ export default function ReviewTimeline({
                     {primaryRow.match?.timeDiffMs != null && ` ±${primaryRow.match.timeDiffMs}ms`}
                   </span>
                 )}
+                {canEditSubmission && (
+                  <div className="review-frame-actions review-frame-actions-submission">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={onAddSubmissionEvent}
+                      disabled={saving}
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNudgeSubmissionEvent?.(-1)}
+                      disabled={saving}
+                    >
+                      −1f
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNudgeSubmissionEvent?.(1)}
+                      disabled={saving}
+                    >
+                      +1f
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={onDeleteSubmissionEvent}
+                      disabled={saving}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
-              <span className="review-frame-empty">No submitter event</span>
+              <>
+                <span className="review-frame-empty">No submitter event</span>
+                {canEditSubmission && (
+                  <div className="review-frame-actions review-frame-actions-submission">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={onAddSubmissionEvent}
+                      disabled={saving}
+                    >
+                      Add event
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

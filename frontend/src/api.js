@@ -202,6 +202,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  updateReviewSubmissionEvents: (id, body) =>
+    request(`/review/submissions/${id}/events`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   getValidators: () => request('/admin/validators'),
   createValidator: (body) =>
     request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),
