@@ -524,7 +524,7 @@ body.nav-open {
 
 .auth-role-toggle {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.5rem;
 }
 
@@ -3003,6 +3003,11 @@ tbody tr:hover {
 .role-badge.role-checker {
   background: rgba(59, 130, 246, 0.2);
   color: #93c5fd;
+}
+
+.role-badge.role-video_manager {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
 }
 
 @media (max-width: 900px) {

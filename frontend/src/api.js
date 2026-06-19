@@ -211,6 +211,15 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  getVideoManagers: () => request('/admin/video-managers'),
+  createVideoManager: (body) =>
+    request('/admin/video-managers', { method: 'POST', body: JSON.stringify(body) }),
+  deleteVideoManager: (id) => request(`/admin/video-managers/${id}`, { method: 'DELETE' }),
+  updateVideoManagerStatus: (id, status) =>
+    request(`/admin/video-managers/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
   getCheckers: () => request('/admin/validators'),
   createChecker: (body) =>
     request('/admin/validators', { method: 'POST', body: JSON.stringify(body) }),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { isAdmin, isValidator, canAccessReview, roleLabel } from '../utils/roles';
+import { isAdmin, isValidator, isVideoManager, canAccessReview, canAccessVideoManagement, roleLabel } from '../utils/roles';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -10,7 +10,9 @@ export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const admin = isAdmin(user);
   const validator = isValidator(user);
+  const videoManager = isVideoManager(user);
   const validatorApproved = validator && canAccessReview(user);
+  const videoManagerApproved = videoManager && canAccessVideoManagement(user);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -71,6 +73,13 @@ export default function Layout() {
                 Videos
               </NavLink>
               <NavLink
+                to="/admin/video-managers"
+                className={navClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                Video managers
+              </NavLink>
+              <NavLink
                 to="/admin/validators"
                 className={navClass}
                 onClick={() => setMenuOpen(false)}
@@ -93,6 +102,19 @@ export default function Layout() {
               <NavLink to="/admin" className={navClass} onClick={() => setMenuOpen(false)}>
                 Admin
               </NavLink>
+            </>
+          ) : videoManager ? (
+            <>
+              {videoManagerApproved && (
+                <>
+                  <NavLink to="/admin/videos" className={navClass} onClick={() => setMenuOpen(false)}>
+                    Videos
+                  </NavLink>
+                  <NavLink to="/admin/tasks" className={navClass} onClick={() => setMenuOpen(false)}>
+                    Tasks & groups
+                  </NavLink>
+                </>
+              )}
             </>
           ) : validator ? (
             <>

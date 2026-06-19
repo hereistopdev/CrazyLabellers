@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../utils/roles';
 import { api } from '../api';
 import { formatMoney, isFreeTaskKind } from '../utils/money';
 import { readVideoDurationFromFile } from '../utils/videoDuration';
@@ -34,8 +36,14 @@ const STATUS_LABELS = {
   rejected: 'Rejected',
 };
 
+function userLabel(user) {
+  return user?.name || user?.email || '—';
+}
+
 export default function ManageVideos() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const adminUser = isAdmin(user);
   const [videos, setVideos] = useState([]);
   const [tableLoading, setTableLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -430,12 +438,21 @@ export default function ManageVideos() {
           whole folder of videos and reference JSON at once.
         </p>
         <div className="actions-row" style={{ marginTop: '0.5rem' }}>
-          <Link to="/admin" className="btn btn-secondary btn-sm">
-            Back to admin
-          </Link>
+          {adminUser ? (
+            <Link to="/admin" className="btn btn-secondary btn-sm">
+              Back to admin
+            </Link>
+          ) : (
+            <Link to="/" className="btn btn-secondary btn-sm">
+              Back to dashboard
+            </Link>
+          )}
           <a href="#bulk-upload" className="btn btn-primary btn-sm">
             Jump to bulk upload
           </a>
+          <Link to="/admin/tasks" className="btn btn-secondary btn-sm">
+            Tasks & groups
+          </Link>
         </div>
       </div>
 
@@ -489,36 +506,38 @@ export default function ManageVideos() {
           </p>
         </div>
 
-        <div className="form-grid" style={{ marginBottom: '1rem' }}>
-          <label>
-            Task type for new clips
-            <select
-              value={uploadBulkKind}
-              onChange={(e) => setUploadBulkKind(e.target.value)}
-              disabled={uploadingBulk}
-            >
-              {TASK_KINDS.map((k) => (
-                <option key={k.value} value={k.value}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {!isFreeTaskKind(uploadBulkKind) && (
+        {adminUser && (
+          <div className="form-grid" style={{ marginBottom: '1rem' }}>
             <label>
-              Task price ($)
-              <input
-                type="number"
-                min={MIN_PRICE}
-                max={MAX_PRICE}
-                step="0.1"
-                value={uploadBulkTaskPrice}
-                onChange={(e) => setUploadBulkTaskPrice(parseFloat(e.target.value) || 1)}
+              Task type for new clips
+              <select
+                value={uploadBulkKind}
+                onChange={(e) => setUploadBulkKind(e.target.value)}
                 disabled={uploadingBulk}
-              />
+              >
+                {TASK_KINDS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
             </label>
-          )}
-        </div>
+            {!isFreeTaskKind(uploadBulkKind) && (
+              <label>
+                Task price ($)
+                <input
+                  type="number"
+                  min={MIN_PRICE}
+                  max={MAX_PRICE}
+                  step="0.1"
+                  value={uploadBulkTaskPrice}
+                  onChange={(e) => setUploadBulkTaskPrice(parseFloat(e.target.value) || 1)}
+                  disabled={uploadingBulk}
+                />
+              </label>
+            )}
+          </div>
+        )}
 
         <label className="review-playback-toggle" style={{ display: 'block', marginBottom: '1rem' }}>
           <input
@@ -715,61 +734,65 @@ export default function ManageVideos() {
               onChange={(e) => setMeta({ ...meta, durationSeconds: parseInt(e.target.value, 10) || 30 })}
             />
           </div>
-          <div className="form-group">
-            <label>Task type</label>
-            <select
-              value={meta.kind}
-              onChange={(e) => {
-                const kind = e.target.value;
-                setMeta({
-                  ...meta,
-                  kind,
-                  taskPrice: isFreeTaskKind(kind) ? 0 : meta.taskPrice || 1,
-                });
-              }}
-            >
-              {TASK_KINDS.map((k) => (
-                <option key={k.value} value={k.value}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-              Tutorial = guided examples · Pre-test = scored practice (3 clips) · Real task =
-              paid production work
-            </p>
-          </div>
-          <div className="form-group">
-            <label>Task price (USD)</label>
-            {isFreeTaskKind(meta.kind) ? (
-              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', margin: 0 }}>
-                {formatMoney(0)} — tutorials and pre-tests are free for labellers.
-              </p>
-            ) : (
-              <>
-                <input
-                  type="number"
-                  min={MIN_PRICE}
-                  max={MAX_PRICE}
-                  step="0.1"
-                  value={meta.taskPrice}
-                  onChange={(e) => setMeta({ ...meta, taskPrice: parseFloat(e.target.value) || 1 })}
-                />
+          {adminUser && (
+            <>
+              <div className="form-group">
+                <label>Task type</label>
+                <select
+                  value={meta.kind}
+                  onChange={(e) => {
+                    const kind = e.target.value;
+                    setMeta({
+                      ...meta,
+                      kind,
+                      taskPrice: isFreeTaskKind(kind) ? 0 : meta.taskPrice || 1,
+                    });
+                  }}
+                >
+                  {TASK_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                  Set between {formatMoney(MIN_PRICE)} and {formatMoney(MAX_PRICE)} based on clip
-                  difficulty.
+                  Tutorial = guided examples · Pre-test = scored practice (3 clips) · Real task =
+                  paid production work
                 </p>
-              </>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Challenge note (optional)</label>
-            <input
-              value={meta.challengeNote}
-              onChange={(e) => setMeta({ ...meta, challengeNote: e.target.value })}
-              placeholder="e.g. Dense events, low visibility"
-            />
-          </div>
+              </div>
+              <div className="form-group">
+                <label>Task price (USD)</label>
+                {isFreeTaskKind(meta.kind) ? (
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', margin: 0 }}>
+                    {formatMoney(0)} — tutorials and pre-tests are free for labellers.
+                  </p>
+                ) : (
+                  <>
+                    <input
+                      type="number"
+                      min={MIN_PRICE}
+                      max={MAX_PRICE}
+                      step="0.1"
+                      value={meta.taskPrice}
+                      onChange={(e) => setMeta({ ...meta, taskPrice: parseFloat(e.target.value) || 1 })}
+                    />
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                      Set between {formatMoney(MIN_PRICE)} and {formatMoney(MAX_PRICE)} based on clip
+                      difficulty.
+                    </p>
+                  </>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Challenge note (optional)</label>
+                <input
+                  value={meta.challengeNote}
+                  onChange={(e) => setMeta({ ...meta, challengeNote: e.target.value })}
+                  placeholder="e.g. Dense events, low visibility"
+                />
+              </div>
+            </>
+          )}
           <div className="actions-row">
             <button type="submit" className="btn btn-primary btn-sm" disabled={uploading}>
               {uploading ? 'Uploading...' : 'Upload video'}
@@ -790,7 +813,7 @@ export default function ManageVideos() {
         Videos ({videoTable.totalCount} shown / {videos.length} total)
       </h2>
 
-      {videos.length > 0 && (
+      {adminUser && videos.length > 0 && (
         <div className="card bulk-actions-bar">
           <strong className="bulk-actions-title">Bulk actions</strong>
           <div className="bulk-actions-row">
@@ -906,14 +929,16 @@ export default function ManageVideos() {
             <table>
               <thead>
                 <tr>
-                  <th></th>
+                  {adminUser && <th></th>}
                   <th>Clip ID</th>
                   <th>Title</th>
-                  <th>Price</th>
-                  <th>Challenge</th>
-                  <th>Task type</th>
+                  {adminUser && <th>Price</th>}
+                  {adminUser && <th>Challenge</th>}
+                  {adminUser && <th>Task type</th>}
                   <th>Status</th>
                   <th>Ref</th>
+                  <th>Uploaded by</th>
+                  <th>Validated by</th>
                   <th>Assigned to</th>
                   <th>Created</th>
                   <th>Updated</th>
@@ -927,74 +952,84 @@ export default function ManageVideos() {
                   className="table-row-link"
                   onClick={(e) => openLabelerRow(navigate, video._id, e)}
                 >
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(video._id)}
-                      onChange={() => toggleSelect(video._id)}
-                    />
-                  </td>
+                  {adminUser && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(video._id)}
+                        onChange={() => toggleSelect(video._id)}
+                      />
+                    </td>
+                  )}
                   <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                     <VideoLabelLink assignmentId={video._id}>{video.clipId || '—'}</VideoLabelLink>
                   </td>
                   <td>
                     <VideoLabelLink assignmentId={video._id}>{video.title}</VideoLabelLink>
                   </td>
-                  <td>
-                    {isFreeTaskKind(video.kind) ? (
-                      <span style={{ color: 'var(--text-muted)' }}>{formatMoney(0)}</span>
-                    ) : (
+                  {adminUser && (
+                    <td>
+                      {isFreeTaskKind(video.kind) ? (
+                        <span style={{ color: 'var(--text-muted)' }}>{formatMoney(0)}</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min={MIN_PRICE}
+                          max={MAX_PRICE}
+                          step="0.1"
+                          defaultValue={video.taskPrice ?? 1}
+                          className="price-input field-input--sm"
+                          onBlur={(e) => {
+                            const next = parseFloat(e.target.value);
+                            if (next !== video.taskPrice && !Number.isNaN(next)) {
+                              savePrice(video._id, next, video.challengeNote || '');
+                            }
+                          }}
+                          disabled={savingPrice === video._id}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {adminUser && (
+                    <td>
                       <input
-                        type="number"
-                        min={MIN_PRICE}
-                        max={MAX_PRICE}
-                        step="0.1"
-                        defaultValue={video.taskPrice ?? 1}
-                        className="price-input field-input--sm"
+                        defaultValue={video.challengeNote || ''}
+                        placeholder="—"
+                        className="challenge-input field-input--sm"
                         onBlur={(e) => {
-                          const next = parseFloat(e.target.value);
-                          if (next !== video.taskPrice && !Number.isNaN(next)) {
-                            savePrice(video._id, next, video.challengeNote || '');
+                          if (e.target.value !== (video.challengeNote || '')) {
+                            savePrice(video._id, video.taskPrice ?? 1, e.target.value);
                           }
                         }}
                         disabled={savingPrice === video._id}
                       />
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      defaultValue={video.challengeNote || ''}
-                      placeholder="—"
-                      className="challenge-input field-input--sm"
-                      onBlur={(e) => {
-                        if (e.target.value !== (video.challengeNote || '')) {
-                          savePrice(video._id, video.taskPrice ?? 1, e.target.value);
-                        }
-                      }}
-                      disabled={savingPrice === video._id}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={video.kind || 'production'}
-                      onChange={(e) => saveKind(video._id, e.target.value)}
-                      disabled={savingKind === video._id}
-                      className="kind-select field-input--sm"
-                      title="Task type"
-                    >
-                      {TASK_KINDS.map((k) => (
-                        <option key={k.value} value={k.value}>
-                          {k.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+                    </td>
+                  )}
+                  {adminUser && (
+                    <td>
+                      <select
+                        value={video.kind || 'production'}
+                        onChange={(e) => saveKind(video._id, e.target.value)}
+                        disabled={savingKind === video._id}
+                        className="kind-select field-input--sm"
+                        title="Task type"
+                      >
+                        {TASK_KINDS.map((k) => (
+                          <option key={k.value} value={k.value}>
+                            {k.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   <td>
                     <span className={`status-badge status-${video.status}`}>
                       {STATUS_LABELS[video.status] || video.status}
                     </span>
                   </td>
                   <td>{video.hasReference ? 'Yes' : '—'}</td>
+                  <td>{userLabel(video.uploadedBy)}</td>
+                  <td>{userLabel(video.reviewedBy)}</td>
                   <td>{video.assignedTo?.name || '—'}</td>
                   <td>{formatTimestamp(video.createdAt)}</td>
                   <td>{formatTimestamp(video.updatedAt)}</td>

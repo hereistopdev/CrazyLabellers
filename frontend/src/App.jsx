@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { isAdmin, isLabeller, isReviewer, canAccessReview } from './utils/roles';
+import { isAdmin, isLabeller, isReviewer, canAccessReview, canAccessVideoManagement } from './utils/roles';
 import { canUseLabeler } from './utils/labelerAccess';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -14,6 +14,7 @@ import Admin from './pages/Admin';
 import ManageValidators from './pages/ManageValidators';
 import ManageLabellers from './pages/ManageLabellers';
 import ManageVideos from './pages/ManageVideos';
+import ManageVideoManagers from './pages/ManageVideoManagers';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Earnings from './pages/Earnings';
 import LabelingTest from './pages/LabelingTest';
@@ -31,6 +32,7 @@ function ProtectedRoute({
   labellerOnly = false,
   reviewerOnly = false,
   labelerAccess = false,
+  videoManagerAccess = false,
 }) {
   const { user, loading } = useAuth();
 
@@ -46,6 +48,10 @@ function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
+  if (videoManagerAccess && !canAccessVideoManagement(user)) {
+    return <Navigate to="/" replace />;
+  }
+
   if (reviewerOnly && !canAccessReview(user)) {
     return <Navigate to="/" replace />;
   }
@@ -57,7 +63,15 @@ function ProtectedRoute({
   if (labellerOnly && !isLabeller(user)) {
     return (
       <Navigate
-        to={canAccessReview(user) ? '/review' : isAdmin(user) ? '/admin' : '/'}
+        to={
+          canAccessReview(user)
+            ? '/review'
+            : canAccessVideoManagement(user)
+              ? '/admin/videos'
+              : isAdmin(user)
+                ? '/admin'
+                : '/'
+        }
         replace
       />
     );
@@ -209,7 +223,7 @@ export default function App() {
         <Route
           path="admin/tasks"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute videoManagerAccess>
               <ManageTasks />
             </ProtectedRoute>
           }
@@ -217,8 +231,16 @@ export default function App() {
         <Route
           path="admin/videos"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute videoManagerAccess>
               <ManageVideos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/video-managers"
+          element={
+            <ProtectedRoute adminOnly>
+              <ManageVideoManagers />
             </ProtectedRoute>
           }
         />

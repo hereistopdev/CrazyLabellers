@@ -6,6 +6,8 @@ import { formatTimestamp } from '../utils/formatTimestamp';
 import { displayAssignmentTitle, assignmentSubtitle } from '../utils/displayTitle';
 import { frameOffsetSummary } from '../config/frameOffsets';
 import { labelerPath } from '../utils/labelerAccess';
+
+function progressLabel(assignment) {
   const progress = assignment.userProgress || 'open';
   if (progress === 'submitted') {
     return assignment.scoreReviewAvailable ? 'Review pending' : 'Completed';

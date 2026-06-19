@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-import { isValidator, canAccessReview } from '../utils/roles';
+import {
+  isValidator,
+  isVideoManager,
+  canAccessReview,
+  canAccessVideoManagement,
+} from '../utils/roles';
 
 export default function Login() {
   const { login } = useAuth();
@@ -20,6 +25,8 @@ export default function Login() {
       const user = await login(email, password);
       if (user.role === 'admin') {
         navigate('/admin');
+      } else if (isVideoManager(user)) {
+        navigate(canAccessVideoManagement(user) ? '/admin/videos' : '/');
       } else if (isValidator(user)) {
         navigate(canAccessReview(user) ? '/review' : '/');
       } else {
@@ -38,7 +45,8 @@ export default function Login() {
         <div className="auth-badge">Shrinik</div>
         <h1>Sign in</h1>
         <p className="subtitle">
-          Labellers and validators sign in here. Admins use the same page with admin credentials.
+          Labellers, validators, and video managers sign in here. Admins use the same page with admin
+          credentials.
         </p>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -78,6 +86,8 @@ export default function Login() {
           <Link to="/register">Register as labeller</Link>
           {' · '}
           <Link to="/register?role=validator">Register as validator</Link>
+          {' · '}
+          <Link to="/register?role=manager">Register as manager</Link>
         </p>
       </div>
     </div>

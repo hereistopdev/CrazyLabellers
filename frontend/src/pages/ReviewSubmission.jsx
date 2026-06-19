@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { isAdmin } from '../utils/roles';
+import { canAccessReview } from '../utils/roles';
 import { FPS, applyFrameOffset, getImmediateFollowUpRule, resolveFrameOffset } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
@@ -31,7 +31,7 @@ function formatTime(seconds) {
 export default function ReviewSubmission() {
   const { submissionId, assignmentId } = useParams();
   const { user } = useAuth();
-  const adminMode = isAdmin(user);
+  const canEditReference = canAccessReview(user);
   const isPreview = Boolean(assignmentId);
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
@@ -76,7 +76,7 @@ export default function ReviewSubmission() {
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
   const submissionEvents = submission?.events || [];
-  const referenceEvents = adminMode
+  const referenceEvents = canEditReference
     ? editableReferenceEvents
     : reference?.hasReference
       ? reference.events
@@ -169,16 +169,16 @@ export default function ReviewSubmission() {
   useEffect(load, [load]);
 
   useEffect(() => {
-    if (!adminMode) return;
+    if (!canEditReference) return;
     api.getEvents().then(setEventTypes).catch(() => setEventTypes([]));
-  }, [adminMode]);
+  }, [canEditReference]);
 
   useEffect(() => {
-    if (!adminMode) return;
+    if (!canEditReference) return;
     const events = reviewData?.reference?.events || [];
     setEditableReferenceEvents(events);
     setReferenceDirty(false);
-  }, [adminMode, reviewData?.reference?.events, reviewData?.reference?.annotationCount, assignment?._id]);
+  }, [canEditReference, reviewData?.reference?.events, reviewData?.reference?.annotationCount, assignment?._id]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -615,6 +615,33 @@ export default function ReviewSubmission() {
             {assignment.challengeNote && ` · ${assignment.challengeNote}`}
           </p>
         )}
+        {(assignment?.uploadedBy?.name || assignment?.reviewedBy?.name) && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {assignment?.uploadedBy?.name && (
+              <>
+                Uploaded by <strong>{assignment.uploadedBy.name}</strong>
+              </>
+            )}
+            {assignment?.referenceUpdatedBy?.name && (
+              <>
+                {assignment?.uploadedBy?.name ? ' · ' : ''}
+                Reference updated by <strong>{assignment.referenceUpdatedBy.name}</strong>
+              </>
+            )}
+            {assignment?.reviewedBy?.name && (
+              <>
+                {(assignment?.uploadedBy?.name || assignment?.referenceUpdatedBy?.name) ? ' · ' : ''}
+                Validated by <strong>{assignment.reviewedBy.name}</strong>
+              </>
+            )}
+          </p>
+        )}
+        {!isPreview && submission?.reviewedBy?.name && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Review recorded by <strong>{submission.reviewedBy.name}</strong>
+            {submission.reviewedAt && ` · ${new Date(submission.reviewedAt).toLocaleString()}`}
+          </p>
+        )}
         {autoScore != null && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Auto score (reference comparison): <strong>{autoScore}/100</strong>
@@ -639,7 +666,7 @@ export default function ReviewSubmission() {
             Reference: {referenceEvents.length || reference.annotationCount} events · Matched {comparison.summary.matchedCount} ·
             Missing {comparison.summary.missingCount} · Extra {comparison.summary.extraCount}
             {comparison.summary.accuracy != null && ` · Accuracy ${comparison.summary.accuracy}%`}
-            {adminMode && referenceDirty && (
+            {canEditReference && referenceDirty && (
               <>
                 {' '}
                 · <strong>Unsaved reference edits</strong>
@@ -647,7 +674,7 @@ export default function ReviewSubmission() {
             )}
           </p>
         )}
-        {adminMode && !reference?.hasReference && (
+        {canEditReference && !reference?.hasReference && (
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             No reference yet — add events on the timeline and save.
             {referenceDirty && (
@@ -793,10 +820,10 @@ export default function ReviewSubmission() {
             referenceEvents={referenceEvents}
             eventRows={eventRows}
             labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
-            hasReference={reference?.hasReference || (adminMode && referenceEvents.length > 0)}
+            hasReference={reference?.hasReference || (canEditReference && referenceEvents.length > 0)}
             previewMode={isPreview}
             saving={saving || savingReference}
-            canEditReference={adminMode}
+            canEditReference={canEditReference}
             referenceDirty={referenceDirty}
             onAddReferenceEvent={openReferenceEventPicker}
             onDeleteReferenceEvent={deleteReferenceEventAtFrame}
@@ -907,7 +934,7 @@ export default function ReviewSubmission() {
         </div>
       </div>
 
-      {adminMode && (
+      {canEditReference && (
         <EventPickerModal
           open={showReferenceEventPicker}
           eventTypes={eventTypes}

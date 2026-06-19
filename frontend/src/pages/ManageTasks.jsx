@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../utils/roles';
 import { api } from '../api';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { formatMoney, isFreeTaskKind } from '../utils/money';
@@ -16,6 +18,8 @@ const KIND_TABS = [
   { id: 'pretest', label: 'Pre-test' },
   { id: 'production', label: 'Real tasks' },
 ];
+
+const MANAGER_TABS = KIND_TABS.filter((t) => t.id === 'groups' || t.id === 'production');
 
 const EMPTY_STEP = { frameTime: 0, eventType: '', title: '', explanation: '' };
 
@@ -102,7 +106,7 @@ function TaskRow({ task, tab, navigate, onEdit }) {
   );
 }
 
-function TaskEditor({ task, groups, onSave, onCancel, saving }) {
+function TaskEditor({ task, groups, onSave, onCancel, saving, adminUser = true }) {
   const [form, setForm] = useState({
     title: task.title || '',
     description: task.description || '',
@@ -169,6 +173,7 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
           Kind
           <select
             value={form.kind}
+            disabled={!adminUser}
             onChange={(e) => {
               const kind = e.target.value;
               setForm({
@@ -178,8 +183,8 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
               });
             }}
           >
-            <option value="tutorial">Tutorial</option>
-            <option value="pretest">Pre-test</option>
+            {adminUser && <option value="tutorial">Tutorial</option>}
+            {adminUser && <option value="pretest">Pre-test</option>}
             <option value="production">Real task</option>
           </select>
         </label>
@@ -207,17 +212,19 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
                 ))}
               </select>
             </label>
-            <label>
-              Task price ($)
-              <input
-                type="number"
-                step="0.05"
-                min="0.3"
-                max="2"
-                value={form.taskPrice}
-                onChange={(e) => setForm({ ...form, taskPrice: e.target.value })}
-              />
-            </label>
+            {adminUser && (
+              <label>
+                Task price ($)
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0.3"
+                  max="2"
+                  value={form.taskPrice}
+                  onChange={(e) => setForm({ ...form, taskPrice: e.target.value })}
+                />
+              </label>
+            )}
             <label className="form-grid-full">
               Challenge note
               <input
@@ -315,7 +322,10 @@ function TaskEditor({ task, groups, onSave, onCancel, saving }) {
 
 export default function ManageTasks() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('tutorial');
+  const { user } = useAuth();
+  const adminUser = isAdmin(user);
+  const tabOptions = adminUser ? KIND_TABS : MANAGER_TABS;
+  const [tab, setTab] = useState(adminUser ? 'tutorial' : 'groups');
   const [groups, setGroups] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -441,17 +451,29 @@ export default function ManageTasks() {
       <div className="page-header">
         <h1>Manage tasks</h1>
         <p>
-          Configure tutorial examples, pre-test clips (3), production groups, and frame explanations.
-          Upload videos from <Link to="/admin/videos#bulk-upload">Videos (bulk upload)</Link>, then
-          assign kind and metadata here.
+          {adminUser
+            ? 'Configure tutorial examples, pre-test clips (3), production groups, and frame explanations. Upload videos from '
+            : 'Create production groups and assign uploaded clips to groups. Upload videos from '}
+          <Link to="/admin/videos#bulk-upload">Videos (bulk upload)</Link>
+          {adminUser ? ', then assign kind and metadata here.' : ', then assign groups here.'}
         </p>
+        <div className="actions-row" style={{ marginTop: '0.5rem' }}>
+          <Link to="/admin/videos" className="btn btn-secondary btn-sm">
+            Manage videos
+          </Link>
+          {adminUser && (
+            <Link to="/admin" className="btn btn-secondary btn-sm">
+              Admin dashboard
+            </Link>
+          )}
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-success">{message}</div>}
 
       <div className="tab-bar">
-        {KIND_TABS.map((t) => (
+        {tabOptions.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -600,6 +622,7 @@ export default function ManageTasks() {
               onSave={handleSaveTask}
               onCancel={() => setEditingId(null)}
               saving={saving}
+              adminUser={adminUser}
             />
           )}
 

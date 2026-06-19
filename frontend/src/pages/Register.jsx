@@ -1,13 +1,66 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { isValidator, canAccessReview } from '../utils/roles';
+import {
+  isValidator,
+  isVideoManager,
+  canAccessReview,
+  canAccessVideoManagement,
+} from '../utils/roles';
+
+function resolveInitialRole(roleParam) {
+  if (roleParam === 'validator') return 'validator';
+  if (roleParam === 'video_manager' || roleParam === 'manager') return 'video_manager';
+  return 'labeller';
+}
+
+const REGISTER_COPY = {
+  labeller: {
+    title: 'Create labeller account',
+    subtitle:
+      'Sign up to label football video clips. Study terminology, pass tests, and complete tutorials before paid tasks.',
+    button: 'Register as labeller',
+    stepsLabel: 'Labeller path:',
+    steps: [
+      'Study the terminology guide',
+      'Pass the knowledge test (80%+)',
+      'Complete tutorials and pre-test',
+      'Start labeling production tasks',
+    ],
+  },
+  validator: {
+    title: 'Create validator account',
+    subtitle:
+      'Sign up to review labeller submissions. An admin must approve your account before you can access the review queue.',
+    button: 'Register as validator',
+    stepsLabel: 'After registering:',
+    steps: [
+      'Wait for admin approval',
+      'Sign in once approved',
+      'Open the review queue',
+      'Score submitted production tasks',
+    ],
+  },
+  video_manager: {
+    title: 'Create manager account',
+    subtitle:
+      'Sign up to upload video clips and reference JSON files. An admin must approve your account before you can manage videos.',
+    button: 'Register as manager',
+    stepsLabel: 'After registering:',
+    steps: [
+      'Wait for admin approval',
+      'Sign in once approved',
+      'Open Manage Videos',
+      'Upload clips and reference annotations',
+    ],
+  },
+};
 
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialRole = searchParams.get('role') === 'validator' ? 'validator' : 'labeller';
+  const initialRole = resolveInitialRole(searchParams.get('role'));
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -16,37 +69,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const isValidator = role === 'validator';
-
-  const copy = useMemo(
-    () =>
-      isValidator
-        ? {
-            title: 'Create validator account',
-            subtitle:
-              'Sign up to review labeller submissions. An admin must approve your account before you can access the review queue.',
-            button: 'Register as validator',
-            steps: [
-              'Wait for admin approval',
-              'Sign in once approved',
-              'Open the review queue',
-              'Score submitted production tasks',
-            ],
-          }
-        : {
-            title: 'Create labeller account',
-            subtitle:
-              'Sign up to label football video clips. Study terminology, pass tests, and complete tutorials before paid tasks.',
-            button: 'Register as labeller',
-            steps: [
-              'Study the terminology guide',
-              'Pass the knowledge test (80%+)',
-              'Complete tutorials and pre-test',
-              'Start labeling production tasks',
-            ],
-          },
-    [isValidator]
-  );
+  const copy = useMemo(() => REGISTER_COPY[role] || REGISTER_COPY.labeller, [role]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,6 +79,8 @@ export default function Register() {
       const user = await register(name, email, password, role);
       if (user.role === 'admin') {
         navigate('/admin');
+      } else if (isVideoManager(user)) {
+        navigate(canAccessVideoManagement(user) ? '/admin/videos' : '/');
       } else if (isValidator(user)) {
         navigate(canAccessReview(user) ? '/review' : '/');
       } else {
@@ -100,6 +125,16 @@ export default function Register() {
                   onChange={() => setRole('validator')}
                 />
                 Validator
+              </label>
+              <label className={`auth-role-option${role === 'video_manager' ? ' active' : ''}`}>
+                <input
+                  type="radio"
+                  name="role"
+                  value="video_manager"
+                  checked={role === 'video_manager'}
+                  onChange={() => setRole('video_manager')}
+                />
+                Manager
               </label>
             </div>
           </div>
@@ -146,7 +181,7 @@ export default function Register() {
 
         <div className="auth-steps">
           <p>
-            <strong>{isValidator ? 'After registering:' : 'Labeller path:'}</strong>
+            <strong>{copy.stepsLabel}</strong>
           </p>
           <ol>
             {copy.steps.map((step) => (

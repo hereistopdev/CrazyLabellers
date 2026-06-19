@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from './AdminDashboard';
-import { isValidator, canAccessReview } from '../utils/roles';
+import { isValidator, isVideoManager, canAccessReview, canAccessVideoManagement } from '../utils/roles';
 import { api } from '../api';
 import LabellerBadges from '../components/LabellerBadges';
 import { formatMoney } from '../utils/money';
@@ -57,6 +57,52 @@ export default function Dashboard() {
           <Link to="/review" className="btn btn-primary">
             Open review queue
           </Link>
+        )}
+      </div>
+    );
+  }
+
+  if (isVideoManager(user)) {
+    const approved = canAccessVideoManagement(user);
+
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Hello, {user?.name}</h1>
+          {approved ? (
+            <p>Upload football video clips and reference JSON files for the labeling platform.</p>
+          ) : user?.status === 'rejected' ? (
+            <p>
+              Your manager application was not approved. Contact an admin if you believe this is a
+              mistake.
+            </p>
+          ) : (
+            <p>
+              Your manager account is waiting for admin approval. You will be able to upload videos
+              once an admin approves your account.
+            </p>
+          )}
+        </div>
+
+        {!approved && user?.status !== 'rejected' && (
+          <div className="alert alert-info">
+            Pending approval — an admin must approve your account before you can manage videos.
+          </div>
+        )}
+
+        {user?.status === 'rejected' && (
+          <div className="alert alert-error">Access denied — manager account not approved.</div>
+        )}
+
+        {approved && (
+          <div className="actions-row">
+            <Link to="/admin/videos" className="btn btn-primary">
+              Manage videos
+            </Link>
+            <Link to="/admin/tasks" className="btn btn-secondary">
+              Tasks & groups
+            </Link>
+          </div>
         )}
       </div>
     );
