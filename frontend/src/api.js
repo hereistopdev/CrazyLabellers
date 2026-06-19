@@ -96,6 +96,7 @@ export const api = {
   getTerminology: () => request('/terminology'),
   getEvents: () => request('/events'),
   getTestQuestions: (limit = 10) => request(`/tests/questions?limit=${limit}`),
+  getAdminTestQuestions: () => request('/tests/questions/all'),
   submitTest: (answers) =>
     request('/tests/submit', { method: 'POST', body: JSON.stringify({ answers }) }),
   getTestResults: () => request('/tests/results'),

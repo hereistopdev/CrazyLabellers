@@ -8,6 +8,30 @@ const router = express.Router();
 const PASS_THRESHOLD = 80;
 const QUESTIONS_PER_ATTEMPT = 10;
 
+router.get('/questions/all', auth, requireRole('admin'), async (_req, res) => {
+  try {
+    const questions = await TestQuestion.find().sort({ difficulty: 1, scenario: 1 }).lean();
+    const activeCount = questions.filter((q) => q.active).length;
+
+    return res.json({
+      questions,
+      passThreshold: PASS_THRESHOLD,
+      questionsPerAttempt: QUESTIONS_PER_ATTEMPT,
+      poolSize: activeCount,
+      stats: {
+        total: questions.length,
+        active: activeCount,
+        inactive: questions.length - activeCount,
+        easy: questions.filter((q) => q.difficulty === 'easy').length,
+        medium: questions.filter((q) => q.difficulty === 'medium').length,
+        hard: questions.filter((q) => q.difficulty === 'hard').length,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/questions', auth, async (req, res) => {
   try {
     const poolSize = await TestQuestion.countDocuments({ active: true });

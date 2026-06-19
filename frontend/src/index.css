@@ -5383,6 +5383,139 @@ a.video-label-link.btn:hover {
   padding: 2rem;
 }
 
+.knowledge-test-stats {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.knowledge-test-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.knowledge-test-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.knowledge-test-item:last-child {
+  border-bottom: none;
+}
+
+.knowledge-test-item-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.knowledge-test-item-header:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+}
+
+.knowledge-test-item-num {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.knowledge-test-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.knowledge-test-scenario {
+  margin: 0 0 0.45rem;
+  line-height: 1.45;
+}
+
+.knowledge-test-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.knowledge-test-answer-pill {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.knowledge-test-answer-pill strong {
+  color: var(--accent);
+}
+
+.knowledge-test-expand {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.knowledge-test-item-body {
+  padding: 0 1rem 1rem 3.35rem;
+}
+
+.knowledge-test-options-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.knowledge-test-options ul {
+  margin: 0 0 0.85rem;
+  padding-left: 1.1rem;
+}
+
+.knowledge-test-options li {
+  margin-bottom: 0.25rem;
+}
+
+.knowledge-test-option-correct {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.knowledge-test-correct-tag {
+  margin-left: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.knowledge-test-explanation p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.difficulty-easy {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+.difficulty-medium {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fde047;
+}
+
+.difficulty-hard {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
 @media (max-width: 640px) {
   .page-header--with-actions {
     flex-direction: column;

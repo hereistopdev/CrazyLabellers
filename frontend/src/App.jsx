@@ -21,6 +21,7 @@ import LabelingTest from './pages/LabelingTest';
 import PretestScoreReview from './pages/PretestScoreReview';
 import Tutorials from './pages/Tutorials';
 import ManageTasks from './pages/ManageTasks';
+import ManageKnowledgeTest from './pages/ManageKnowledgeTest';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewSubmission from './pages/ReviewSubmission';
 import LabellerProfile from './pages/LabellerProfile';
@@ -265,6 +266,14 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <ManageLabellers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/knowledge-test"
+          element={
+            <ProtectedRoute adminOnly>
+              <ManageKnowledgeTest />
             </ProtectedRoute>
           }
         />
