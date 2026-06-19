@@ -54,7 +54,7 @@ function computeLabelingScore(submissionEvents = [], referenceEvents = [], fps =
       };
     }
 
-    const frameDiff = getFrameDiff(match.timeDiffMs, fps);
+    const frameDiff = match.frameDiff ?? getFrameDiff(match.timeDiffMs, fps);
     return {
       referenceIndex: refEvent.referenceIndex,
       eventType: refEvent.eventType,

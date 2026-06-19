@@ -20,13 +20,15 @@ function getEventTimeSeconds(event, variant) {
 }
 
 function exportAnnotation(events, { gameTime = '1 - 00:00', variant = 'post' } = {}) {
+  const { snapTimeToFrame } = require('./frameTime');
+  const { FPS } = require('../config/frameOffsets');
   const sorted = [...(events || [])].sort(
     (a, b) => getEventTimeSeconds(a, variant) - getEventTimeSeconds(b, variant)
   );
 
   return {
     annotations: sorted.map((event) => {
-      const timeSec = getEventTimeSeconds(event, variant);
+      const timeSec = snapTimeToFrame(getEventTimeSeconds(event, variant), FPS);
       return {
         gameTime,
         label: toExportLabel(event.eventType, variant),

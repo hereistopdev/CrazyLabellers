@@ -297,7 +297,11 @@ router.get('/:id/labels', auth, async (req, res) => {
     if (!submission) {
       return res.json({ events: [], status: 'draft' });
     }
-    return res.json(submission);
+    const payload = submission.toObject ? submission.toObject() : submission;
+    return res.json({
+      ...payload,
+      events: normalizeLabelEvents(payload.events || []),
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

@@ -1,4 +1,6 @@
 const { EVENT_TYPES } = require('../config/events');
+const { FPS } = require('../config/frameOffsets');
+const { snapTimeToFrame } = require('./frameTime');
 
 function labelToEventType(label) {
   const normalized = String(label || '')
@@ -26,7 +28,7 @@ function parseReferenceAnnotation(data) {
 
       return {
         eventType,
-        frameTime: positionMs / 1000,
+        frameTime: snapTimeToFrame(positionMs / 1000, FPS),
         index,
       };
     })

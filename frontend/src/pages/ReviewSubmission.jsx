@@ -18,14 +18,15 @@ import {
   getFrameNumber,
   getTimeForFrame,
   isEventFrame,
+  snapTimeToFrame,
+  nudgeFrameTime,
 } from '../utils/reviewPlayback';
+import { formatEventTime } from '../utils/frameTime';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(2);
-  return `${m}:${s.padStart(5, '0')}`;
+function formatTime(seconds, fps = FPS) {
+  return formatEventTime(seconds, fps);
 }
 
 export default function ReviewSubmission() {
@@ -78,7 +79,7 @@ export default function ReviewSubmission() {
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
   const maxTime = resolvePlaybackDuration(mediaDuration, assignment?.durationSeconds);
-  const currentFrame = Math.round(currentTime * fps);
+  const currentFrame = getFrameNumber(currentTime, fps);
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
   const canEditSubmission = canEditReference && !isPreview;
@@ -239,7 +240,8 @@ export default function ReviewSubmission() {
 
   const seekTo = useCallback(
     (time, { clearEventPause = true } = {}) => {
-      const clamped = Math.max(0, Math.min(maxTime, time));
+      const snapped = snapTimeToFrame(time, fps);
+      const clamped = Math.max(0, Math.min(maxTime, snapped));
       if (videoRef.current) {
         videoRef.current.currentTime = clamped;
         setCurrentTime(clamped);
@@ -248,16 +250,16 @@ export default function ReviewSubmission() {
         setPausedAtEvent(false);
       }
     },
-    [maxTime]
+    [maxTime, fps]
   );
 
   const stepFrames = useCallback(
     (count) => {
       pauseAll();
-      const t = videoRef.current?.currentTime ?? currentTime;
-      seekTo(t + frameDuration * count);
+      const frame = getFrameNumber(videoRef.current?.currentTime ?? currentTime, fps) + count;
+      seekTo(getTimeForFrame(Math.max(0, frame), fps));
     },
-    [pauseAll, seekTo, frameDuration, currentTime]
+    [pauseAll, seekTo, fps, currentTime]
   );
 
   const playNormal = useCallback(async () => {
@@ -313,17 +315,17 @@ export default function ReviewSubmission() {
       const video = videoRef.current;
       if (!video) return;
 
-      const next = video.currentTime + frameDuration;
-      if (next >= maxTime) {
+      const nextFrame = getFrameNumber(video.currentTime, fps) + 1;
+      if (getTimeForFrame(nextFrame, fps) >= maxTime) {
         seekTo(maxTime);
         pauseAll();
         return;
       }
 
+      const next = getTimeForFrame(nextFrame, fps);
       seekTo(next, { clearEventPause: false });
-      const frame = getFrameNumber(next, fps);
-      if (shouldPauseAtFrame(frame)) {
-        pauseAtEventFrame(frame);
+      if (shouldPauseAtFrame(nextFrame)) {
+        pauseAtEventFrame(nextFrame);
         stopFrameAutoPlay();
       }
     }, FRAME_PLAY_INTERVAL_MS);
@@ -331,7 +333,6 @@ export default function ReviewSubmission() {
     playMode,
     pauseAll,
     stopFrameAutoPlay,
-    frameDuration,
     maxTime,
     seekTo,
     fps,
@@ -433,7 +434,7 @@ export default function ReviewSubmission() {
   const addReferenceEvent = useCallback(
     (eventType) => {
       pauseAll();
-      const playheadTime = videoRef.current?.currentTime ?? currentTime;
+      const playheadTime = snapTimeToFrame(videoRef.current?.currentTime ?? currentTime, fps);
       const followUpRule = lastReferenceEvent
         ? getImmediateFollowUpRule(lastReferenceEvent.eventType, eventType)
         : null;
@@ -442,7 +443,7 @@ export default function ReviewSubmission() {
         immediateFollowUp: useFollowUp,
         afterEvent: useFollowUp ? lastReferenceEvent?.eventType : null,
       };
-      const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
       const offset = resolveFrameOffset(eventType, options);
 
       const newEvents = [
@@ -450,7 +451,7 @@ export default function ReviewSubmission() {
         {
           eventType,
           frameTime: adjustedTime,
-          playheadTime: parseFloat(playheadTime.toFixed(3)),
+          playheadTime,
           frameOffset: offset,
           immediateFollowUp: useFollowUp,
           afterEvent: useFollowUp ? lastReferenceEvent?.eventType : undefined,
@@ -460,16 +461,16 @@ export default function ReviewSubmission() {
       setEditableReferenceEvents(newEvents);
       setReferenceDirty(true);
       setShowReferenceEventPicker(false);
-      setMessage(`Added reference ${eventType} at ${formatTime(adjustedTime)} (unsaved)`);
+      setMessage(`Added reference ${eventType} at ${formatTime(adjustedTime, fps)} (unsaved)`);
       setTimeout(() => setMessage(''), 2500);
     },
-    [pauseAll, currentTime, lastReferenceEvent, editableReferenceEvents]
+    [pauseAll, currentTime, lastReferenceEvent, editableReferenceEvents, fps]
   );
 
   const addSubmissionEvent = useCallback(
     (eventType) => {
       pauseAll();
-      const playheadTime = videoRef.current?.currentTime ?? currentTime;
+      const playheadTime = snapTimeToFrame(videoRef.current?.currentTime ?? currentTime, fps);
       const followUpRule = lastSubmissionEvent
         ? getImmediateFollowUpRule(lastSubmissionEvent.eventType, eventType)
         : null;
@@ -478,7 +479,7 @@ export default function ReviewSubmission() {
         immediateFollowUp: useFollowUp,
         afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : null,
       };
-      const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
       const offset = resolveFrameOffset(eventType, options);
 
       const newEvents = [
@@ -486,7 +487,7 @@ export default function ReviewSubmission() {
         {
           eventType,
           frameTime: adjustedTime,
-          playheadTime: parseFloat(playheadTime.toFixed(3)),
+          playheadTime,
           frameOffset: offset,
           immediateFollowUp: useFollowUp,
           afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : undefined,
@@ -496,16 +497,16 @@ export default function ReviewSubmission() {
       setEditableSubmissionEvents(newEvents);
       setSubmissionDirty(true);
       setShowSubmissionEventPicker(false);
-      setMessage(`Added submission ${eventType} at ${formatTime(adjustedTime)} (unsaved)`);
+      setMessage(`Added submission ${eventType} at ${formatTime(adjustedTime, fps)} (unsaved)`);
       setTimeout(() => setMessage(''), 2500);
     },
-    [pauseAll, currentTime, lastSubmissionEvent, editableSubmissionEvents]
+    [pauseAll, currentTime, lastSubmissionEvent, editableSubmissionEvents, fps]
   );
 
   const changeSubmissionEventTypeAtFrame = useCallback(
     (eventType) => {
       pauseAll();
-      const frame = Math.round(currentTime * fps);
+      const frame = currentFrame;
       const targetIndex = submissionEditIndex;
       let changed = false;
       let changedTime = currentTime;
@@ -514,10 +515,10 @@ export default function ReviewSubmission() {
           const matchesIndex =
             targetIndex != null
               ? index === targetIndex
-              : Math.round(event.frameTime * fps) === frame;
+              : getFrameNumber(event.frameTime, fps) === frame;
           if (!matchesIndex) return event;
           changed = true;
-          const playheadTime = event.playheadTime ?? event.frameTime;
+          const playheadTime = snapTimeToFrame(event.playheadTime ?? event.frameTime, fps);
           const followUpRule = lastSubmissionEvent
             ? getImmediateFollowUpRule(lastSubmissionEvent.eventType, eventType)
             : null;
@@ -526,14 +527,14 @@ export default function ReviewSubmission() {
             immediateFollowUp: useFollowUp,
             afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : null,
           };
-          const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+          const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
           const offset = resolveFrameOffset(eventType, options);
           changedTime = adjustedTime;
           return {
             ...event,
             eventType,
             frameTime: adjustedTime,
-            playheadTime: parseFloat(playheadTime.toFixed(3)),
+            playheadTime,
             frameOffset: offset,
             immediateFollowUp: useFollowUp,
             afterEvent: useFollowUp ? lastSubmissionEvent?.eventType : undefined,
@@ -551,7 +552,7 @@ export default function ReviewSubmission() {
       setSubmissionDirty(true);
       setShowSubmissionEventPicker(false);
       setSubmissionEditIndex(null);
-      setMessage(`Changed to ${eventType} at ${formatTime(changedTime)} (unsaved)`);
+      setMessage(`Changed to ${eventType} at ${formatTime(changedTime, fps)} (unsaved)`);
       setTimeout(() => setMessage(''), 2500);
     },
     [pauseAll, currentTime, fps, lastSubmissionEvent, editableSubmissionEvents, submissionEditIndex]
@@ -570,12 +571,12 @@ export default function ReviewSubmission() {
 
   const deleteSubmissionEventAtFrame = useCallback(
     (eventIndex) => {
-      const frame = Math.round(currentTime * fps);
+      const frame = currentFrame;
       const next =
         typeof eventIndex === 'number'
           ? editableSubmissionEvents.filter((_, index) => index !== eventIndex)
           : editableSubmissionEvents.filter(
-              (event) => Math.round(event.frameTime * fps) !== frame
+              (event) => getFrameNumber(event.frameTime, fps) !== frame
             );
       if (next.length === editableSubmissionEvents.length) return;
       setEditableSubmissionEvents(next);
@@ -588,19 +589,19 @@ export default function ReviewSubmission() {
 
   const nudgeSubmissionEventAtFrame = useCallback(
     (frameDelta, eventIndex) => {
-      const frame = Math.round(currentTime * fps);
+      const frame = currentFrame;
       let changed = false;
       const next = editableSubmissionEvents
         .map((event, index) => {
           const matchesIndex =
             typeof eventIndex === 'number'
               ? index === eventIndex
-              : Math.round(event.frameTime * fps) === frame;
+              : getFrameNumber(event.frameTime, fps) === frame;
           if (!matchesIndex) return event;
           changed = true;
           return {
             ...event,
-            frameTime: Math.max(0, event.frameTime + frameDelta * frameDuration),
+            frameTime: nudgeFrameTime(event.frameTime, frameDelta, fps),
           };
         })
         .sort((a, b) => a.frameTime - b.frameTime);
@@ -608,7 +609,7 @@ export default function ReviewSubmission() {
       setEditableSubmissionEvents(next);
       setSubmissionDirty(true);
     },
-    [currentTime, fps, editableSubmissionEvents, frameDuration]
+    [currentFrame, fps, editableSubmissionEvents]
   );
 
   const saveSubmissionEvents = async () => {
@@ -639,28 +640,28 @@ export default function ReviewSubmission() {
   };
 
   const deleteReferenceEventAtFrame = useCallback(() => {
-    const frame = Math.round(currentTime * fps);
+    const frame = currentFrame;
     const next = editableReferenceEvents.filter(
-      (event) => Math.round(event.frameTime * fps) !== frame
+      (event) => getFrameNumber(event.frameTime, fps) !== frame
     );
     if (next.length === editableReferenceEvents.length) return;
     setEditableReferenceEvents(next);
     setReferenceDirty(true);
     setMessage('Removed reference event on this frame (unsaved)');
     setTimeout(() => setMessage(''), 2000);
-  }, [currentTime, fps, editableReferenceEvents]);
+  }, [currentFrame, fps, editableReferenceEvents]);
 
   const nudgeReferenceEventAtFrame = useCallback(
     (frameDelta) => {
-      const frame = Math.round(currentTime * fps);
+      const frame = currentFrame;
       let changed = false;
       const next = editableReferenceEvents
         .map((event) => {
-          if (Math.round(event.frameTime * fps) !== frame) return event;
+          if (getFrameNumber(event.frameTime, fps) !== frame) return event;
           changed = true;
           return {
             ...event,
-            frameTime: Math.max(0, event.frameTime + frameDelta * frameDuration),
+            frameTime: nudgeFrameTime(event.frameTime, frameDelta, fps),
           };
         })
         .sort((a, b) => a.frameTime - b.frameTime);
@@ -668,7 +669,7 @@ export default function ReviewSubmission() {
       setEditableReferenceEvents(next);
       setReferenceDirty(true);
     },
-    [currentTime, fps, editableReferenceEvents, frameDuration]
+    [currentFrame, fps, editableReferenceEvents]
   );
 
   const saveReferenceEvents = async () => {
@@ -783,7 +784,7 @@ export default function ReviewSubmission() {
       }
       if (key === 'v' || key === 'V') {
         const row = eventRows.find(
-          (item) => Math.round(item.event.frameTime * fps) === Math.round(currentTime * fps)
+          (item) => getFrameNumber(item.event.frameTime, fps) === currentFrame
         );
         if (row) {
           event.preventDefault();
@@ -792,7 +793,7 @@ export default function ReviewSubmission() {
       }
       if (key === 'x' || key === 'X') {
         const row = eventRows.find(
-          (item) => Math.round(item.event.frameTime * fps) === Math.round(currentTime * fps)
+          (item) => getFrameNumber(item.event.frameTime, fps) === currentFrame
         );
         if (row) {
           event.preventDefault();
@@ -1287,7 +1288,7 @@ export default function ReviewSubmission() {
           currentTime={currentTime}
           title={
             submissionPickerMode === 'change'
-              ? `Change event type · frame ${Math.round(currentTime * fps)}`
+              ? `Change event type · frame ${currentFrame}`
               : undefined
           }
           subtitle={

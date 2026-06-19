@@ -139,10 +139,12 @@ export function frameToSeconds(frames, fps = FPS) {
   return frames / fps;
 }
 
-export function applyFrameOffset(timeSeconds, eventType, options = {}) {
+import { getFrameNumber, getTimeForFrame } from '../utils/frameTime';
+
+export function applyFrameOffset(timeSeconds, eventType, options = {}, fps = FPS) {
+  const playheadFrame = getFrameNumber(timeSeconds, fps);
   const offset = resolveFrameOffset(eventType, options);
-  const adjusted = timeSeconds + frameToSeconds(offset);
-  return Math.max(0, parseFloat(adjusted.toFixed(3)));
+  return getTimeForFrame(Math.max(0, playheadFrame + offset), fps);
 }
 
 export function formatOffset(offset) {

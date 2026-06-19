@@ -22,13 +22,17 @@ import LabelingChatbot from '../components/LabelingChatbot';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
 import { displayAssignmentTitle } from '../utils/displayTitle';
+import {
+  getFrameNumber,
+  getTimeForFrame,
+  snapTimeToFrame,
+  formatEventTime,
+} from '../utils/frameTime';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(2);
-  return `${m}:${s.padStart(5, '0')}`;
+function formatTime(seconds, fps = FPS) {
+  return formatEventTime(seconds, fps);
 }
 
 export default function Labeling() {
@@ -59,7 +63,7 @@ export default function Labeling() {
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
   const maxTime = resolvePlaybackDuration(mediaDuration, assignment?.durationSeconds);
-  const currentFrame = Math.round(currentTime * fps);
+  const currentFrame = getFrameNumber(currentTime, fps);
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
 
   const lastEvent = events.length > 0 ? events[events.length - 1] : null;
@@ -196,12 +200,13 @@ export default function Labeling() {
   useEffect(() => () => stopFrameAutoPlay(), [stopFrameAutoPlay]);
 
   const seekTo = useCallback((time) => {
-    const clamped = Math.max(0, Math.min(maxTime, time));
+    const snapped = snapTimeToFrame(time, fps);
+    const clamped = Math.max(0, Math.min(maxTime, snapped));
     if (videoRef.current) {
       videoRef.current.currentTime = clamped;
       setCurrentTime(clamped);
     }
-  }, [maxTime]);
+  }, [maxTime, fps]);
 
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current && playMode === 'normal') {
@@ -218,10 +223,10 @@ export default function Labeling() {
   const stepFrames = useCallback(
     (count) => {
       pauseAll();
-      const t = videoRef.current?.currentTime ?? currentTime;
-      seekTo(t + frameDuration * count);
+      const frame = getFrameNumber(videoRef.current?.currentTime ?? currentTime, fps) + count;
+      seekTo(getTimeForFrame(Math.max(0, frame), fps));
     },
-    [pauseAll, seekTo, frameDuration, currentTime]
+    [pauseAll, seekTo, fps, currentTime]
   );
 
   const playNormal = useCallback(async () => {
@@ -250,16 +255,16 @@ export default function Labeling() {
       const video = videoRef.current;
       if (!video) return;
 
-      const next = video.currentTime + frameDuration;
-      if (next >= maxTime) {
+      const nextFrame = getFrameNumber(video.currentTime, fps) + 1;
+      if (getTimeForFrame(nextFrame, fps) >= maxTime) {
         seekTo(maxTime);
         pauseAll();
         return;
       }
 
-      seekTo(next);
+      seekTo(getTimeForFrame(nextFrame, fps));
     }, FRAME_PLAY_INTERVAL_MS);
-  }, [playMode, pauseAll, stopFrameAutoPlay, frameDuration, maxTime, seekTo]);
+  }, [playMode, pauseAll, stopFrameAutoPlay, fps, maxTime, seekTo]);
 
   const togglePlayPause = useCallback(() => {
     if (playMode === 'normal') {
@@ -281,7 +286,7 @@ export default function Labeling() {
   const markEvent = useCallback(
     async (eventType) => {
       pauseAll();
-      const playheadTime = videoRef.current?.currentTime ?? currentTime;
+      const playheadTime = snapTimeToFrame(videoRef.current?.currentTime ?? currentTime, fps);
       const followUpRule = lastEvent
         ? getImmediateFollowUpRule(lastEvent.eventType, eventType)
         : null;
@@ -290,7 +295,7 @@ export default function Labeling() {
         immediateFollowUp: useFollowUp,
         afterEvent: useFollowUp ? lastEvent?.eventType : null,
       };
-      const adjustedTime = applyFrameOffset(playheadTime, eventType, options);
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
       const offset = resolveFrameOffset(eventType, options);
 
       const newEvents = [
@@ -298,7 +303,7 @@ export default function Labeling() {
         {
           eventType,
           frameTime: adjustedTime,
-          playheadTime: parseFloat(playheadTime.toFixed(3)),
+          playheadTime,
           frameOffset: offset,
           immediateFollowUp: useFollowUp,
           afterEvent: useFollowUp ? lastEvent?.eventType : undefined,
@@ -313,14 +318,14 @@ export default function Labeling() {
       try {
         await api.saveLabels(id, { events: newEvents, status: 'draft' });
         setMessage(
-          `Marked ${eventType} at ${formatTime(adjustedTime)} (${formatOffset(offset)} frames) — saved`
+          `Marked ${eventType} at ${formatTime(adjustedTime, fps)} (${formatOffset(offset)} frames) — saved`
         );
         setTimeout(() => setMessage(''), 2500);
       } catch (err) {
         setError(err.message);
       }
     },
-    [pauseAll, currentTime, lastEvent, events, id]
+    [pauseAll, currentTime, lastEvent, events, id, fps]
   );
 
   const save = useCallback(

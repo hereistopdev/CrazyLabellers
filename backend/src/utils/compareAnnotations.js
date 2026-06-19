@@ -1,5 +1,6 @@
 const DEFAULT_TOLERANCE_MS = 250;
 const { normalizeLabelEvents } = require('./normalizeLabelEvents');
+const { getFrameDiffFromTimes } = require('./frameTime');
 
 function getFrameDiff(timeDiffMs, fps = 25) {
   return Math.round((timeDiffMs * fps) / 1000);
@@ -47,18 +48,24 @@ function compareAnnotations(
       const timeDiffMs = Math.abs(
         referenceEvent.frameTime * 1000 - submissionEvent.frameTime * 1000
       );
+      const frameDiff = getFrameDiffFromTimes(
+        referenceEvent.frameTime,
+        submissionEvent.frameTime,
+        fps
+      );
 
-      if (timeDiffMs <= toleranceMs && (!bestMatch || timeDiffMs < bestMatch.timeDiffMs)) {
+      if (timeDiffMs <= toleranceMs && (!bestMatch || frameDiff < bestMatch.frameDiff)) {
         bestMatch = {
           referenceEvent,
           timeDiffMs,
+          frameDiff,
         };
       }
     });
 
     if (bestMatch) {
       usedReference.add(bestMatch.referenceEvent.referenceIndex);
-      const frameDiff = getFrameDiff(bestMatch.timeDiffMs, fps);
+      const frameDiff = bestMatch.frameDiff;
       matched.push({
         submissionIndex: submissionEvent.submissionIndex,
         referenceIndex: bestMatch.referenceEvent.referenceIndex,

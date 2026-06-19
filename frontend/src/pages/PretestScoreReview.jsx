@@ -7,12 +7,16 @@ import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { displayAssignmentTitle } from '../utils/displayTitle';
+import {
+  formatEventTime,
+  getFrameNumber,
+  getTimeForFrame,
+  snapTimeToFrame,
+} from '../utils/frameTime';
 
-function formatTime(seconds) {
+function formatTime(seconds, fps = FPS) {
   if (!Number.isFinite(seconds)) return '—';
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(2);
-  return `${m}:${s.padStart(5, '0')}`;
+  return formatEventTime(seconds, fps);
 }
 
 function scoreLabel(score, frameDiff) {
@@ -61,14 +65,15 @@ export default function PretestScoreReview() {
 
   const handleScrub = useCallback(
     (time) => {
-      const clamped = Math.max(0, Math.min(maxTime, time));
+      const snapped = snapTimeToFrame(time, fps);
+      const clamped = Math.max(0, Math.min(maxTime, snapped));
       if (videoRef.current) {
         videoRef.current.currentTime = clamped;
       }
       setCurrentTime(clamped);
       setPlayMode('paused');
     },
-    [maxTime]
+    [maxTime, fps]
   );
 
   const togglePlayPause = useCallback(() => {
@@ -85,9 +90,10 @@ export default function PretestScoreReview() {
 
   const stepFrames = useCallback(
     (delta) => {
-      handleScrub(currentTime + delta * frameDuration);
+      const frame = getFrameNumber(currentTime, fps) + delta;
+      handleScrub(getTimeForFrame(Math.max(0, frame), fps));
     },
-    [currentTime, frameDuration, handleScrub]
+    [currentTime, fps, handleScrub]
   );
 
   const finishReview = async () => {

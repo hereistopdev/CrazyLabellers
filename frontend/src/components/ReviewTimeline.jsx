@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { FPS } from '../config/frameOffsets';
+import { formatEventTime, getFrameNumber } from '../utils/frameTime';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 40;
@@ -8,10 +10,8 @@ function clampZoom(value) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 }
 
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(1);
-  return `${m}:${s.padStart(5, '0')}`;
+function formatTime(seconds, fps = FPS) {
+  return formatEventTime(seconds, fps);
 }
 
 function toPercent(time, maxTime) {
@@ -20,7 +20,7 @@ function toPercent(time, maxTime) {
 }
 
 function isOnFrame(eventTime, currentTime, fps) {
-  return Math.round(eventTime * fps) === Math.round(currentTime * fps);
+  return getFrameNumber(eventTime, fps) === getFrameNumber(currentTime, fps);
 }
 
 function comparisonLabel(status, frameDiff) {
@@ -125,7 +125,7 @@ function EventMarkers({
           .filter(Boolean)
           .join(' ')}
         style={{ left: `${toPercent(event.frameTime, maxTime)}%` }}
-        title={`${event.eventType} @ ${formatTime(event.frameTime)}${titleSuffix}`}
+        title={`${event.eventType} @ ${formatTime(event.frameTime, fps)}${titleSuffix}`}
         onClick={(e) => {
           e.stopPropagation();
           onSeek(event.frameTime);
@@ -490,7 +490,7 @@ export default function ReviewTimeline({
           </div>
         )}
         <span className="review-timeline-current">
-          Frame {Math.round(currentTime * fps)} · {formatTime(currentTime)}
+          Frame {getFrameNumber(currentTime, fps)} · {formatTime(currentTime, fps)}
           {offFrameCount > 0 && (
             <span className="review-timeline-attention-count">
               · {offFrameCount} event{offFrameCount !== 1 ? 's' : ''} ≥2f off

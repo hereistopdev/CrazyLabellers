@@ -1,4 +1,6 @@
 const { labelToEventType } = require('./parseReferenceAnnotation');
+const { FPS } = require('../config/frameOffsets');
+const { snapTimeToFrame } = require('./frameTime');
 
 function toPlainObject(value) {
   if (value == null) return value;
@@ -34,20 +36,25 @@ function resolveEventType(event) {
   return null;
 }
 
-function normalizeLabelEvents(events = []) {
+function normalizeLabelEvents(events = [], fps = FPS) {
   return events
     .map((event, index) => {
       const plain = toPlainObject(event);
       const eventType = resolveEventType(plain);
-      const frameTime = resolveFrameTime(plain);
+      const rawFrameTime = resolveFrameTime(plain);
 
-      if (!eventType || frameTime == null) return null;
+      if (!eventType || rawFrameTime == null) return null;
+
+      const frameTime = snapTimeToFrame(rawFrameTime, fps);
+      const playheadTime = Number.isFinite(plain.playheadTime)
+        ? snapTimeToFrame(plain.playheadTime, fps)
+        : frameTime;
 
       return {
         ...plain,
         eventType,
         frameTime,
-        playheadTime: Number.isFinite(plain.playheadTime) ? plain.playheadTime : frameTime,
+        playheadTime,
         index,
       };
     })

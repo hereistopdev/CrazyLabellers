@@ -1,4 +1,5 @@
 const FPS = 25;
+const { getFrameNumber, getTimeForFrame } = require('../utils/frameTime');
 
 const FRAME_OFFSETS = {
   Pass: 0,
@@ -128,10 +129,10 @@ function frameToSeconds(frames, fps = FPS) {
   return frames / fps;
 }
 
-function applyFrameOffset(timeSeconds, eventType, options = {}) {
+function applyFrameOffset(timeSeconds, eventType, options = {}, fps = FPS) {
+  const playheadFrame = getFrameNumber(timeSeconds, fps);
   const offset = resolveFrameOffset(eventType, options);
-  const adjusted = timeSeconds + frameToSeconds(offset);
-  return Math.max(0, parseFloat(adjusted.toFixed(3)));
+  return getTimeForFrame(Math.max(0, playheadFrame + offset), fps);
 }
 
 function formatOffset(offset) {

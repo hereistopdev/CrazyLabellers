@@ -1,10 +1,6 @@
-export function getFrameNumber(time, fps) {
-  return Math.round(time * fps);
-}
+import { getFrameNumber } from './frameTime';
 
-export function getTimeForFrame(frame, fps) {
-  return frame / fps;
-}
+export { getFrameNumber, getTimeForFrame, snapTimeToFrame, nudgeFrameTime } from './frameTime';
 
 export function buildSortedEventFrames(submissionEvents = [], referenceEvents = [], fps) {
   const frames = new Set();
