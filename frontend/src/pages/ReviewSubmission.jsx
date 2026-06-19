@@ -7,6 +7,7 @@ import { FPS, applyFrameOffset, getImmediateFollowUpRule, resolveFrameOffset } f
 import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
 import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
+import CompareIssuesPanel from '../components/CompareIssuesPanel';
 import EventPickerModal from '../components/EventPickerModal';
 import { isEditableTarget } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
@@ -989,8 +990,9 @@ export default function ReviewSubmission() {
       {message && <div className="alert alert-success">{message}</div>}
 
       <div className="review-workspace">
-        <div className="video-panel review-video-panel">
-          <FrameMagnifier
+        <div className={`review-video-row${!isPreview && comparison ? ' has-compare-sidebar' : ''}`}>
+          <div className="video-panel review-video-panel">
+            <FrameMagnifier
             videoRef={videoRef}
             currentTime={currentTime}
             isPaused={isPaused}
@@ -1106,8 +1108,17 @@ export default function ReviewSubmission() {
               </button>
             </div>
           </div>
+        </div>
 
-          <ReviewTimeline
+          <CompareIssuesPanel
+            comparison={comparison}
+            onSeek={handleScrub}
+            fps={fps}
+            previewMode={isPreview}
+          />
+        </div>
+
+        <ReviewTimeline
             currentTime={currentTime}
             maxTime={maxTime}
             fps={fps}
@@ -1277,7 +1288,6 @@ export default function ReviewSubmission() {
               </div>
             </div>
           )}
-        </div>
       </div>
 
       {canEditReference && (

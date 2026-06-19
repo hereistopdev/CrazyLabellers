@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import { FPS } from '../config/frameOffsets';
 import { formatEventTime, getFrameNumber } from '../utils/frameTime';
+import { countOffFrameIssues } from './CompareIssuesPanel';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 40;
@@ -300,44 +301,7 @@ export default function ReviewTimeline({
     return map;
   }, [comparison]);
 
-  const attentionItems = useMemo(() => {
-    if (!comparison) return [];
-    const items = [];
-
-    for (const item of comparison.matched || []) {
-      if ((item.frameDiff ?? 0) >= 2) {
-        items.push({
-          key: `off-${item.submissionIndex}-${item.referenceIndex}`,
-          label: `${item.eventType} · ${item.frameDiff}f off`,
-          time: item.submissionTime,
-          kind: 'off',
-        });
-      }
-    }
-    for (const item of comparison.missingInSubmission || []) {
-      items.push({
-        key: `missing-${item.referenceIndex}`,
-        label: `${item.eventType} · missing`,
-        time: item.frameTime,
-        kind: 'missing',
-      });
-    }
-    for (const item of comparison.extraInSubmission || []) {
-      items.push({
-        key: `extra-${item.submissionIndex}`,
-        label: `${item.eventType} · extra`,
-        time: item.frameTime,
-        kind: 'extra',
-      });
-    }
-
-    return items.sort((a, b) => a.time - b.time);
-  }, [comparison]);
-
-  const offFrameCount = useMemo(
-    () => (comparison?.matched || []).filter((item) => (item.frameDiff ?? 0) >= 2).length,
-    [comparison]
-  );
+  const offFrameCount = useMemo(() => countOffFrameIssues(comparison), [comparison]);
 
   const submissionOnFrame = useMemo(
     () => sortedSubmission.filter(({ event }) => isOnFrame(event.frameTime, currentTime, fps)),
@@ -605,29 +569,6 @@ export default function ReviewTimeline({
         </div>
         </div>
       </div>
-
-      {!previewMode && attentionItems.length > 0 && (
-        <div className="review-attention-panel">
-          <div className="review-attention-title">
-            Compare issues — {offFrameCount} matched event{offFrameCount !== 1 ? 's' : ''} ≥2 frames off
-            {comparison?.summary?.missingCount > 0 &&
-              ` · ${comparison.summary.missingCount} missing`}
-            {comparison?.summary?.extraCount > 0 && ` · ${comparison.summary.extraCount} extra`}
-          </div>
-          <div className="review-attention-chips">
-            {attentionItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`review-attention-chip review-attention-chip-${item.kind}`}
-                onClick={() => onSeek(item.time)}
-              >
-                {item.label} @ {formatTime(item.time)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="review-frame-panel">
         <div className="review-frame-panel-title">Current frame</div>

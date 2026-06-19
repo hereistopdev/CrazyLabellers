@@ -2396,6 +2396,68 @@ tbody tr:hover {
   display: block;
 }
 
+.review-page .review-video-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.review-page .review-video-row.has-compare-sidebar {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+}
+
+.review-compare-sidebar {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+}
+
+.review-compare-sidebar-panel {
+  margin-top: 0;
+  min-height: 120px;
+}
+
+.review-compare-sidebar-chips {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.review-compare-sidebar-chips .review-attention-chip {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.review-compare-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+  .review-page .review-video-row.has-compare-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .review-compare-sidebar {
+    position: static;
+    max-height: none;
+  }
+
+  .review-compare-sidebar-chips {
+    flex-direction: row;
+  }
+
+  .review-compare-sidebar-chips .review-attention-chip {
+    width: auto;
+  }
+}
+
 .pretest-score-review .review-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
