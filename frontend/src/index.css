@@ -1432,9 +1432,24 @@ th {
 
 .export-submission-actions {
   display: inline-flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.export-submission-group {
+  display: inline-flex;
   gap: 0.35rem;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.export-submission-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .table-actions-inline {

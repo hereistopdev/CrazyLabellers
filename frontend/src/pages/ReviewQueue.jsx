@@ -272,6 +272,7 @@ export default function ReviewQueue() {
                           <ExportSubmissionButtons
                             submissionId={submission._id}
                             clipId={submission.assignmentId.clipId}
+                            hasReference={submission.hasReference}
                             compact
                             className="table-export-actions"
                           />

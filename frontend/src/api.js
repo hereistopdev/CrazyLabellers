@@ -146,6 +146,11 @@ export const api = {
     downloadRequest(`/assignments/${id}/export?variant=${variant}`, `labels_${variant}.json`),
   exportReviewSubmission: (id, variant = 'post') =>
     downloadRequest(`/review/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
+  exportReviewReference: (id, variant = 'post') =>
+    downloadRequest(
+      `/review/submissions/${id}/reference-export?variant=${variant}`,
+      `reference_${variant}.json`
+    ),
   exportSubmission: (id, variant = 'post') =>
     downloadRequest(`/review/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
   getAdminStats: () => request('/admin/stats'),

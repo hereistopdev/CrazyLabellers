@@ -979,6 +979,7 @@ export default function ReviewSubmission() {
             <ExportSubmissionButtons
               submissionId={submission._id}
               clipId={assignment.clipId}
+              hasReference={reference?.hasReference}
             />
           </div>
         )}

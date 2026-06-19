@@ -1,5 +1,6 @@
 const express = require('express');
 const LabelSubmission = require('../models/LabelSubmission');
+const ClipReference = require('../models/ClipReference');
 const VideoAssignment = require('../models/VideoAssignment');
 const PaymentSettings = require('../models/PaymentSettings');
 const { auth } = require('../middleware/auth');
@@ -15,6 +16,7 @@ const { applyCorrectionScore, buildCorrectionBreakdown } = require('../services/
 const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { EVENT_TYPES } = require('../config/events');
 const { buildSubmissionExport, sendSubmissionExport } = require('../services/submissionExport');
+const { buildReferenceExportForSubmission } = require('../services/referenceExport');
 
 const router = express.Router();
 
@@ -114,7 +116,18 @@ router.get('/submissions', auth, requireReviewerRole, async (req, res) => {
       (s) => s.assignmentId && !['tutorial', 'pretest'].includes(s.assignmentId.kind)
     );
 
-    return res.json(reviewable);
+    const clipIds = [...new Set(reviewable.map((s) => s.assignmentId?.clipId).filter(Boolean))];
+    const referenceClips = clipIds.length
+      ? await ClipReference.find({ clipId: { $in: clipIds }, variant: 'post' }).distinct('clipId')
+      : [];
+    const referenceClipSet = new Set(referenceClips);
+
+    return res.json(
+      reviewable.map((submission) => ({
+        ...(submission.toObject ? submission.toObject() : submission),
+        hasReference: referenceClipSet.has(submission.assignmentId?.clipId),
+      }))
+    );
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -493,6 +506,26 @@ router.get('/submissions/:id/export', auth, requireReviewerRole, async (req, res
   try {
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
     const { payload, filename, submission } = await buildSubmissionExport(req.params.id, variant);
+
+    if (submission.status !== 'approved') {
+      return res.status(403).json({
+        message: 'JSON export is only available for approved submissions',
+      });
+    }
+
+    return sendSubmissionExport(res, { payload, filename });
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.get('/submissions/:id/reference-export', auth, requireReviewerRole, async (req, res) => {
+  try {
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const { payload, filename, submission } = await buildReferenceExportForSubmission(
+      req.params.id,
+      variant
+    );
 
     if (submission.status !== 'approved') {
       return res.status(403).json({
