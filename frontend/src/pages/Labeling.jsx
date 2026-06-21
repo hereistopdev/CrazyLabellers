@@ -18,6 +18,7 @@ import TutorialPanel from '../components/TutorialPanel';
 import TutorialEditorPanel from '../components/TutorialEditorPanel';
 import ReviewTimeline from '../components/ReviewTimeline';
 import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
+import FrameNudgeRow from '../components/FrameNudgeRow';
 import LabelingChatbot from '../components/LabelingChatbot';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
@@ -27,6 +28,7 @@ import {
   getTimeForFrame,
   snapTimeToFrame,
   formatEventTime,
+  nudgeFrameTime,
 } from '../utils/frameTime';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
@@ -43,6 +45,7 @@ export default function Labeling() {
   const labellerMode = isLabeller(user);
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
+  const activeEventRef = useRef(null);
   const [assignment, setAssignment] = useState(null);
   const [eventTypes, setEventTypes] = useState([]);
   const [events, setEvents] = useState([]);
@@ -198,6 +201,10 @@ export default function Labeling() {
   }, [stopFrameAutoPlay]);
 
   useEffect(() => () => stopFrameAutoPlay(), [stopFrameAutoPlay]);
+
+  useEffect(() => {
+    activeEventRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [currentFrame]);
 
   const seekTo = useCallback((time) => {
     const snapped = snapTimeToFrame(time, fps);
@@ -461,6 +468,47 @@ export default function Labeling() {
     }
   };
 
+  const nudgeEvent = useCallback(
+    async (eventIndex, frameDelta) => {
+      const target = events[eventIndex];
+      if (!target || !frameDelta) return;
+
+      pauseAll();
+      const newFrameTime = nudgeFrameTime(target.frameTime, frameDelta, fps);
+      const newEvents = events
+        .map((event, index) =>
+          index === eventIndex ? { ...event, frameTime: newFrameTime } : event
+        )
+        .sort((a, b) => a.frameTime - b.frameTime);
+
+      setEvents(newEvents);
+      seekTo(newFrameTime);
+
+      try {
+        await api.saveLabels(id, { events: newEvents, status: 'draft' });
+        setMessage(
+          `Moved ${target.eventType} to frame ${getFrameNumber(newFrameTime, fps)} — saved`
+        );
+        setTimeout(() => setMessage(''), 2000);
+      } catch (err) {
+        setError(err.message);
+      }
+    },
+    [events, fps, id, pauseAll, seekTo]
+  );
+
+  const nudgeEventAtFrame = useCallback(
+    (frameDelta, eventIndex) => {
+      const index =
+        typeof eventIndex === 'number'
+          ? eventIndex
+          : events.findIndex((event) => getFrameNumber(event.frameTime, fps) === currentFrame);
+      if (index < 0) return;
+      nudgeEvent(index, frameDelta);
+    },
+    [events, currentFrame, fps, nudgeEvent]
+  );
+
   const handleExport = async (variant) => {
     try {
       await api.exportLabels(id, variant);
@@ -495,6 +543,7 @@ export default function Labeling() {
     submissionStatus === 'submitted' &&
     assignment?.status === 'submitted' &&
     !relabelMode;
+  const canAdjustEvents = !tutorialLabellerMode && !awaitingReview;
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) {
@@ -693,6 +742,9 @@ export default function Labeling() {
               hasReference
               previewMode
               onSeek={handleScrub}
+              canEditSubmission={canAdjustEvents}
+              onNudgeSubmissionEvent={nudgeEventAtFrame}
+              saving={saving}
             />
           )}
         </div>
@@ -776,30 +828,51 @@ export default function Labeling() {
           </div>
 
           <h3>Events ({events.length})</h3>
+          {canAdjustEvents && events.some((ev) => getFrameNumber(ev.frameTime, fps) === currentFrame) && (
+            <div className="labeling-event-nudge-panel">
+              <span className="labeling-event-nudge-label">Adjust event on this frame</span>
+              <FrameNudgeRow
+                disabled={saving}
+                onNudge={(delta) => nudgeEventAtFrame(delta)}
+              />
+            </div>
+          )}
           <div className="events-list">
             {events.length === 0 ? (
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No events marked yet</p>
             ) : (
-              events.map((ev, i) => (
-                <div key={`${ev.eventType}-${ev.frameTime}-${i}`} className="event-row">
-                  <span className="time">{formatTime(ev.frameTime)}</span>
-                  <span className="type">
-                    {ev.eventType}
-                    {ev.frameOffset !== undefined && (
-                      <span className="event-offset"> ({formatOffset(ev.frameOffset)}f)</span>
-                    )}
-                    {ev.immediateFollowUp && (
-                      <span className="event-followup"> ↳ after {ev.afterEvent}</span>
-                    )}
-                  </span>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleScrub(ev.frameTime)}>
-                    Go
-                  </button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => removeEvent(i)}>
-                    ×
-                  </button>
+              events.map((ev, i) => {
+                const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
+                return (
+                <div
+                  key={`${ev.eventType}-${ev.frameTime}-${i}`}
+                  ref={isActive ? activeEventRef : null}
+                  className={`event-row-wrap${isActive ? ' active' : ''}`}
+                >
+                  <div className={`event-row${isActive ? ' active' : ''}`}>
+                    <span className="time">{formatTime(ev.frameTime)}</span>
+                    <span className="type">
+                      {ev.eventType}
+                      {ev.frameOffset !== undefined && (
+                        <span className="event-offset"> ({formatOffset(ev.frameOffset)}f)</span>
+                      )}
+                      {ev.immediateFollowUp && (
+                        <span className="event-followup"> ↳ after {ev.afterEvent}</span>
+                      )}
+                    </span>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleScrub(ev.frameTime)}>
+                      Go
+                    </button>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => removeEvent(i)}>
+                      ×
+                    </button>
+                  </div>
+                  {canAdjustEvents && isActive && (
+                    <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
+                  )}
                 </div>
-              ))
+                );
+              })
             )}
           </div>
 

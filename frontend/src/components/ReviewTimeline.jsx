@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import { FPS } from '../config/frameOffsets';
 import { formatEventTime, getFrameNumber } from '../utils/frameTime';
 import { countOffFrameIssues } from './CompareIssuesPanel';
+import FrameNudgeRow from './FrameNudgeRow';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 40;
@@ -38,47 +39,6 @@ function referenceComparisonStatus(referenceIndex, comparisonByReference) {
   const entry = comparisonByReference?.get(referenceIndex);
   if (!entry) return null;
   return entry.status;
-}
-
-const FRAME_NUDGE_STEPS = [1, 3, 5];
-
-function FrameNudgeRow({ onNudge, disabled = false }) {
-  if (!onNudge) return null;
-
-  return (
-    <div className="frame-nudge-row" role="group" aria-label="Nudge event frame">
-      {FRAME_NUDGE_STEPS.map((step) => (
-        <div key={step} className="frame-nudge-group">
-          <button
-            type="button"
-            className="frame-nudge-btn"
-            onClick={() => onNudge(-step)}
-            disabled={disabled}
-            title={`Back ${step} frame${step === 1 ? '' : 's'}`}
-            aria-label={`Back ${step} frame${step === 1 ? '' : 's'}`}
-          >
-            <span className="frame-nudge-icon" aria-hidden>
-              ‹
-            </span>
-            <span className="frame-nudge-step">{step}</span>
-          </button>
-          <button
-            type="button"
-            className="frame-nudge-btn"
-            onClick={() => onNudge(step)}
-            disabled={disabled}
-            title={`Forward ${step} frame${step === 1 ? '' : 's'}`}
-            aria-label={`Forward ${step} frame${step === 1 ? '' : 's'}`}
-          >
-            <span className="frame-nudge-step">{step}</span>
-            <span className="frame-nudge-icon" aria-hidden>
-              ›
-            </span>
-          </button>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function EventMarkers({
@@ -347,31 +307,50 @@ export default function ReviewTimeline({
     ? eventRowsByIndex.get(primarySubmission.index)
     : null;
 
-  const renderSubmissionEditActions = (eventIndex) => (
-    <div className="review-frame-edit-toolbar">
-      <div className="review-frame-edit-row">
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => onChangeSubmissionEventType?.(eventIndex)}
-          disabled={saving}
-        >
-          Change type
-        </button>
-        <button
-          type="button"
-          className="btn btn-danger btn-sm"
-          onClick={() => onDeleteSubmissionEvent?.(eventIndex)}
-          disabled={saving}
-        >
-          Delete
-        </button>
+  const renderSubmissionEditActions = (eventIndex) => {
+    const hasTypeChange = Boolean(onChangeSubmissionEventType);
+    const hasDelete = Boolean(onDeleteSubmissionEvent);
+    const hasNudge = Boolean(onNudgeSubmissionEvent);
+    if (!hasTypeChange && !hasDelete && !hasNudge) return null;
+
+    return (
+      <div className="review-frame-edit-toolbar">
+        {(hasTypeChange || hasDelete) && (
+          <div className="review-frame-edit-row">
+            {hasTypeChange && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onChangeSubmissionEventType(eventIndex)}
+                disabled={saving}
+              >
+                Change type
+              </button>
+            )}
+            {hasDelete && (
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => onDeleteSubmissionEvent(eventIndex)}
+                disabled={saving}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        )}
+        {hasNudge && (
+          <FrameNudgeRow
+            disabled={saving}
+            onNudge={(delta) => onNudgeSubmissionEvent(delta, eventIndex)}
+          />
+        )}
       </div>
-      <FrameNudgeRow
-        disabled={saving}
-        onNudge={(delta) => onNudgeSubmissionEvent?.(delta, eventIndex)}
-      />
-    </div>
+    );
+  };
+
+  const showSubmissionEditActions = Boolean(
+    canEditSubmission || onNudgeSubmissionEvent || onChangeSubmissionEventType || onDeleteSubmissionEvent
   );
 
   return (
@@ -591,7 +570,7 @@ export default function ReviewTimeline({
                         ` ±${primaryRow.match.timeDiffMs}ms`}
                     </span>
                   )}
-                  {canEditSubmission && renderSubmissionEditActions(primarySubmission.index)}
+                  {showSubmissionEditActions && renderSubmissionEditActions(primarySubmission.index)}
                 </>
               ) : (
                 <div className="review-frame-event-list">
@@ -608,7 +587,7 @@ export default function ReviewTimeline({
                             {comparisonLabel(row.comparisonStatus, row.frameDiff)}
                           </span>
                         )}
-                        {canEditSubmission && renderSubmissionEditActions(index)}
+                        {showSubmissionEditActions && renderSubmissionEditActions(index)}
                       </div>
                     );
                   })}
