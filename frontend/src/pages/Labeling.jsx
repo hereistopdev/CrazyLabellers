@@ -20,9 +20,11 @@ import ReviewTimeline from '../components/ReviewTimeline';
 import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
 import FrameNudgeRow from '../components/FrameNudgeRow';
 import LabelingChatbot from '../components/LabelingChatbot';
+import ToastStack from '../components/ToastStack';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
 import { displayAssignmentTitle } from '../utils/displayTitle';
+import { useToasts } from '../hooks/useToasts';
 import {
   getFrameNumber,
   getTimeForFrame,
@@ -53,7 +55,7 @@ export default function Labeling() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const { toasts, pushToast, dismissToast } = useToasts();
   const [playMode, setPlayMode] = useState('paused');
   const [magnifyEnabled, setMagnifyEnabled] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
@@ -324,15 +326,14 @@ export default function Labeling() {
 
       try {
         await api.saveLabels(id, { events: newEvents, status: 'draft' });
-        setMessage(
+        pushToast(
           `Marked ${eventType} at ${formatTime(adjustedTime, fps)} (${formatOffset(offset)} frames) — saved`
         );
-        setTimeout(() => setMessage(''), 2500);
       } catch (err) {
-        setError(err.message);
+        pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [pauseAll, currentTime, lastEvent, events, id, fps]
+    [pauseAll, currentTime, lastEvent, events, id, fps, pushToast]
   );
 
   const save = useCallback(
@@ -344,29 +345,28 @@ export default function Labeling() {
         setSubmissionStatus(data.submission?.status || status);
         if (status === 'submitted' && data.tutorial?.completed) {
           await refreshUser();
-          setMessage('Tutorial completed! Continue to the next tutorial or pre-test.');
+          pushToast('Tutorial completed! Continue to the next tutorial or pre-test.', {
+            duration: 4000,
+          });
         } else if (status === 'submitted' && assignment?.kind === 'pretest') {
           await refreshUser();
           if (data.grading?.scoreReviewUrl) {
             navigate(data.grading.scoreReviewUrl);
             return;
           }
-          setMessage('Submitted but could not open score review.');
+          pushToast('Submitted but could not open score review.', { duration: 4000 });
         } else if (status === 'submitted') {
-          setMessage('Submitted for review!');
+          pushToast('Submitted for review!', { duration: 4000 });
         } else {
-          setMessage('Draft saved');
-        }
-        if (status === 'submitted') {
-          setTimeout(() => setMessage(''), 4000);
+          pushToast('Draft saved');
         }
       } catch (err) {
-        setError(err.message);
+        pushToast(err.message, { type: 'error', duration: 4000 });
       } finally {
         setSaving(false);
       }
     },
-    [id, events, assignment?.kind, refreshUser, navigate]
+    [id, events, assignment?.kind, refreshUser, navigate, pushToast]
   );
 
   const handleCompleteTutorial = useCallback(async () => {
@@ -376,17 +376,18 @@ export default function Labeling() {
       const data = await api.completeTutorial(id);
       setTutorialDone(true);
       await refreshUser();
-      setMessage(
+      pushToast(
         data.tutorialsCompleted
           ? 'All tutorials complete! You can continue to the pre-test.'
-          : 'Tutorial marked complete.'
+          : 'Tutorial marked complete.',
+        { duration: 4000 }
       );
     } catch (err) {
-      setError(err.message);
+      pushToast(err.message, { type: 'error', duration: 4000 });
     } finally {
       setSaving(false);
     }
-  }, [id, refreshUser]);
+  }, [id, refreshUser, pushToast]);
 
   useEffect(() => {
     const tutorialLabeller = labellerMode && assignment?.kind === 'tutorial';
@@ -461,10 +462,9 @@ export default function Labeling() {
     setEvents(newEvents);
     try {
       await api.saveLabels(id, { events: newEvents, status: 'draft' });
-      setMessage('Event removed — saved');
-      setTimeout(() => setMessage(''), 2000);
+      pushToast('Event removed — saved');
     } catch (err) {
-      setError(err.message);
+      pushToast(err.message, { type: 'error', duration: 4000 });
     }
   };
 
@@ -486,15 +486,14 @@ export default function Labeling() {
 
       try {
         await api.saveLabels(id, { events: newEvents, status: 'draft' });
-        setMessage(
+        pushToast(
           `Moved ${target.eventType} to frame ${getFrameNumber(newFrameTime, fps)} — saved`
         );
-        setTimeout(() => setMessage(''), 2000);
       } catch (err) {
-        setError(err.message);
+        pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [events, fps, id, pauseAll, seekTo]
+    [events, fps, id, pauseAll, seekTo, pushToast]
   );
 
   const nudgeEventAtFrame = useCallback(
@@ -513,7 +512,7 @@ export default function Labeling() {
     try {
       await api.exportLabels(id, variant);
     } catch (err) {
-      setError(err.message);
+      pushToast(err.message, { type: 'error', duration: 4000 });
     }
   };
 
@@ -636,9 +635,6 @@ export default function Labeling() {
           </button>
         )}
       </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      {message && <div className="alert alert-success">{message}</div>}
 
       <div className="labeling-workspace">
         <aside className="labeling-hotkeys-sidebar">
@@ -797,125 +793,133 @@ export default function Labeling() {
             )}
           </div>
         ) : (
-        <div className="events-panel">
-          {showReference && (
-            <ReferenceEventsPanel
-              referenceEvents={referenceEvents}
-              currentTime={currentTime}
-              fps={fps}
-              annotationCount={reference.annotationCount}
-              onSeek={handleScrub}
-            />
-          )}
-
-          <h3>Add event</h3>
-          <p className="offset-hint">
-            {frameOffsetSummary}
-            · Immediate follow-up: <strong>0</strong> at touch
-          </p>
-          <div className="mark-panel">
-            <p className="mark-hint">
-              Pause on the frame, then press <kbd>Enter</kbd> or <kbd>M</kbd> to pick an event.
-              Each mark auto-saves.
-            </p>
-            <button type="button" className="btn btn-primary btn-sm" onClick={openEventPicker}>
-              Mark event at {formatTime(currentTime)}
-            </button>
-            {lastEvent && (
-              <p className="mark-hint last-event">
-                Last: {lastEvent.eventType} at {formatTime(lastEvent.frameTime)}
-              </p>
-            )}
-          </div>
-
-          <h3>Events ({events.length})</h3>
-          {canAdjustEvents && events.some((ev) => getFrameNumber(ev.frameTime, fps) === currentFrame) && (
-            <div className="labeling-event-nudge-panel">
-              <span className="labeling-event-nudge-label">Adjust event on this frame</span>
-              <FrameNudgeRow
-                disabled={saving}
-                onNudge={(delta) => nudgeEventAtFrame(delta)}
+        <div className="events-panel events-panel--labeling">
+          <div className="events-panel-fixed">
+            {showReference && (
+              <ReferenceEventsPanel
+                referenceEvents={referenceEvents}
+                currentTime={currentTime}
+                fps={fps}
+                annotationCount={reference.annotationCount}
+                onSeek={handleScrub}
               />
-            </div>
-          )}
-          <div className="events-list">
-            {events.length === 0 ? (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No events marked yet</p>
-            ) : (
-              events.map((ev, i) => {
-                const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
-                return (
-                <div
-                  key={`${ev.eventType}-${ev.frameTime}-${i}`}
-                  ref={isActive ? activeEventRef : null}
-                  className={`event-row-wrap${isActive ? ' active' : ''}`}
-                >
-                  <div className={`event-row${isActive ? ' active' : ''}`}>
-                    <span className="time">{formatTime(ev.frameTime)}</span>
-                    <span className="type">
-                      {ev.eventType}
-                      {ev.frameOffset !== undefined && (
-                        <span className="event-offset"> ({formatOffset(ev.frameOffset)}f)</span>
-                      )}
-                      {ev.immediateFollowUp && (
-                        <span className="event-followup"> ↳ after {ev.afterEvent}</span>
-                      )}
-                    </span>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleScrub(ev.frameTime)}>
-                      Go
-                    </button>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => removeEvent(i)}>
-                      ×
-                    </button>
-                  </div>
-                  {canAdjustEvents && isActive && (
-                    <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
-                  )}
-                </div>
-                );
-              })
             )}
+
+            <section className="events-panel-add-event">
+              <h3>Add event</h3>
+              <p className="offset-hint">
+                {frameOffsetSummary}
+                · Immediate follow-up: <strong>0</strong> at touch
+              </p>
+              <div className="mark-panel">
+                <p className="mark-hint">
+                  Pause on the frame, then press <kbd>Enter</kbd> or <kbd>M</kbd> to pick an event.
+                  Each mark auto-saves.
+                </p>
+                <button type="button" className="btn btn-primary btn-sm" onClick={openEventPicker}>
+                  Mark event at {formatTime(currentTime)}
+                </button>
+                {lastEvent && (
+                  <p className="mark-hint last-event">
+                    Last: {lastEvent.eventType} at {formatTime(lastEvent.frameTime)}
+                  </p>
+                )}
+              </div>
+            </section>
           </div>
 
-          <div className="actions-row" style={{ marginTop: '1rem' }}>
-            {assignment?.clipId && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleExport('post')}
-                  title={`Download ${assignment.clipId}_post.json`}
-                >
-                  Export _post.json
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleExport('raw')}
-                  title={`Download ${assignment.clipId}.json`}
-                >
-                  Export .json
-                </button>
-              </>
+          <div className="events-panel-scroll">
+            <h3>Events ({events.length})</h3>
+            {canAdjustEvents && events.some((ev) => getFrameNumber(ev.frameTime, fps) === currentFrame) && (
+              <div className="labeling-event-nudge-panel">
+                <span className="labeling-event-nudge-label">Adjust event on this frame</span>
+                <FrameNudgeRow
+                  disabled={saving}
+                  onNudge={(delta) => nudgeEventAtFrame(delta)}
+                />
+              </div>
             )}
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving}>
-              Save draft
-            </button>
-            {labellerMode && !awaitingReview && (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => save('submitted')}
-                disabled={saving || events.length === 0}
-              >
-                {relabelMode ? 'Re-submit' : 'Submit'}
+            <div className="events-list events-list--labeling">
+              {events.length === 0 ? (
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No events marked yet</p>
+              ) : (
+                events.map((ev, i) => {
+                  const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
+                  return (
+                  <div
+                    key={`${ev.eventType}-${ev.frameTime}-${i}`}
+                    ref={isActive ? activeEventRef : null}
+                    className={`event-row-wrap${isActive ? ' active' : ''}`}
+                  >
+                    <div className={`event-row${isActive ? ' active' : ''}`}>
+                      <span className="time">{formatTime(ev.frameTime)}</span>
+                      <span className="type">
+                        {ev.eventType}
+                        {ev.frameOffset !== undefined && (
+                          <span className="event-offset"> ({formatOffset(ev.frameOffset)}f)</span>
+                        )}
+                        {ev.immediateFollowUp && (
+                          <span className="event-followup"> ↳ after {ev.afterEvent}</span>
+                        )}
+                      </span>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleScrub(ev.frameTime)}>
+                        Go
+                      </button>
+                      <button type="button" className="btn btn-danger btn-sm" onClick={() => removeEvent(i)}>
+                        ×
+                      </button>
+                    </div>
+                    {canAdjustEvents && isActive && (
+                      <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
+                    )}
+                  </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="events-panel-footer">
+            <div className="actions-row">
+              {assignment?.clipId && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleExport('post')}
+                    title={`Download ${assignment.clipId}_post.json`}
+                  >
+                    Export _post.json
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleExport('raw')}
+                    title={`Download ${assignment.clipId}.json`}
+                  >
+                    Export .json
+                  </button>
+                </>
+              )}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving}>
+                Save draft
               </button>
-            )}
-            {awaitingReview && (
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Awaiting validator review
-              </span>
-            )}
+              {labellerMode && !awaitingReview && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => save('submitted')}
+                  disabled={saving || events.length === 0}
+                >
+                  {relabelMode ? 'Re-submit' : 'Submit'}
+                </button>
+              )}
+              {awaitingReview && (
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Awaiting validator review
+                </span>
+              )}
+            </div>
           </div>
         </div>
         )}
@@ -941,6 +945,7 @@ export default function Labeling() {
         />
       )}
 
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
