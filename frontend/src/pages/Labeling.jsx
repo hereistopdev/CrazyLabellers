@@ -583,8 +583,9 @@ export default function Labeling() {
         <p>{assignment?.description}</p>
         {showReference && labellerMode && !adminMode && (
           <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
-            Reference visible — compare gold-standard events (blue) with your labels (green), then
-            update and {relabelMode ? 're-submit' : 'submit'} when they match the current criteria.
+            Reference visible — your draft starts from the reference events. Compare gold-standard
+            events (blue) with your labels (green), adjust with nudge or mark controls, then{' '}
+            {relabelMode ? 're-submit' : 'submit'} when ready.
           </p>
         )}
         {adminMode && (

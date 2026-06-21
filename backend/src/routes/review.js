@@ -13,6 +13,7 @@ const { compareAnnotations } = require('../utils/compareAnnotations');
 const { buildScoreReviewPayload } = require('../services/scoreReview');
 const { gradeSubmissionAgainstReference, gradeEventsAgainstReference } = require('../services/grading');
 const { applyCorrectionScore, buildCorrectionBreakdown } = require('../services/submissionCorrections');
+const { loadDraftEventsFromReference } = require('../services/referenceDraftSeed');
 const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
 const { EVENT_TYPES } = require('../config/events');
 const { buildSubmissionExport, sendSubmissionExport } = require('../services/submissionExport');
@@ -483,14 +484,16 @@ router.post('/submissions/:id/reopen-for-relabel', auth, requireReviewerRole, as
     submission.reviewerNotes = '';
     submission.reviewedAt = undefined;
     submission.reviewedBy = undefined;
-    if (clearEvents) {
-      submission.events = [];
-    }
-    await submission.save();
 
     assignment.status = 'in_progress';
     assignment.allowLabellerReference = true;
     await assignment.save();
+
+    if (clearEvents) {
+      submission.events = await loadDraftEventsFromReference(assignment);
+    }
+
+    await submission.save();
 
     return res.json({
       message: 'Task reopened — labeller can compare against reference and re-submit',

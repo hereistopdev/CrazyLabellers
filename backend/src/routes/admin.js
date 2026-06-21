@@ -23,6 +23,7 @@ const { importClipsFromDir } = require('../services/clipImport');
 const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
 const { importClipFromUpload } = require('../services/clipUpload');
 const { resolveUploadGroupId } = require('../services/taskGroups');
+const { loadDraftEventsFromReference } = require('../services/referenceDraftSeed');
 const { isRemoteVideoStorage, getStorageStatus } = require('../services/videoStorage');
 const { isVideoFilename } = require('../utils/clipId');
 const { saveReferenceForClip, deleteReferenceForClip, hasReferenceForClip } = require('../services/referenceStorage');
@@ -496,9 +497,16 @@ router.post('/labellers/:id/assign', auth, requireRole('admin'), async (req, res
     assignment.status = 'assigned';
     await assignment.save();
 
+    const draftEvents = await loadDraftEventsFromReference(assignment);
+
     await LabelSubmission.findOneAndUpdate(
       { assignmentId: assignment._id, userId: labeller._id },
-      { assignmentId: assignment._id, userId: labeller._id, events: [], status: 'draft' },
+      {
+        assignmentId: assignment._id,
+        userId: labeller._id,
+        events: draftEvents,
+        status: 'draft',
+      },
       { upsert: true, new: true }
     );
 
