@@ -21,6 +21,7 @@ const { loadReferenceForClip } = require('../services/referenceStorage');
 const {
   assertLabellerProductionAssignment,
   canLabellerRelabelWithReference,
+  canLabellerEditSubmission,
   isAssignedLabeller,
 } = require('../services/labellerAssignmentAccess');
 const {
@@ -411,32 +412,12 @@ router.put('/:id/labels', auth, async (req, res) => {
       !isAdmin(req.user) &&
       assignment.kind !== 'tutorial' &&
       assignment.kind !== 'pretest' &&
-      existing?.status === 'submitted' &&
-      !relabelWithReference
+      existing &&
+      !canLabellerEditSubmission(assignment, existing)
     ) {
-      return res.status(403).json({
-        message: 'This submission is awaiting review and cannot be edited',
-      });
-    }
-
-    if (
-      isLabeller(req.user) &&
-      !isAdmin(req.user) &&
-      assignment.kind !== 'tutorial' &&
-      assignment.kind !== 'pretest' &&
-      existing?.status === 'approved'
-    ) {
-      return res.status(403).json({ message: 'This submission is approved and cannot be edited' });
-    }
-
-    if (
-      isLabeller(req.user) &&
-      !isAdmin(req.user) &&
-      assignment.kind !== 'tutorial' &&
-      assignment.kind !== 'pretest' &&
-      existing?.status === 'rejected' &&
-      !assignment.allowLabellerReference
-    ) {
+      if (existing.status === 'approved') {
+        return res.status(403).json({ message: 'This submission is approved and cannot be edited' });
+      }
       return res.status(403).json({
         message: 'This task was rejected. Contact an admin if you need to re-label.',
       });
@@ -447,10 +428,23 @@ router.put('/:id/labels', auth, async (req, res) => {
       status: status || 'draft',
     };
 
+    const isProductionResubmit =
+      status === 'submitted' &&
+      existing?.status === 'submitted' &&
+      assignment.kind !== 'pretest' &&
+      assignment.kind !== 'tutorial';
+
     if (status === 'submitted') {
       updatePayload.originalEvents = normalizedEvents;
       if (relabelWithReference && existing?.status === 'rejected') {
         updatePayload.eventValidations = [];
+      }
+      if (isProductionResubmit) {
+        updatePayload.eventValidations = [];
+        updatePayload.reviewerNotes = '';
+        updatePayload.reviewPoints = null;
+        updatePayload.reviewedAt = null;
+        updatePayload.reviewedBy = null;
       }
     }
 
@@ -508,7 +502,9 @@ router.put('/:id/labels', auth, async (req, res) => {
     } else if (
       assignment.kind !== 'tutorial' &&
       assignment.kind !== 'pretest' &&
-      (assignment.status === 'assigned' || assignment.status === 'rejected')
+      (assignment.status === 'assigned' ||
+        assignment.status === 'rejected' ||
+        assignment.status === 'submitted')
     ) {
       await patchAssignment(assignment._id, { status: 'in_progress' });
     }

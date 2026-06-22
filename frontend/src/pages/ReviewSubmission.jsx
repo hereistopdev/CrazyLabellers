@@ -8,6 +8,7 @@ import FrameMagnifier from '../components/FrameMagnifier';
 import ReviewTimeline from '../components/ReviewTimeline';
 import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import CompareIssuesPanel from '../components/CompareIssuesPanel';
+import DiscussionEventsPanel, { getDiscussionEvents } from '../components/DiscussionEventsPanel';
 import EventPickerModal from '../components/EventPickerModal';
 import { isEditableTarget } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
@@ -107,6 +108,11 @@ export default function ReviewSubmission() {
   const eventFrames = useMemo(
     () => buildSortedEventFrames(submissionEvents, referenceEvents, fps),
     [submissionEvents, referenceEvents, fps]
+  );
+
+  const discussionEvents = useMemo(
+    () => getDiscussionEvents(submissionEvents),
+    [submissionEvents]
   );
 
   useEffect(() => {
@@ -852,6 +858,11 @@ export default function ReviewSubmission() {
               <strong>{submission?.userId?.name}</strong>
             </Link>{' '}
             · {submissionEvents.length} events · Validated {validatedCount}/{eventRows.length}{' '}
+            {discussionEvents.length > 0 && (
+              <>
+                · <strong>{discussionEvents.length}</strong> flagged for discussion{' '}
+              </>
+            )}
             · Status: <strong>{submission?.status}</strong>
           </p>
         )}
@@ -1116,6 +1127,10 @@ export default function ReviewSubmission() {
             fps={fps}
             previewMode={isPreview}
           />
+
+          {!isPreview && (
+            <DiscussionEventsPanel events={submissionEvents} onSeek={handleScrub} fps={fps} />
+          )}
         </div>
 
         <ReviewTimeline

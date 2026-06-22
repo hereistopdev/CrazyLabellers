@@ -55,6 +55,8 @@ function normalizeLabelEvents(events = [], fps = FPS) {
         eventType,
         frameTime,
         playheadTime,
+        needsDiscussion: Boolean(plain.needsDiscussion),
+        notes: typeof plain.notes === 'string' ? plain.notes : '',
         index,
       };
     })

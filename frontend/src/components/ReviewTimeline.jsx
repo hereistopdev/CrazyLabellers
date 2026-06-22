@@ -71,6 +71,9 @@ function EventMarkers({
           : comparisonStatus === 'missing'
             ? ' · missing from submission'
             : '';
+    const discussionSuffix = variant === 'submission' && event.needsDiscussion
+      ? ` · flagged for discussion${event.notes ? `: ${event.notes}` : ''}`
+      : '';
 
     return (
       <button
@@ -81,12 +84,13 @@ function EventMarkers({
           `review-timeline-marker-${variant}`,
           active ? 'active' : '',
           variant === 'submission' ? `validation-${validationStatus}` : '',
+          variant === 'submission' && event.needsDiscussion ? 'needs-discussion' : '',
           comparisonStatus ? `comparison-${comparisonStatus}` : '',
         ]
           .filter(Boolean)
           .join(' ')}
         style={{ left: `${toPercent(event.frameTime, maxTime)}%` }}
-        title={`${event.eventType} @ ${formatTime(event.frameTime, fps)}${titleSuffix}`}
+        title={`${event.eventType} @ ${formatTime(event.frameTime, fps)}${titleSuffix}${discussionSuffix}`}
         onClick={(e) => {
           e.stopPropagation();
           onSeek(event.frameTime);
@@ -561,6 +565,12 @@ export default function ReviewTimeline({
                   <span className="review-frame-event-time">
                     {formatTime(primarySubmission.event.frameTime)}
                   </span>
+                  {primarySubmission.event.needsDiscussion && (
+                    <span className="review-discussion-badge" title={primarySubmission.event.notes || undefined}>
+                      ⚑ Flagged for discussion
+                      {primarySubmission.event.notes ? `: ${primarySubmission.event.notes}` : ''}
+                    </span>
+                  )}
                   {primaryRow?.comparisonStatus && (
                     <span className={`comparison-badge comparison-${primaryRow.comparisonStatus}`}>
                       {comparisonLabel(primaryRow.comparisonStatus, primaryRow.frameDiff)}
@@ -582,6 +592,12 @@ export default function ReviewTimeline({
                         <span className="review-frame-event-time">
                           {formatTime(event.frameTime)}
                         </span>
+                        {event.needsDiscussion && (
+                          <span className="review-discussion-badge" title={event.notes || undefined}>
+                            ⚑ Discuss
+                            {event.notes ? `: ${event.notes}` : ''}
+                          </span>
+                        )}
                         {row?.comparisonStatus && (
                           <span className={`comparison-badge comparison-${row.comparisonStatus}`}>
                             {comparisonLabel(row.comparisonStatus, row.frameDiff)}

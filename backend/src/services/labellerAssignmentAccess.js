@@ -14,6 +14,15 @@ function canLabellerRelabelWithReference(assignment, submission) {
   return false;
 }
 
+function canLabellerEditSubmission(assignment, submission) {
+  if (!submission) return true;
+  if (submission.status === 'approved') return false;
+  if (submission.status === 'rejected') {
+    return Boolean(assignment?.allowLabellerReference);
+  }
+  return submission.status === 'draft' || submission.status === 'submitted';
+}
+
 function assertLabellerProductionAssignment(user, assignment) {
   if (!isLabeller(user) || isAdmin(user)) return;
 
@@ -31,5 +40,6 @@ function assertLabellerProductionAssignment(user, assignment) {
 module.exports = {
   isAssignedLabeller,
   canLabellerRelabelWithReference,
+  canLabellerEditSubmission,
   assertLabellerProductionAssignment,
 };

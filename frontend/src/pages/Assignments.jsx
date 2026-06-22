@@ -272,12 +272,16 @@ export default function Assignments() {
                       )}
                       {canOpen && (
                         <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
-                          {canRelabel ? 'Re-label with reference' : 'Open labeler'}
+                          {canRelabel
+                            ? 'Re-label with reference'
+                            : a.status === 'submitted' && isMine
+                              ? 'Edit & re-submit'
+                              : 'Open labeler'}
                         </Link>
                       )}
                       {a.status === 'submitted' && isMine && (
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                          Awaiting review
+                          Awaiting review — edits allowed until validated
                         </span>
                       )}
                     </div>

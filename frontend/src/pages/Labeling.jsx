@@ -19,6 +19,7 @@ import TutorialEditorPanel from '../components/TutorialEditorPanel';
 import ReviewTimeline from '../components/ReviewTimeline';
 import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
 import FrameNudgeRow from '../components/FrameNudgeRow';
+import EventDiscussionFlag from '../components/EventDiscussionFlag';
 import LabelingChatbot from '../components/LabelingChatbot';
 import ToastStack from '../components/ToastStack';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
@@ -48,6 +49,8 @@ export default function Labeling() {
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const activeEventRef = useRef(null);
+  const eventsRef = useRef([]);
+  const discussionNotesRef = useRef({});
   const [assignment, setAssignment] = useState(null);
   const [eventTypes, setEventTypes] = useState([]);
   const [events, setEvents] = useState([]);
@@ -181,6 +184,10 @@ export default function Labeling() {
   useEffect(() => {
     setMediaDuration(null);
   }, [assignment?.videoUrl]);
+
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   const handleLoadedMetadata = useCallback(() => {
     const duration = videoRef.current?.duration;
@@ -316,6 +323,7 @@ export default function Labeling() {
           frameOffset: offset,
           immediateFollowUp: useFollowUp,
           afterEvent: useFollowUp ? lastEvent?.eventType : undefined,
+          needsDiscussion: false,
           notes: '',
         },
       ].sort((a, b) => a.frameTime - b.frameTime);
@@ -356,9 +364,23 @@ export default function Labeling() {
           }
           pushToast('Submitted but could not open score review.', { duration: 4000 });
         } else if (status === 'submitted') {
-          pushToast('Submitted for review!', { duration: 4000 });
+          const wasSubmitted = submissionStatus === 'submitted';
+          const isRelabel =
+            labellerMode &&
+            assignment?.allowLabellerReference &&
+            (submissionStatus === 'rejected' || assignment?.status === 'rejected');
+          pushToast(
+            wasSubmitted || isRelabel
+              ? 'Submission updated — sent back for review'
+              : 'Submitted for review!',
+            { duration: 4000 }
+          );
+          setAssignment((prev) => (prev ? { ...prev, status: 'submitted' } : prev));
         } else {
           pushToast('Draft saved');
+          if (status === 'draft' && assignment?.status === 'submitted') {
+            setAssignment((prev) => (prev ? { ...prev, status: 'in_progress' } : prev));
+          }
         }
       } catch (err) {
         pushToast(err.message, { type: 'error', duration: 4000 });
@@ -366,7 +388,16 @@ export default function Labeling() {
         setSaving(false);
       }
     },
-    [id, events, assignment?.kind, refreshUser, navigate, pushToast]
+    [
+      id,
+      events,
+      assignment,
+      labellerMode,
+      submissionStatus,
+      refreshUser,
+      navigate,
+      pushToast,
+    ]
   );
 
   const handleCompleteTutorial = useCallback(async () => {
@@ -468,6 +499,59 @@ export default function Labeling() {
     }
   };
 
+  const toggleEventDiscussion = async (index) => {
+    const target = eventsRef.current[index];
+    if (!target) return;
+
+    const flagged = !target.needsDiscussion;
+    const newEvents = eventsRef.current.map((event, i) =>
+      i === index
+        ? {
+            ...event,
+            needsDiscussion: flagged,
+            notes: flagged ? event.notes || '' : '',
+          }
+        : event
+    );
+
+    setEvents(newEvents);
+    try {
+      await api.saveLabels(id, { events: newEvents, status: 'draft' });
+      if (flagged) {
+        discussionNotesRef.current[index] = newEvents[index].notes || '';
+      } else {
+        delete discussionNotesRef.current[index];
+      }
+      pushToast(
+        flagged ? 'Event flagged for discussion — saved' : 'Discussion flag removed — saved'
+      );
+    } catch (err) {
+      pushToast(err.message, { type: 'error', duration: 4000 });
+    }
+  };
+
+  const updateEventDiscussionNote = (index, notes) => {
+    setEvents((prev) => prev.map((event, i) => (i === index ? { ...event, notes } : event)));
+  };
+
+  const saveEventDiscussionNote = async (index) => {
+    const snapshot = eventsRef.current;
+    const event = snapshot[index];
+    if (!event?.needsDiscussion) return;
+
+    const prev = discussionNotesRef.current[index] ?? '';
+    const next = event.notes || '';
+    if (next === prev) return;
+
+    try {
+      await api.saveLabels(id, { events: snapshot, status: 'draft' });
+      discussionNotesRef.current[index] = next;
+      pushToast('Discussion note saved');
+    } catch (err) {
+      pushToast(err.message, { type: 'error', duration: 4000 });
+    }
+  };
+
   const nudgeEvent = useCallback(
     async (eventIndex, frameDelta) => {
       const target = events[eventIndex];
@@ -537,12 +621,16 @@ export default function Labeling() {
     labellerMode &&
     assignment?.allowLabellerReference &&
     (submissionStatus === 'rejected' || assignment?.status === 'rejected');
-  const awaitingReview =
+  const pendingReviewResubmit =
     labellerMode &&
     submissionStatus === 'submitted' &&
-    assignment?.status === 'submitted' &&
+    assignment?.kind !== 'pretest' &&
     !relabelMode;
-  const canAdjustEvents = !tutorialLabellerMode && !awaitingReview;
+  const submissionLocked =
+    submissionStatus === 'approved' ||
+    (submissionStatus === 'rejected' && !assignment?.allowLabellerReference);
+  const canAdjustEvents = !tutorialLabellerMode && !submissionLocked;
+  const discussionEventCount = events.filter((event) => event.needsDiscussion).length;
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) {
@@ -584,7 +672,18 @@ export default function Labeling() {
           <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
             Reference visible — your draft starts from the reference events. Compare gold-standard
             events (blue) with your labels (green), adjust with nudge or mark controls, then{' '}
-            {relabelMode ? 're-submit' : 'submit'} when ready.
+            {relabelMode || pendingReviewResubmit ? 're-submit' : 'submit'} when ready.
+          </p>
+        )}
+        {pendingReviewResubmit && (
+          <p style={{ fontSize: '0.85rem', color: '#93c5fd' }}>
+            Already submitted — you can still edit events and <strong>Re-submit</strong> until a
+            validator reviews this task.
+          </p>
+        )}
+        {submissionLocked && submissionStatus === 'approved' && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            This submission is approved and can no longer be edited.
           </p>
         )}
         {adminMode && (
@@ -814,7 +913,7 @@ export default function Labeling() {
               <div className="mark-panel">
                 <p className="mark-hint">
                   Pause on the frame, then press <kbd>Enter</kbd> or <kbd>M</kbd> to pick an event.
-                  Each mark auto-saves.
+                  Each mark auto-saves. Flag uncertain events for validator discussion below.
                 </p>
                 <button type="button" className="btn btn-primary btn-sm" onClick={openEventPicker}>
                   Mark event at {formatTime(currentTime)}
@@ -829,7 +928,14 @@ export default function Labeling() {
           </div>
 
           <div className="events-panel-scroll">
-            <h3>Events ({events.length})</h3>
+            <h3>
+              Events ({events.length})
+              {discussionEventCount > 0 && (
+                <span className="events-discussion-count">
+                  · {discussionEventCount} flagged for discussion
+                </span>
+              )}
+            </h3>
             {canAdjustEvents && events.some((ev) => getFrameNumber(ev.frameTime, fps) === currentFrame) && (
               <div className="labeling-event-nudge-panel">
                 <span className="labeling-event-nudge-label">Adjust event on this frame</span>
@@ -849,11 +955,16 @@ export default function Labeling() {
                   <div
                     key={`${ev.eventType}-${ev.frameTime}-${i}`}
                     ref={isActive ? activeEventRef : null}
-                    className={`event-row-wrap${isActive ? ' active' : ''}`}
+                    className={`event-row-wrap${isActive ? ' active' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}
                   >
-                    <div className={`event-row${isActive ? ' active' : ''}`}>
+                    <div className={`event-row${isActive ? ' active' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}>
                       <span className="time">{formatTime(ev.frameTime)}</span>
                       <span className="type">
+                        {ev.needsDiscussion && (
+                          <span className="event-discussion-badge" title="Flagged for discussion">
+                            ⚑
+                          </span>
+                        )}
                         {ev.eventType}
                         {ev.frameOffset !== undefined && (
                           <span className="event-offset"> ({formatOffset(ev.frameOffset)}f)</span>
@@ -871,6 +982,16 @@ export default function Labeling() {
                     </div>
                     {canAdjustEvents && isActive && (
                       <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
+                    )}
+                    {canAdjustEvents && (
+                      <EventDiscussionFlag
+                        flagged={Boolean(ev.needsDiscussion)}
+                        note={ev.notes || ''}
+                        disabled={saving}
+                        onToggle={() => toggleEventDiscussion(i)}
+                        onNoteChange={(value) => updateEventDiscussionNote(i, value)}
+                        onNoteBlur={() => saveEventDiscussionNote(i)}
+                      />
                     )}
                   </div>
                   );
@@ -901,22 +1022,24 @@ export default function Labeling() {
                   </button>
                 </>
               )}
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving || submissionLocked}>
                 Save draft
               </button>
-              {labellerMode && !awaitingReview && (
+              {labellerMode && canAdjustEvents && (
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={() => save('submitted')}
                   disabled={saving || events.length === 0}
                 >
-                  {relabelMode ? 'Re-submit' : 'Submit'}
+                  {pendingReviewResubmit || relabelMode ? 'Re-submit' : 'Submit'}
                 </button>
               )}
-              {awaitingReview && (
+              {submissionLocked && (
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  Awaiting validator review
+                  {submissionStatus === 'approved'
+                    ? 'Approved — no further edits'
+                    : 'Rejected — contact admin to re-open'}
                 </span>
               )}
             </div>

@@ -9,6 +9,7 @@ const eventLabelSchema = new mongoose.Schema(
     frameOffset: { type: Number },
     immediateFollowUp: { type: Boolean, default: false },
     afterEvent: { type: String },
+    needsDiscussion: { type: Boolean, default: false },
     notes: { type: String, default: '' },
   },
   { _id: false }
