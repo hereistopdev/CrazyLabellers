@@ -1417,6 +1417,93 @@ body.nav-open {
   margin-bottom: 0.5rem;
 }
 
+.events-panel-add-event-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+
+.events-panel-add-event-header h3 {
+  margin: 0;
+}
+
+.labeling-help-trigger {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.labeling-help-trigger:hover {
+  color: var(--text);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.mark-panel--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.labeling-help-modal {
+  max-width: 520px;
+}
+
+.labeling-help-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.labeling-help-modal-header h3 {
+  margin: 0;
+}
+
+.labeling-help-modal-close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.labeling-help-modal-body p {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.labeling-help-modal-body p:last-child {
+  margin-bottom: 0;
+}
+
+.event-row-wrap.selected .event-row,
+.event-row.selected {
+  outline: 1px solid rgba(59, 130, 246, 0.55);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.event-row {
+  cursor: pointer;
+}
+
+.review-timeline-marker-submission.selected .review-timeline-marker-dot {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.95);
+}
+
 .events-panel-scroll {
   flex: 1;
   min-height: 0;
@@ -1450,6 +1537,19 @@ body.nav-open {
 
 .events-panel--labeling .reference-events-list {
   max-height: 160px;
+}
+
+.labeling-reset-reference-row {
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.labeling-reset-reference-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .events-panel h3 {
@@ -2675,7 +2775,7 @@ tbody tr:hover {
   position: sticky;
   top: 1rem;
   align-self: start;
-  max-height: calc(100vh - 8rem);
+  max-height: calc(70vh - 8rem);
   overflow-y: auto;
 }
 

@@ -9,7 +9,6 @@ import {
   FPS,
   getImmediateFollowUpRule,
   resolveFrameOffset,
-  frameOffsetSummary,
 } from '../config/frameOffsets';
 import FrameMagnifier from '../components/FrameMagnifier';
 import TutorialEventOverlay from '../components/TutorialEventOverlay';
@@ -21,6 +20,7 @@ import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
 import FrameNudgeRow from '../components/FrameNudgeRow';
 import EventDiscussionFlag from '../components/EventDiscussionFlag';
 import LabelingChatbot from '../components/LabelingChatbot';
+import LabelingHelpModal from '../components/LabelingHelpModal';
 import ToastStack from '../components/ToastStack';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
@@ -62,6 +62,10 @@ export default function Labeling() {
   const [playMode, setPlayMode] = useState('paused');
   const [magnifyEnabled, setMagnifyEnabled] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
+  const [eventPickerMode, setEventPickerMode] = useState('add');
+  const [editEventIndex, setEditEventIndex] = useState(null);
+  const [selectedEventIndex, setSelectedEventIndex] = useState(null);
+  const [showLabelingHelp, setShowLabelingHelp] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [mediaDuration, setMediaDuration] = useState(null);
   const [reference, setReference] = useState(null);
@@ -296,6 +300,8 @@ export default function Labeling() {
 
   const openEventPicker = useCallback(() => {
     pauseAll();
+    setEventPickerMode('add');
+    setEditEventIndex(null);
     setShowEventPicker(true);
   }, [pauseAll]);
 
@@ -342,6 +348,120 @@ export default function Labeling() {
       }
     },
     [pauseAll, currentTime, lastEvent, events, id, fps, pushToast]
+  );
+
+  const resolveSelectedEventIndex = useCallback(() => {
+    if (selectedEventIndex != null && events[selectedEventIndex]) {
+      return selectedEventIndex;
+    }
+    return events.findIndex((event) => getFrameNumber(event.frameTime, fps) === currentFrame);
+  }, [selectedEventIndex, events, currentFrame, fps]);
+
+  const changeEventType = useCallback(
+    async (eventType) => {
+      if (editEventIndex == null || !events[editEventIndex]) return;
+
+      pauseAll();
+      const target = events[editEventIndex];
+      const playheadTime = snapTimeToFrame(target.playheadTime ?? target.frameTime, fps);
+      const sortedEvents = [...events].sort((a, b) => a.frameTime - b.frameTime);
+      const targetSortedIdx = sortedEvents.indexOf(target);
+      const priorEvent = targetSortedIdx > 0 ? sortedEvents[targetSortedIdx - 1] : null;
+      const followUpRule = priorEvent
+        ? getImmediateFollowUpRule(priorEvent.eventType, eventType)
+        : null;
+      const useFollowUp = Boolean(followUpRule);
+      const options = {
+        immediateFollowUp: useFollowUp,
+        afterEvent: useFollowUp ? priorEvent?.eventType : null,
+      };
+      const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
+      const offset = resolveFrameOffset(eventType, options);
+
+      const newEvents = events
+        .map((event, index) =>
+          index === editEventIndex
+            ? {
+                ...event,
+                eventType,
+                frameTime: adjustedTime,
+                playheadTime,
+                frameOffset: offset,
+                immediateFollowUp: useFollowUp,
+                afterEvent: useFollowUp ? priorEvent?.eventType : undefined,
+              }
+            : event
+        )
+        .sort((a, b) => a.frameTime - b.frameTime);
+
+      setEvents(newEvents);
+      setShowEventPicker(false);
+      setEventPickerMode('add');
+      setEditEventIndex(null);
+
+      try {
+        await api.saveLabels(id, { events: newEvents, status: 'draft' });
+        const nextIndex = newEvents.findIndex(
+          (event) =>
+            event.eventType === eventType && getFrameNumber(event.frameTime, fps) === getFrameNumber(adjustedTime, fps)
+        );
+        if (nextIndex >= 0) setSelectedEventIndex(nextIndex);
+        pushToast(`Changed to ${eventType} at ${formatTime(adjustedTime, fps)} — saved`);
+      } catch (err) {
+        pushToast(err.message, { type: 'error', duration: 4000 });
+      }
+    },
+    [editEventIndex, events, fps, id, pauseAll, pushToast]
+  );
+
+  const openChangeEventPicker = useCallback(
+    (eventIndex) => {
+      const index = typeof eventIndex === 'number' ? eventIndex : resolveSelectedEventIndex();
+      if (index < 0) return;
+      pauseAll();
+      setSelectedEventIndex(index);
+      setEditEventIndex(index);
+      setEventPickerMode('change');
+      setShowEventPicker(true);
+    },
+    [pauseAll, resolveSelectedEventIndex]
+  );
+
+  const deleteSelectedEvent = useCallback(
+    async (eventIndex) => {
+      const index = typeof eventIndex === 'number' ? eventIndex : resolveSelectedEventIndex();
+      if (index < 0) return;
+      const newEvents = events.filter((_, i) => i !== index);
+      setEvents(newEvents);
+      setSelectedEventIndex(null);
+      try {
+        await api.saveLabels(id, { events: newEvents, status: 'draft' });
+        pushToast('Event removed — saved');
+      } catch (err) {
+        pushToast(err.message, { type: 'error', duration: 4000 });
+      }
+    },
+    [events, id, pushToast, resolveSelectedEventIndex]
+  );
+
+  const handleEventPickerSelect = useCallback(
+    (eventType) => {
+      if (eventPickerMode === 'change') {
+        changeEventType(eventType);
+      } else {
+        markEvent(eventType);
+      }
+    },
+    [eventPickerMode, changeEventType, markEvent]
+  );
+
+  const selectEvent = useCallback(
+    (index, time) => {
+      setSelectedEventIndex(index);
+      pauseAll();
+      seekTo(time);
+    },
+    [pauseAll, seekTo]
   );
 
   const save = useCallback(
@@ -581,6 +701,24 @@ export default function Labeling() {
         save('draft');
         return;
       }
+      if (!tutorialLabeller && !submissionLocked) {
+        if (key === 'Delete') {
+          const selectedIndex = resolveSelectedEventIndex();
+          if (selectedIndex >= 0) {
+            event.preventDefault();
+            deleteSelectedEvent();
+            return;
+          }
+        }
+        if (key === 'Insert') {
+          const selectedIndex = resolveSelectedEventIndex();
+          if (selectedIndex >= 0) {
+            event.preventDefault();
+            openChangeEventPicker(selectedIndex);
+            return;
+          }
+        }
+      }
       const nudgeDelta = getNumpadFrameNudgeDelta(event);
       if (!tutorialLabeller && !submissionLocked && nudgeDelta != null) {
         event.preventDefault();
@@ -598,6 +736,9 @@ export default function Labeling() {
     openEventPicker,
     save,
     nudgeEventAtFrame,
+    resolveSelectedEventIndex,
+    deleteSelectedEvent,
+    openChangeEventPicker,
     labellerMode,
     assignment?.kind,
     assignment?.allowLabellerReference,
@@ -609,6 +750,30 @@ export default function Labeling() {
       await api.exportLabels(id, variant);
     } catch (err) {
       pushToast(err.message, { type: 'error', duration: 4000 });
+    }
+  };
+
+  const resetLabelsToReference = async () => {
+    const refCount = reference?.events?.length || reference?.annotationCount || 0;
+    const message =
+      events.length > 0
+        ? `Replace your ${events.length} event(s) with ${refCount} reference event(s)? Your current labels will be lost.`
+        : `Load ${refCount} reference event(s) as your starting labels?`;
+
+    if (!window.confirm(message)) return;
+
+    setSaving(true);
+    try {
+      const data = await api.resetLabelsFromReference(id);
+      const nextEvents = data.events || [];
+      setEvents(nextEvents);
+      setSubmissionStatus(data.submission?.status || 'draft');
+      setAssignment((prev) => (prev ? { ...prev, status: 'in_progress' } : prev));
+      pushToast(`Reset to reference — ${nextEvents.length} event(s) saved as draft`);
+    } catch (err) {
+      pushToast(err.message, { type: 'error', duration: 4000 });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -853,7 +1018,11 @@ export default function Labeling() {
               previewMode
               onSeek={handleScrub}
               canEditSubmission={canAdjustEvents}
+              onChangeSubmissionEventType={openChangeEventPicker}
+              onDeleteSubmissionEvent={deleteSelectedEvent}
               onNudgeSubmissionEvent={nudgeEventAtFrame}
+              selectedSubmissionIndex={selectedEventIndex}
+              onSelectSubmissionEvent={setSelectedEventIndex}
               saving={saving}
             />
           )}
@@ -918,17 +1087,37 @@ export default function Labeling() {
               />
             )}
 
-            <section className="events-panel-add-event">
-              <h3>Add event</h3>
-              <p className="offset-hint">
-                {frameOffsetSummary}
-                · Immediate follow-up: <strong>0</strong> at touch
-              </p>
-              <div className="mark-panel">
-                <p className="mark-hint">
-                  Pause on the frame, then press <kbd>Enter</kbd> or <kbd>M</kbd> to pick an event.
-                  Each mark auto-saves. Flag uncertain events for validator discussion below.
+            {showReference && labellerMode && !adminMode && canAdjustEvents && (
+              <div className="labeling-reset-reference-row">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={resetLabelsToReference}
+                  disabled={saving}
+                >
+                  Reset labels to reference
+                </button>
+                <p className="labeling-reset-reference-hint">
+                  Replace your current events with the shared reference template, then adjust and
+                  submit.
                 </p>
+              </div>
+            )}
+
+            <section className="events-panel-add-event">
+              <div className="events-panel-add-event-header">
+                <h3>Add event</h3>
+                <button
+                  type="button"
+                  className="labeling-help-trigger"
+                  onClick={() => setShowLabelingHelp(true)}
+                  aria-label="Open labeling guide"
+                  title="Labeling guide"
+                >
+                  ?
+                </button>
+              </div>
+              <div className="mark-panel mark-panel--compact">
                 <button type="button" className="btn btn-primary btn-sm" onClick={openEventPicker}>
                   Mark event at {formatTime(currentTime)}
                 </button>
@@ -965,13 +1154,25 @@ export default function Labeling() {
               ) : (
                 events.map((ev, i) => {
                   const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
+                  const isSelected = selectedEventIndex === i;
                   return (
                   <div
                     key={`${ev.eventType}-${ev.frameTime}-${i}`}
                     ref={isActive ? activeEventRef : null}
-                    className={`event-row-wrap${isActive ? ' active' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}
+                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}
                   >
-                    <div className={`event-row${isActive ? ' active' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}>
+                    <div
+                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}
+                      onClick={() => selectEvent(i, ev.frameTime)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          selectEvent(i, ev.frameTime);
+                        }
+                      }}
+                    >
                       <span className="time">{formatTime(ev.frameTime)}</span>
                       <span className="type">
                         {ev.needsDiscussion && (
@@ -987,12 +1188,27 @@ export default function Labeling() {
                           <span className="event-followup"> ↳ after {ev.afterEvent}</span>
                         )}
                       </span>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleScrub(ev.frameTime)}>
-                        Go
-                      </button>
-                      <button type="button" className="btn btn-danger btn-sm" onClick={() => removeEvent(i)}>
-                        ×
-                      </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectEvent(i, ev.frameTime);
+                      }}
+                    >
+                      Go
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEventIndex(i);
+                        removeEvent(i);
+                      }}
+                    >
+                      ×
+                    </button>
                     </div>
                     {canAdjustEvents && isActive && (
                       <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
@@ -1068,9 +1284,25 @@ export default function Labeling() {
         eventTypes={eventTypes}
         lastEvent={lastEvent}
         currentTime={currentTime}
-        onSelect={markEvent}
-        onClose={() => setShowEventPicker(false)}
+        onSelect={handleEventPickerSelect}
+        onClose={() => {
+          setShowEventPicker(false);
+          setEventPickerMode('add');
+          setEditEventIndex(null);
+        }}
+        title={
+          eventPickerMode === 'change' && editEventIndex != null
+            ? `Change ${events[editEventIndex]?.eventType || 'event'} type`
+            : undefined
+        }
+        subtitle={
+          eventPickerMode === 'change'
+            ? 'Pick the new event type. Esc to cancel.'
+            : undefined
+        }
       />
+
+      <LabelingHelpModal open={showLabelingHelp} onClose={() => setShowLabelingHelp(false)} />
 
       {(labellerMode || adminMode) && (
         <LabelingChatbot

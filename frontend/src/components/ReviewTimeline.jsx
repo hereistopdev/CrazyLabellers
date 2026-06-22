@@ -48,6 +48,8 @@ function EventMarkers({
   maxTime,
   fps,
   onSeek,
+  onSelectSubmissionEvent,
+  selectedSubmissionIndex,
   eventRowsByIndex,
   comparisonByReference,
 }) {
@@ -83,6 +85,7 @@ function EventMarkers({
           'review-timeline-marker',
           `review-timeline-marker-${variant}`,
           active ? 'active' : '',
+          variant === 'submission' && eventIndex === selectedSubmissionIndex ? 'selected' : '',
           variant === 'submission' ? `validation-${validationStatus}` : '',
           variant === 'submission' && event.needsDiscussion ? 'needs-discussion' : '',
           comparisonStatus ? `comparison-${comparisonStatus}` : '',
@@ -93,6 +96,9 @@ function EventMarkers({
         title={`${event.eventType} @ ${formatTime(event.frameTime, fps)}${titleSuffix}${discussionSuffix}`}
         onClick={(e) => {
           e.stopPropagation();
+          if (variant === 'submission' && eventIndex != null) {
+            onSelectSubmissionEvent?.(eventIndex);
+          }
           onSeek(event.frameTime);
         }}
       >
@@ -132,6 +138,8 @@ export default function ReviewTimeline({
   onDeleteSubmissionEvent,
   onNudgeSubmissionEvent,
   onSaveSubmission,
+  selectedSubmissionIndex = null,
+  onSelectSubmissionEvent,
 }) {
   const viewportRef = useRef(null);
   const contentRef = useRef(null);
@@ -529,6 +537,8 @@ export default function ReviewTimeline({
                 maxTime={maxTime}
                 fps={fps}
                 onSeek={onSeek}
+                onSelectSubmissionEvent={onSelectSubmissionEvent}
+                selectedSubmissionIndex={selectedSubmissionIndex}
                 eventRowsByIndex={eventRowsByIndex}
               />
             </div>

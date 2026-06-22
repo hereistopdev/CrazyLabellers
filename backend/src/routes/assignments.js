@@ -27,6 +27,7 @@ const {
 const {
   ensureDraftSeededFromReference,
   initializeLabellerSubmission,
+  resetLabellerSubmissionFromReference,
 } = require('../services/referenceDraftSeed');
 
 const router = express.Router();
@@ -320,6 +321,78 @@ router.get('/:id/labels', auth, async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/:id/labels/reset-from-reference', auth, async (req, res) => {
+  try {
+    const assignment = await VideoAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.kind === 'tutorial') {
+      return res.status(400).json({ message: 'Tutorials cannot be reset from reference' });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind === 'pretest' &&
+      !isPretestClipForUser(req.user, assignment._id)
+    ) {
+      return res.status(403).json({ message: 'This pre-test clip is not assigned to you' });
+    }
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial' &&
+      assignment.kind !== 'pretest'
+    ) {
+      if (!isAssignedLabeller(req.user, assignment)) {
+        return res.status(403).json({ message: 'You are not assigned to this video' });
+      }
+    }
+
+    if (!assignment.allowLabellerReference) {
+      return res.status(403).json({ message: 'Reference is not shared for this task' });
+    }
+
+    const existing = await LabelSubmission.findOne({
+      assignmentId: req.params.id,
+      userId: req.user._id,
+    });
+
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      existing &&
+      !canLabellerEditSubmission(assignment, existing)
+    ) {
+      if (existing.status === 'approved') {
+        return res.status(403).json({ message: 'This submission is approved and cannot be reset' });
+      }
+      return res.status(403).json({
+        message: 'This task was rejected. Contact an admin if you need to re-label.',
+      });
+    }
+
+    const submission = await resetLabellerSubmissionFromReference(assignment, req.user._id, {
+      canEdit: !existing || canLabellerEditSubmission(assignment, existing),
+    });
+
+    if (assignment.kind !== 'pretest' && assignment.kind !== 'tutorial') {
+      await patchAssignment(assignment._id, { status: 'in_progress' });
+    }
+
+    const payload = submission.toObject ? submission.toObject() : submission;
+    return res.json({
+      submission: payload,
+      events: normalizeLabelEvents(payload.events || []),
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
   }
 });
 

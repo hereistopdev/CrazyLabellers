@@ -71,6 +71,7 @@ export default function ReviewSubmission() {
   const [showSubmissionEventPicker, setShowSubmissionEventPicker] = useState(false);
   const [submissionPickerMode, setSubmissionPickerMode] = useState('add');
   const [submissionEditIndex, setSubmissionEditIndex] = useState(null);
+  const [selectedSubmissionIndex, setSelectedSubmissionIndex] = useState(null);
   const [savingSubmission, setSavingSubmission] = useState(false);
 
   const assignment = reviewData?.assignment;
@@ -432,12 +433,32 @@ export default function ReviewSubmission() {
   const openChangeSubmissionEventPicker = useCallback(
     (eventIndex) => {
       pauseAll();
-      setSubmissionEditIndex(typeof eventIndex === 'number' ? eventIndex : null);
+      const index = typeof eventIndex === 'number' ? eventIndex : null;
+      setSubmissionEditIndex(index);
+      if (index != null) setSelectedSubmissionIndex(index);
       setSubmissionPickerMode('change');
       setShowSubmissionEventPicker(true);
     },
     [pauseAll]
   );
+
+  const resolveSelectedSubmissionIndex = useCallback(() => {
+    if (selectedSubmissionIndex != null && editableSubmissionEvents[selectedSubmissionIndex]) {
+      return selectedSubmissionIndex;
+    }
+    if (submissionEditIndex != null && editableSubmissionEvents[submissionEditIndex]) {
+      return submissionEditIndex;
+    }
+    return editableSubmissionEvents.findIndex(
+      (event) => getFrameNumber(event.frameTime, fps) === currentFrame
+    );
+  }, [
+    selectedSubmissionIndex,
+    submissionEditIndex,
+    editableSubmissionEvents,
+    currentFrame,
+    fps,
+  ]);
 
   const addReferenceEvent = useCallback(
     (eventType) => {
@@ -751,6 +772,7 @@ export default function ReviewSubmission() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (showSubmissionEventPicker || showReferenceEventPicker) return;
       if (isEditableTarget(event.target)) return;
 
       const { key, shiftKey } = event;
@@ -809,6 +831,25 @@ export default function ReviewSubmission() {
         }
         return;
       }
+      if (canEditSubmission) {
+        if (key === 'Delete') {
+          const index = resolveSelectedSubmissionIndex();
+          if (index >= 0) {
+            event.preventDefault();
+            deleteSubmissionEventAtFrame(index);
+            setSelectedSubmissionIndex(null);
+            return;
+          }
+        }
+        if (key === 'Insert') {
+          const index = resolveSelectedSubmissionIndex();
+          if (index >= 0) {
+            event.preventDefault();
+            openChangeSubmissionEventPicker(index);
+            return;
+          }
+        }
+      }
       const nudgeDelta = getNumpadFrameNudgeDelta(event);
       if (nudgeDelta != null) {
         const submissionOnFrame = editableSubmissionEvents.some(
@@ -843,6 +884,11 @@ export default function ReviewSubmission() {
     editableReferenceEvents,
     nudgeSubmissionEventAtFrame,
     nudgeReferenceEventAtFrame,
+    resolveSelectedSubmissionIndex,
+    deleteSubmissionEventAtFrame,
+    openChangeSubmissionEventPicker,
+    showSubmissionEventPicker,
+    showReferenceEventPicker,
   ]);
 
   if (loading) return <div className="loading">Loading review...</div>;
@@ -1189,6 +1235,8 @@ export default function ReviewSubmission() {
             onDeleteSubmissionEvent={deleteSubmissionEventAtFrame}
             onNudgeSubmissionEvent={nudgeSubmissionEventAtFrame}
             onSaveSubmission={saveSubmissionEvents}
+            selectedSubmissionIndex={selectedSubmissionIndex}
+            onSelectSubmissionEvent={setSelectedSubmissionIndex}
             onSeek={handleScrub}
             onValidateEvent={validateEvent}
             onValidateAll={validateAll}

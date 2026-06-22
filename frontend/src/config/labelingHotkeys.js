@@ -5,6 +5,7 @@ export const LABELING_HOTKEYS = [
   { keys: 'Shift+→ / Shift+.', action: 'Forward 5 frames' },
   { keys: 'Num 1 / 2 / 3', action: 'Nudge event on frame back 1 / 3 / 5 frames' },
   { keys: 'Num 4 / 5 / 6', action: 'Nudge event on frame forward 1 / 3 / 5 frames' },
+  { keys: 'Del / Insert', action: 'Delete / change type of selected event' },
   { keys: 'Space', action: 'Play / pause' },
   { keys: 'F', action: 'Frame play / stop' },
   { keys: 'Enter / M', action: 'Open event picker' },

@@ -142,6 +142,8 @@ export const api = {
   getLabels: (id) => request(`/assignments/${id}/labels`),
   saveLabels: (id, body) =>
     request(`/assignments/${id}/labels`, { method: 'PUT', body: JSON.stringify(body) }),
+  resetLabelsFromReference: (id) =>
+    request(`/assignments/${id}/labels/reset-from-reference`, { method: 'POST' }),
   exportLabels: (id, variant = 'post') =>
     downloadRequest(`/assignments/${id}/export?variant=${variant}`, `labels_${variant}.json`),
   exportReviewSubmission: (id, variant = 'post') =>

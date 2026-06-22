@@ -88,10 +88,44 @@ async function ensureDraftSeededFromReference(assignment, userId, existingSubmis
   );
 }
 
+async function resetLabellerSubmissionFromReference(assignment, userId, { canEdit = true } = {}) {
+  if (!assignment?.allowLabellerReference) {
+    const error = new Error('Reference is not shared for this task');
+    error.status = 403;
+    throw error;
+  }
+
+  const events = await loadDraftEventsFromReference(assignment);
+  if (events.length === 0) {
+    const error = new Error('No reference events available for this task');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!canEdit) {
+    const error = new Error('This submission cannot be reset');
+    error.status = 403;
+    throw error;
+  }
+
+  return LabelSubmission.findOneAndUpdate(
+    { assignmentId: assignment._id, userId },
+    {
+      assignmentId: assignment._id,
+      userId,
+      events,
+      status: 'draft',
+      eventValidations: [],
+    },
+    { upsert: true, new: true, runValidators: true }
+  );
+}
+
 module.exports = {
   loadDraftEventsFromReference,
   ensureDraftSeededFromReference,
   initializeLabellerSubmission,
+  resetLabellerSubmissionFromReference,
   shouldSeedDraftFromReference,
   submissionFieldsFromReferenceEvents,
 };
