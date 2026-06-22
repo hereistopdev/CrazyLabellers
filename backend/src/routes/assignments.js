@@ -25,8 +25,8 @@ const {
   isAssignedLabeller,
 } = require('../services/labellerAssignmentAccess');
 const {
-  loadDraftEventsFromReference,
   ensureDraftSeededFromReference,
+  initializeLabellerSubmission,
 } = require('../services/referenceDraftSeed');
 
 const router = express.Router();
@@ -193,18 +193,7 @@ router.post('/:id/claim', auth, async (req, res) => {
     assignment.assignedTo = req.user._id;
     assignment.status = 'assigned';
 
-    const draftEvents = await loadDraftEventsFromReference(assignment);
-
-    await LabelSubmission.findOneAndUpdate(
-      { assignmentId: assignment._id, userId: req.user._id },
-      {
-        assignmentId: assignment._id,
-        userId: req.user._id,
-        events: draftEvents,
-        status: 'draft',
-      },
-      { upsert: true, new: true }
-    );
+    await initializeLabellerSubmission(assignment, req.user._id);
 
     return res.json(assignment);
   } catch (error) {

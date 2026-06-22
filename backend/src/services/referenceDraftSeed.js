@@ -28,7 +28,39 @@ async function loadDraftEventsFromReference(assignment) {
 function shouldSeedDraftFromReference(submission) {
   if (!submission) return true;
   if (submission.events?.length > 0) return false;
+  if (submission.status === 'submitted' || submission.status === 'approved') return false;
   return submission.status === 'draft' || submission.status === 'rejected';
+}
+
+async function initializeLabellerSubmission(assignment, userId) {
+  const existing = await LabelSubmission.findOne({
+    assignmentId: assignment._id,
+    userId,
+  });
+
+  if (existing?.events?.length > 0) {
+    return existing;
+  }
+
+  const seeded = await ensureDraftSeededFromReference(assignment, userId, existing);
+  if (seeded) {
+    return seeded;
+  }
+
+  if (!existing) {
+    return LabelSubmission.findOneAndUpdate(
+      { assignmentId: assignment._id, userId },
+      {
+        assignmentId: assignment._id,
+        userId,
+        events: [],
+        status: 'draft',
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+  }
+
+  return existing;
 }
 
 async function ensureDraftSeededFromReference(assignment, userId, existingSubmission = null) {
@@ -59,6 +91,7 @@ async function ensureDraftSeededFromReference(assignment, userId, existingSubmis
 module.exports = {
   loadDraftEventsFromReference,
   ensureDraftSeededFromReference,
+  initializeLabellerSubmission,
   shouldSeedDraftFromReference,
   submissionFieldsFromReferenceEvents,
 };

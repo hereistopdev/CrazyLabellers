@@ -670,9 +670,11 @@ export default function Labeling() {
         <p>{assignment?.description}</p>
         {showReference && labellerMode && !adminMode && (
           <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
-            Reference visible — your draft starts from the reference events. Compare gold-standard
-            events (blue) with your labels (green), adjust with nudge or mark controls, then{' '}
-            {relabelMode || pendingReviewResubmit ? 're-submit' : 'submit'} when ready.
+            Reference visible — compare gold-standard events (blue) with your labels (green).
+            {events.length === 0
+              ? ' Your draft starts from reference when you have no labels yet.'
+              : ' Your saved labels are kept — adjust with nudge or mark controls,'}{' '}
+            then {relabelMode || pendingReviewResubmit ? 're-submit' : 'submit'} when ready.
           </p>
         )}
         {pendingReviewResubmit && (
