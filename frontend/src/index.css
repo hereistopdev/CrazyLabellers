@@ -1602,6 +1602,23 @@ body.nav-open {
   letter-spacing: 0.04em;
 }
 
+.labeling-spacing-alert {
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--danger);
+  line-height: 1.45;
+}
+
+.event-row-wrap.spacing-error .event-row,
+.event-row.spacing-error {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 .event-row {
   display: flex;
   align-items: center;

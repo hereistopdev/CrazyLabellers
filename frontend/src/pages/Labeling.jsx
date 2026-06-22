@@ -33,6 +33,7 @@ import {
   formatEventTime,
   nudgeFrameTime,
 } from '../utils/frameTime';
+import { validateEventSpacing, getEventSpacingRuleSummary } from '../utils/eventSpacingValidation';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -71,6 +72,7 @@ export default function Labeling() {
   const [reference, setReference] = useState(null);
   const [submissionStatus, setSubmissionStatus] = useState('draft');
   const [tutorialDone, setTutorialDone] = useState(false);
+  const [spacingIssueIndices, setSpacingIssueIndices] = useState(() => new Set());
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
@@ -464,12 +466,39 @@ export default function Labeling() {
     [pauseAll, seekTo]
   );
 
+  const reportSpacingValidationFailure = useCallback(
+    (validation, summaryMessage) => {
+      setSpacingIssueIndices(new Set(validation.affectedIndices));
+      pushToast(summaryMessage, { type: 'error', duration: 5000 });
+      for (const issue of validation.issues) {
+        pushToast(issue.message, { type: 'error', duration: 6500 });
+      }
+    },
+    [pushToast]
+  );
+
   const save = useCallback(
     async (status = 'draft') => {
+      if (
+        status === 'submitted' &&
+        labellerMode &&
+        assignment?.kind !== 'tutorial'
+      ) {
+        const spacing = validateEventSpacing(events, fps);
+        if (!spacing.valid) {
+          reportSpacingValidationFailure(
+            spacing,
+            'Cannot submit — fix event spacing violations listed below'
+          );
+          return;
+        }
+      }
+
       setSaving(true);
       setError('');
       try {
         const data = await api.saveLabels(id, { events, status });
+        setSpacingIssueIndices(new Set());
         setSubmissionStatus(data.submission?.status || status);
         if (status === 'submitted' && data.tutorial?.completed) {
           await refreshUser();
@@ -503,7 +532,17 @@ export default function Labeling() {
           }
         }
       } catch (err) {
-        pushToast(err.message, { type: 'error', duration: 4000 });
+        if (err.code === 'EVENT_SPACING_INVALID' && err.issues?.length) {
+          reportSpacingValidationFailure(
+            {
+              issues: err.issues,
+              affectedIndices: err.affectedIndices || [],
+            },
+            err.message
+          );
+        } else {
+          pushToast(err.message, { type: 'error', duration: 4000 });
+        }
       } finally {
         setSaving(false);
       }
@@ -511,12 +550,14 @@ export default function Labeling() {
     [
       id,
       events,
+      fps,
       assignment,
       labellerMode,
       submissionStatus,
       refreshUser,
       navigate,
       pushToast,
+      reportSpacingValidationFailure,
     ]
   );
 
@@ -1148,6 +1189,12 @@ export default function Labeling() {
                 />
               </div>
             )}
+            {spacingIssueIndices.size > 0 && (
+              <div className="labeling-spacing-alert" role="alert">
+                <strong>Event spacing rules not met.</strong>{' '}
+                {getEventSpacingRuleSummary()} Fix the highlighted events before submitting.
+              </div>
+            )}
             <div className="events-list events-list--labeling">
               {events.length === 0 ? (
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No events marked yet</p>
@@ -1155,14 +1202,15 @@ export default function Labeling() {
                 events.map((ev, i) => {
                   const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
                   const isSelected = selectedEventIndex === i;
+                  const hasSpacingError = spacingIssueIndices.has(i);
                   return (
                   <div
                     key={`${ev.eventType}-${ev.frameTime}-${i}`}
                     ref={isActive ? activeEventRef : null}
-                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}
+                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}`}
                   >
                     <div
-                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}`}
+                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}`}
                       onClick={() => selectEvent(i, ev.frameTime)}
                       role="button"
                       tabIndex={0}

@@ -4,6 +4,7 @@ const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
 const { isLabeller, isAdmin } = require('../config/roles');
 const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
+const { validateEventSpacing } = require('../utils/eventSpacingValidation');
 const {
   gradeSubmissionAgainstReference,
   recordLabelingTestAttempt,
@@ -446,6 +447,23 @@ router.put('/:id/labels', auth, async (req, res) => {
     }
 
     const normalizedEvents = normalizeLabelEvents(events || []);
+
+    if (
+      status === 'submitted' &&
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      assignment.kind !== 'tutorial'
+    ) {
+      const spacing = validateEventSpacing(normalizedEvents, assignment.fps);
+      if (!spacing.valid) {
+        return res.status(400).json({
+          message: 'Fix event spacing before submitting — only one event per frame, with at least one blank frame between events',
+          code: 'EVENT_SPACING_INVALID',
+          issues: spacing.issues,
+          affectedIndices: spacing.affectedIndices,
+        });
+      }
+    }
 
     const existing = await LabelSubmission.findOne({
       assignmentId: req.params.id,

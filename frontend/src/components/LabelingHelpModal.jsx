@@ -24,6 +24,10 @@ export default function LabelingHelpModal({ open, onClose }) {
             Click an event on the timeline or list, then <kbd>Insert</kbd> to change its type or{' '}
             <kbd>Del</kbd> to remove it.
           </p>
+          <p>
+            <strong>Spacing rules:</strong> only one event per frame, with at least one blank frame
+            between any two events. Submit is blocked until these rules are met.
+          </p>
         </div>
       </div>
     </div>
