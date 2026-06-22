@@ -18,7 +18,7 @@ import TutorialEditorPanel from '../components/TutorialEditorPanel';
 import ReviewTimeline from '../components/ReviewTimeline';
 import ReferenceEventsPanel from '../components/ReferenceEventsPanel';
 import FrameNudgeRow from '../components/FrameNudgeRow';
-import EventDiscussionFlag from '../components/EventDiscussionFlag';
+import EventDiscussionFlag, { EventDiscussionNote } from '../components/EventDiscussionFlag';
 import LabelingChatbot from '../components/LabelingChatbot';
 import LabelingHelpModal from '../components/LabelingHelpModal';
 import ToastStack from '../components/ToastStack';
@@ -1175,11 +1175,6 @@ export default function Labeling() {
                     >
                       <span className="time">{formatTime(ev.frameTime)}</span>
                       <span className="type">
-                        {ev.needsDiscussion && (
-                          <span className="event-discussion-badge" title="Flagged for discussion">
-                            ⚑
-                          </span>
-                        )}
                         {ev.eventType}
                         {ev.frameOffset !== undefined && (
                           <span className="event-offset"> ({formatOffset(ev.frameOffset)}f)</span>
@@ -1188,40 +1183,56 @@ export default function Labeling() {
                           <span className="event-followup"> ↳ after {ev.afterEvent}</span>
                         )}
                       </span>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectEvent(i, ev.frameTime);
-                      }}
-                    >
-                      Go
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedEventIndex(i);
-                        removeEvent(i);
-                      }}
-                    >
-                      ×
-                    </button>
+                      <div className="event-row-actions">
+                        <button
+                          type="button"
+                          className="event-row-icon-btn"
+                          title="Go to frame"
+                          aria-label="Go to frame"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectEvent(i, ev.frameTime);
+                          }}
+                        >
+                          <span className="event-row-icon-btn-symbol" aria-hidden>
+                            ▶
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="event-row-icon-btn event-row-icon-btn-danger"
+                          title="Remove event"
+                          aria-label="Remove event"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEventIndex(i);
+                            removeEvent(i);
+                          }}
+                        >
+                          <span className="event-row-icon-btn-symbol" aria-hidden>
+                            ×
+                          </span>
+                        </button>
+                        {canAdjustEvents && (
+                          <EventDiscussionFlag
+                            iconOnly
+                            flagged={Boolean(ev.needsDiscussion)}
+                            disabled={saving}
+                            onToggle={() => toggleEventDiscussion(i)}
+                          />
+                        )}
+                      </div>
                     </div>
-                    {canAdjustEvents && isActive && (
-                      <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
-                    )}
-                    {canAdjustEvents && (
-                      <EventDiscussionFlag
-                        flagged={Boolean(ev.needsDiscussion)}
+                    {canAdjustEvents && ev.needsDiscussion && (
+                      <EventDiscussionNote
                         note={ev.notes || ''}
                         disabled={saving}
-                        onToggle={() => toggleEventDiscussion(i)}
                         onNoteChange={(value) => updateEventDiscussionNote(i, value)}
                         onNoteBlur={() => saveEventDiscussionNote(i)}
                       />
+                    )}
+                    {canAdjustEvents && isActive && (
+                      <FrameNudgeRow disabled={saving} onNudge={(delta) => nudgeEvent(i, delta)} />
                     )}
                   </div>
                   );

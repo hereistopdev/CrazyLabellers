@@ -1627,8 +1627,78 @@ body.nav-open {
 .event-row .type {
   font-weight: 500;
   flex: 1;
+  min-width: 0;
   margin: 0 0.5rem;
   color: #fff;
+}
+
+.event-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.event-row-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.event-row-icon-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.event-row-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.event-row-icon-btn-symbol {
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.event-row-icon-btn-danger {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.event-row-icon-btn-danger:hover:not(:disabled) {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.event-row-icon-btn-discuss {
+  color: var(--text-muted);
+}
+
+.event-row-icon-btn-discuss:hover:not(:disabled) {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.event-row-icon-btn-discuss.is-on {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.event-discussion-note-below {
+  width: 100%;
+  margin-top: 0.1rem;
 }
 
 .event-row-wrap.needs-discussion .event-row {
