@@ -1,3 +1,5 @@
+import { getNumpadNudgeLabel } from '../config/labelingHotkeys';
+
 const FRAME_NUDGE_STEPS = [1, 3, 5];
 
 export default function FrameNudgeRow({ onNudge, disabled = false }) {
@@ -12,7 +14,7 @@ export default function FrameNudgeRow({ onNudge, disabled = false }) {
             className="frame-nudge-btn"
             onClick={() => onNudge(-step)}
             disabled={disabled}
-            title={`Back ${step} frame${step === 1 ? '' : 's'}`}
+            title={getNumpadNudgeLabel(step, 'back')}
             aria-label={`Back ${step} frame${step === 1 ? '' : 's'}`}
           >
             <span className="frame-nudge-icon" aria-hidden>
@@ -25,7 +27,7 @@ export default function FrameNudgeRow({ onNudge, disabled = false }) {
             className="frame-nudge-btn"
             onClick={() => onNudge(step)}
             disabled={disabled}
-            title={`Forward ${step} frame${step === 1 ? '' : 's'}`}
+            title={getNumpadNudgeLabel(step, 'forward')}
             aria-label={`Forward ${step} frame${step === 1 ? '' : 's'}`}
           >
             <span className="frame-nudge-step">{step}</span>

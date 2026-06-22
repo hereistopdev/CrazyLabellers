@@ -10,7 +10,7 @@ import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import CompareIssuesPanel from '../components/CompareIssuesPanel';
 import DiscussionEventsPanel, { getDiscussionEvents } from '../components/DiscussionEventsPanel';
 import EventPickerModal from '../components/EventPickerModal';
-import { isEditableTarget } from '../config/labelingHotkeys';
+import { isEditableTarget, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
 import StarRating from '../components/StarRating';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
@@ -807,12 +807,43 @@ export default function ReviewSubmission() {
           event.preventDefault();
           validateEvent(row.eventIndex, 'invalid');
         }
+        return;
+      }
+      const nudgeDelta = getNumpadFrameNudgeDelta(event);
+      if (nudgeDelta != null) {
+        const submissionOnFrame = editableSubmissionEvents.some(
+          (item) => getFrameNumber(item.frameTime, fps) === currentFrame
+        );
+        const referenceOnFrame = editableReferenceEvents.some(
+          (item) => getFrameNumber(item.frameTime, fps) === currentFrame
+        );
+        if (canEditSubmission && submissionOnFrame) {
+          event.preventDefault();
+          nudgeSubmissionEventAtFrame(nudgeDelta);
+        } else if (canEditReference && referenceOnFrame) {
+          event.preventDefault();
+          nudgeReferenceEventAtFrame(nudgeDelta);
+        }
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [stepFrames, togglePlayPause, toggleFrameAutoPlay, eventRows, currentTime, fps]);
+  }, [
+    stepFrames,
+    togglePlayPause,
+    toggleFrameAutoPlay,
+    eventRows,
+    currentFrame,
+    fps,
+    validateEvent,
+    canEditSubmission,
+    canEditReference,
+    editableSubmissionEvents,
+    editableReferenceEvents,
+    nudgeSubmissionEventAtFrame,
+    nudgeReferenceEventAtFrame,
+  ]);
 
   if (loading) return <div className="loading">Loading review...</div>;
   if (error && !reviewData) return <div className="alert alert-error">{error}</div>;

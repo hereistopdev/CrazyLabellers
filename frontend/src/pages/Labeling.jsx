@@ -23,7 +23,7 @@ import EventDiscussionFlag from '../components/EventDiscussionFlag';
 import LabelingChatbot from '../components/LabelingChatbot';
 import ToastStack from '../components/ToastStack';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
-import { isEditableTarget, LABELING_HOTKEYS } from '../config/labelingHotkeys';
+import { isEditableTarget, LABELING_HOTKEYS, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
 import { displayAssignmentTitle } from '../utils/displayTitle';
 import { useToasts } from '../hooks/useToasts';
 import {
@@ -420,74 +420,6 @@ export default function Labeling() {
     }
   }, [id, refreshUser, pushToast]);
 
-  useEffect(() => {
-    const tutorialLabeller = labellerMode && assignment?.kind === 'tutorial';
-
-    const onKeyDown = (event) => {
-      if (showEventPicker) return;
-      if (isEditableTarget(event.target)) return;
-
-      const { key, shiftKey, ctrlKey, metaKey } = event;
-
-      if (!shiftKey && (key === 'ArrowLeft' || key === ',')) {
-        event.preventDefault();
-        stepFrames(-1);
-        return;
-      }
-      if (!shiftKey && (key === 'ArrowRight' || key === '.')) {
-        event.preventDefault();
-        stepFrames(1);
-        return;
-      }
-      if (shiftKey && (key === 'ArrowLeft' || key === ',')) {
-        event.preventDefault();
-        stepFrames(-5);
-        return;
-      }
-      if (shiftKey && (key === 'ArrowRight' || key === '.')) {
-        event.preventDefault();
-        stepFrames(5);
-        return;
-      }
-      if (key === ' ') {
-        event.preventDefault();
-        togglePlayPause();
-        return;
-      }
-      if (key === 'f' || key === 'F') {
-        event.preventDefault();
-        toggleFrameAutoPlay();
-        return;
-      }
-      if (!tutorialLabeller && (key === 'm' || key === 'M' || key === 'Enter')) {
-        event.preventDefault();
-        openEventPicker();
-        return;
-      }
-      if (key === 'g' || key === 'G') {
-        event.preventDefault();
-        setMagnifyEnabled((v) => !v);
-        return;
-      }
-      if (!tutorialLabeller && (ctrlKey || metaKey) && key === 's') {
-        event.preventDefault();
-        save('draft');
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    showEventPicker,
-    stepFrames,
-    togglePlayPause,
-    toggleFrameAutoPlay,
-    openEventPicker,
-    save,
-    labellerMode,
-    assignment?.kind,
-  ]);
-
   const removeEvent = async (index) => {
     const newEvents = events.filter((_, i) => i !== index);
     setEvents(newEvents);
@@ -591,6 +523,86 @@ export default function Labeling() {
     },
     [events, currentFrame, fps, nudgeEvent]
   );
+
+  useEffect(() => {
+    const tutorialLabeller = labellerMode && assignment?.kind === 'tutorial';
+    const submissionLocked =
+      submissionStatus === 'approved' ||
+      (submissionStatus === 'rejected' && !assignment?.allowLabellerReference);
+
+    const onKeyDown = (event) => {
+      if (showEventPicker) return;
+      if (isEditableTarget(event.target)) return;
+
+      const { key, shiftKey, ctrlKey, metaKey } = event;
+
+      if (!shiftKey && (key === 'ArrowLeft' || key === ',')) {
+        event.preventDefault();
+        stepFrames(-1);
+        return;
+      }
+      if (!shiftKey && (key === 'ArrowRight' || key === '.')) {
+        event.preventDefault();
+        stepFrames(1);
+        return;
+      }
+      if (shiftKey && (key === 'ArrowLeft' || key === ',')) {
+        event.preventDefault();
+        stepFrames(-5);
+        return;
+      }
+      if (shiftKey && (key === 'ArrowRight' || key === '.')) {
+        event.preventDefault();
+        stepFrames(5);
+        return;
+      }
+      if (key === ' ') {
+        event.preventDefault();
+        togglePlayPause();
+        return;
+      }
+      if (key === 'f' || key === 'F') {
+        event.preventDefault();
+        toggleFrameAutoPlay();
+        return;
+      }
+      if (!tutorialLabeller && (key === 'm' || key === 'M' || key === 'Enter')) {
+        event.preventDefault();
+        openEventPicker();
+        return;
+      }
+      if (key === 'g' || key === 'G') {
+        event.preventDefault();
+        setMagnifyEnabled((v) => !v);
+        return;
+      }
+      if (!tutorialLabeller && (ctrlKey || metaKey) && key === 's') {
+        event.preventDefault();
+        save('draft');
+        return;
+      }
+      const nudgeDelta = getNumpadFrameNudgeDelta(event);
+      if (!tutorialLabeller && !submissionLocked && nudgeDelta != null) {
+        event.preventDefault();
+        nudgeEventAtFrame(nudgeDelta);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    showEventPicker,
+    stepFrames,
+    togglePlayPause,
+    toggleFrameAutoPlay,
+    openEventPicker,
+    save,
+    nudgeEventAtFrame,
+    labellerMode,
+    assignment?.kind,
+    assignment?.allowLabellerReference,
+    submissionStatus,
+  ]);
 
   const handleExport = async (variant) => {
     try {
