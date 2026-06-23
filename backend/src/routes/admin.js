@@ -23,7 +23,7 @@ const { importClipsFromDir } = require('../services/clipImport');
 const { previewBulkFolder, importBulkFromFolder } = require('../services/bulkFolderImport');
 const { importClipFromUpload } = require('../services/clipUpload');
 const { resolveUploadGroupId } = require('../services/taskGroups');
-const { initializeLabellerSubmission } = require('../services/referenceDraftSeed');
+const { reassignTaskLabeller } = require('../services/reassignLabeller');
 const { isRemoteVideoStorage, getStorageStatus } = require('../services/videoStorage');
 const { isVideoFilename } = require('../utils/clipId');
 const { saveReferenceForClip, deleteReferenceForClip, hasReferenceForClip } = require('../services/referenceStorage');
@@ -480,28 +480,16 @@ router.post('/labellers/:id/assign', auth, requireRole('admin'), async (req, res
       return res.status(404).json({ message: 'Assignment not found' });
     }
 
-    if (assignment.kind === 'tutorial') {
-      return res.status(400).json({
-        message: 'Tutorial clips are open to all labellers for study — they cannot be assigned',
-      });
-    }
+    const { assignment: updated } = await reassignTaskLabeller(assignment, labeller._id);
 
-    if (assignment.kind === 'pretest') {
-      return res.status(400).json({
-        message:
-          'Pre-test clips stay in the shared pool — each labeller gets 3 random picks automatically',
-      });
-    }
+    const populated = await VideoAssignment.findById(updated._id).populate(
+      'assignedTo',
+      'name email'
+    );
 
-    assignment.assignedTo = labeller._id;
-    assignment.status = 'assigned';
-    await assignment.save();
-
-    await initializeLabellerSubmission(assignment, labeller._id);
-
-    return res.json(assignment);
+    return res.json(populated);
   } catch (error) {
-    return res.status(400).json({ message: error.message });
+    return res.status(error.status || 400).json({ message: error.message });
   }
 });
 

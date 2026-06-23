@@ -2,11 +2,12 @@ const express = require('express');
 const VideoAssignment = require('../models/VideoAssignment');
 const TaskGroup = require('../models/TaskGroup');
 const LabelSubmission = require('../models/LabelSubmission');
-const { auth, requireVideoManagerAccess } = require('../middleware/auth');
+const { auth, requireRole, requireVideoManagerAccess } = require('../middleware/auth');
 const { validateTaskPrice, isFreeTaskKind } = require('../config/payments');
 const { hasReferenceForClip } = require('../services/referenceStorage');
 const { normalizeTutorialSteps } = require('../utils/normalizeTutorialSteps');
 const { updateAssignmentFields } = require('../services/assignmentUpdate');
+const { reassignTaskLabeller } = require('../services/reassignLabeller');
 
 const router = express.Router();
 
@@ -101,6 +102,31 @@ router.get('/', auth, requireVideoManagerAccess, async (req, res) => {
     return res.json(enriched);
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/:id/labeller', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { labellerId } = req.body;
+    const task = await VideoAssignment.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    const { assignment } = await reassignTaskLabeller(task, labellerId || null);
+
+    const populated = await VideoAssignment.findById(assignment._id)
+      .populate('assignedTo', 'name email')
+      .populate('groupId', 'name')
+      .populate('uploadedBy', 'name email')
+      .populate('referenceUpdatedBy', 'name email')
+      .populate('reviewedBy', 'name email');
+
+    return res.json({
+      ...populated.toObject(),
+      hasReference: populated.clipId ? await hasReferenceForClip(populated.clipId) : false,
+      submissionCount: await LabelSubmission.countDocuments({ assignmentId: populated._id }),
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
   }
 });
 

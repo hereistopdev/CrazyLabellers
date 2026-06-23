@@ -135,6 +135,11 @@ export const api = {
   },
   updateAdminTask: (id, body) =>
     request(`/admin/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  reassignTaskLabeller: (assignmentId, labellerId) =>
+    request(`/admin/tasks/${assignmentId}/labeller`, {
+      method: 'PATCH',
+      body: JSON.stringify({ labellerId: labellerId || null }),
+    }),
   setupPretestClips: (pretestCount) =>
     request('/labeling-test/setup-clips', {
       method: 'POST',

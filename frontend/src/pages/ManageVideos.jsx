@@ -216,6 +216,8 @@ export default function ManageVideos() {
   const [savingPrice, setSavingPrice] = useState(null);
   const [savingKind, setSavingKind] = useState(null);
   const [savingRefAccess, setSavingRefAccess] = useState(null);
+  const [savingLabeller, setSavingLabeller] = useState(null);
+  const [labellers, setLabellers] = useState([]);
   const [storage, setStorage] = useState(null);
   const [uploadClips, setUploadClips] = useState([]);
   const [uploadSummary, setUploadSummary] = useState(null);
@@ -277,6 +279,20 @@ export default function ManageVideos() {
   useEffect(load, []);
 
   useEffect(loadGroups, []);
+
+  useEffect(() => {
+    if (!adminUser) return;
+    api
+      .getLabellers()
+      .then((list) =>
+        setLabellers(
+          list
+            .filter((labeller) => ['passed_test', 'approved'].includes(labeller.status))
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        )
+      )
+      .catch(() => setLabellers([]));
+  }, [adminUser]);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -582,6 +598,35 @@ export default function ManageVideos() {
       setError(err.message);
     } finally {
       setSavingRefAccess(null);
+    }
+  };
+
+  const reassignLabeller = async (video, labellerId) => {
+    const currentId = video.assignedTo?._id || video.assignedTo || '';
+    if (String(currentId || '') === String(labellerId || '')) return;
+
+    setSavingLabeller(video._id);
+    setError('');
+    try {
+      const updated = await api.reassignTaskLabeller(video._id, labellerId || null);
+      patchVideo(video._id, {
+        assignedTo: updated.assignedTo,
+        status: updated.status,
+      });
+      const name = updated.assignedTo?.name;
+      setMessage(
+        labellerId
+          ? name
+            ? `Assigned to ${name} — previous labeller's work was kept`
+            : 'Labeller updated'
+          : 'Task unassigned'
+      );
+      setTimeout(() => setMessage(''), 3500);
+    } catch (err) {
+      setError(err.message);
+      load({ silent: true });
+    } finally {
+      setSavingLabeller(null);
     }
   };
 
@@ -1474,7 +1519,40 @@ export default function ManageVideos() {
                   )}
                   <td>{userLabel(video.uploadedBy)}</td>
                   <td>{userLabel(video.reviewedBy)}</td>
-                  <td>{video.assignedTo?.name || '—'}</td>
+                  <td>
+                    {adminUser && (video.kind || 'production') === 'production' ? (
+                      <select
+                        value={video.assignedTo?._id || video.assignedTo || ''}
+                        onChange={(e) => reassignLabeller(video, e.target.value || null)}
+                        disabled={savingLabeller === video._id}
+                        className="labeller-assign-select field-input--sm"
+                        title="Assign or change labeller"
+                      >
+                        <option value="">Unassigned</option>
+                        {(() => {
+                          const assignedId = video.assignedTo?._id || video.assignedTo;
+                          const assignedInList = labellers.some(
+                            (labeller) => String(labeller._id || labeller.id) === String(assignedId)
+                          );
+                          if (!assignedInList && video.assignedTo?.name && assignedId) {
+                            return (
+                              <option value={assignedId}>
+                                {video.assignedTo.name} (current)
+                              </option>
+                            );
+                          }
+                          return null;
+                        })()}
+                        {labellers.map((labeller) => (
+                          <option key={labeller._id || labeller.id} value={labeller._id || labeller.id}>
+                            {labeller.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      video.assignedTo?.name || '—'
+                    )}
+                  </td>
                   <td>{formatTimestamp(video.createdAt)}</td>
                   <td>{formatTimestamp(video.updatedAt)}</td>
                   <td>
