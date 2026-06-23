@@ -28,6 +28,14 @@ export default function LabelingHelpModal({ open, onClose }) {
             <strong>Spacing rules:</strong> only one event per frame, with at least one blank frame
             between any two events. Submit is blocked until these rules are met.
           </p>
+          <p>
+            <strong>Take on / Take on End:</strong> mark Take on when the attacker commits to
+            beating a defender; mark Take on End when the duel is clearly finished.
+          </p>
+          <p>
+            <strong>Interception / Interception 2:</strong> Interception for a nearby cut-out attempt;
+            Interception 2 for a clear interception farther from the intended receiver.
+          </p>
         </div>
       </div>
     </div>

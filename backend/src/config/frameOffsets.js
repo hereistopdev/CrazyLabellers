@@ -16,10 +16,12 @@ const FRAME_OFFSETS = {
   'Pass Received': -1,
   Recovery: -1,
   Interception: -1,
+  'Interception 2': -1,
   'Ball Out of Play': -1,
   Save: -1,
   Goal: -2,
   'Take on': 2,
+  'Take on End': 2,
   Foul: 2,
 };
 
@@ -97,6 +99,26 @@ const immediateFollowUpRules = [
     detail:
       'Win ball and shoot in one motion. Interception at −1; Shot at contact (0).',
   },
+  {
+    id: 'interception2-pass',
+    after: 'Interception 2',
+    event: 'Pass',
+    firstOffset: -1,
+    secondOffset: 0,
+    title: 'Interception 2 → immediate pass',
+    detail:
+      'Clear cut-out followed by instant outlet pass. Interception 2 at −1; Pass at contact (0).',
+  },
+  {
+    id: 'interception2-shot',
+    after: 'Interception 2',
+    event: 'Shot',
+    firstOffset: -1,
+    secondOffset: 0,
+    title: 'Interception 2 → immediate shot',
+    detail:
+      'Win ball from a clear interception and shoot in one motion. Interception 2 at −1; Shot at contact (0).',
+  },
 ];
 
 const followUpLookup = new Map(
@@ -141,7 +163,7 @@ function formatOffset(offset) {
 }
 
 const frameOffsetSummary =
-  '0f: Pass, Tackle, Clearance, Block, Aerial Duel, Shot · −1f: Pass Received, Recovery, Interception, Ball Out of Play, Save · −2f: Goal · +2f: Take on, Foul';
+  '0f: Pass, Tackle, Clearance, Block, Aerial Duel, Shot · −1f: Pass Received, Recovery, Interception, Interception 2, Ball Out of Play, Save · −2f: Goal · +2f: Take on, Take on End, Foul';
 
 const OFFSET_GROUP_META = {
   [-2]: 'Two frames before the moment',
@@ -174,7 +196,7 @@ const frameOffsetRules = [
   {
     event: '−1 frame — slightly before moment',
     offset: -1,
-    detail: 'Pass Received, Recovery, Interception, Ball Out of Play, Save',
+    detail: 'Pass Received, Recovery, Interception, Interception 2, Ball Out of Play, Save',
   },
   {
     event: '−2 frames — two frames before moment',
@@ -184,7 +206,7 @@ const frameOffsetRules = [
   {
     event: '+2 frames — two frames after moment',
     offset: 2,
-    detail: 'Take on, Foul',
+    detail: 'Take on, Take on End, Foul',
     exception:
       'Immediate follow-up after Pass Received / Recovery / Interception uses 0 for the second event.',
   },

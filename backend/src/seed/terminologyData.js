@@ -7,12 +7,17 @@ const OFFICIAL_DEFINITIONS = {
     'A player gains possession after no team has possession of the ball or the ball is directed to them by an opponent. Active attempts to intercept the ball are excluded.',
   Tackle:
     'A player tries to stop an opposing player from progressing further with the ball or takes possession from an opposing player.',
-  Interception: 'A player intercepts an opposing team pass between two opposing players.',
+  Interception:
+    'A player tries to intercept an opposing pass near the intended receiver — the defending player is close to the pass line or receiver when attempting the cut-out.',
+  'Interception 2':
+    'A clear interception where a defending player stops the ball noticeably farther from the player who was planned to receive the pass — a decisive cut-out with more distance from the intended target.',
   'Ball Out of Play': 'The ball goes out of play.',
   Clearance:
     'A player clears the ball to safety by kick or header and eliminates immediate threat toward his/her own goal within the goal section (penalty area / defensive box). Do not mark Clearance outside the goal section — use Pass, Recovery, or Ball Out of Play instead.',
   'Take on':
-    'Situations in which a player in control of the ball moves past an opponent player. Awarded to the offensive player who performs the take-on.',
+    'Mark when a player in control of the ball is willing to start a take-on — they commit to trying to beat an opponent with the ball. Award to the offensive player performing the take-on.',
+  'Take on End':
+    'Mark when the take-on sequence appears finished — the attacker has completed beating (or failing to beat) the defender and the dribbling duel is clearly over.',
   Substitution:
     'Refers to the event when a player enters the match to replace a teammate. This occurs during a stoppage in play.',
   Block: 'A player blocks a shot by an opposing player.',
@@ -73,8 +78,29 @@ const terminologies = [
     title: 'Interception',
     order: 5,
     definition: OFFICIAL_DEFINITIONS.Interception,
-    criteria: ['Opposing pass between two opposing players is cut out'],
-    commonMistakes: ['Labeling recovery of a loose ball as interception', 'Labeling tackle as interception'],
+    criteria: [
+      'Opposing pass is being cut out near the intended receiver',
+      'Defender is close to the pass line or receiver during the attempt',
+    ],
+    commonMistakes: [
+      'Labeling a clear far cut-out as Interception — use Interception 2',
+      'Labeling recovery of a loose ball as interception',
+      'Labeling tackle as interception',
+    ],
+  },
+  {
+    eventType: 'Interception 2',
+    title: 'Interception 2',
+    order: 5.5,
+    definition: OFFICIAL_DEFINITIONS['Interception 2'],
+    criteria: [
+      'Clear interception of an opposing pass',
+      'Defender stops the ball noticeably farther from the intended receiver',
+    ],
+    commonMistakes: [
+      'Labeling a nearby interception attempt as Interception 2',
+      'Labeling recovery of a loose ball as interception',
+    ],
   },
   {
     eventType: 'Ball Out of Play',
@@ -97,8 +123,31 @@ const terminologies = [
     title: 'Take on',
     order: 8,
     definition: OFFICIAL_DEFINITIONS['Take on'],
-    criteria: ['Attacker in control moves past an opponent', 'Award to the offensive player performing the take-on'],
-    commonMistakes: ['Marking every dribble as take on', 'Awarding to the defender'],
+    criteria: [
+      'Attacker in control commits to beating an opponent',
+      'Mark at the start of the take-on attempt',
+      'Award to the offensive player performing the take-on',
+    ],
+    commonMistakes: [
+      'Marking every dribble as take on',
+      'Marking the end of the duel instead of the start — use Take on End',
+      'Awarding to the defender',
+    ],
+  },
+  {
+    eventType: 'Take on End',
+    title: 'Take on End',
+    order: 8.5,
+    definition: OFFICIAL_DEFINITIONS['Take on End'],
+    criteria: [
+      'The take-on sequence is clearly finished',
+      'Attacker has completed beating or failing to beat the defender',
+      'Pair with Take on at the start of the same duel when applicable',
+    ],
+    commonMistakes: [
+      'Marking Take on End at the start of the attempt — use Take on',
+      'Marking every dribble end as Take on End',
+    ],
   },
   {
     eventType: 'Substitution',

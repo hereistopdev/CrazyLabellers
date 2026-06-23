@@ -21,6 +21,7 @@ import FrameNudgeRow from '../components/FrameNudgeRow';
 import EventDiscussionFlag, { EventDiscussionNote } from '../components/EventDiscussionFlag';
 import LabelingChatbot from '../components/LabelingChatbot';
 import LabelingHelpModal from '../components/LabelingHelpModal';
+import EventSearchInput from '../components/EventSearchInput';
 import ToastStack from '../components/ToastStack';
 import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
@@ -34,6 +35,7 @@ import {
   nudgeFrameTime,
 } from '../utils/frameTime';
 import { validateEventSpacing, getEventSpacingRuleSummary } from '../utils/eventSpacingValidation';
+import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearch';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -73,6 +75,7 @@ export default function Labeling() {
   const [submissionStatus, setSubmissionStatus] = useState('draft');
   const [tutorialDone, setTutorialDone] = useState(false);
   const [spacingIssueIndices, setSpacingIssueIndices] = useState(() => new Set());
+  const [eventSearchQuery, setEventSearchQuery] = useState('');
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
@@ -849,6 +852,8 @@ export default function Labeling() {
     (submissionStatus === 'rejected' && !assignment?.allowLabellerReference);
   const canAdjustEvents = !tutorialLabellerMode && !submissionLocked;
   const discussionEventCount = events.filter((event) => event.needsDiscussion).length;
+  const eventSearchActive = Boolean(eventSearchQuery.trim());
+  const eventSearchMatchCount = countEventSearchMatches(eventSearchQuery, events);
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) {
@@ -1180,6 +1185,14 @@ export default function Labeling() {
                 </span>
               )}
             </h3>
+            {events.length > 0 && (
+              <EventSearchInput
+                value={eventSearchQuery}
+                onChange={setEventSearchQuery}
+                matchCount={eventSearchMatchCount}
+                totalCount={events.length}
+              />
+            )}
             {canAdjustEvents && events.some((ev) => getFrameNumber(ev.frameTime, fps) === currentFrame) && (
               <div className="labeling-event-nudge-panel">
                 <span className="labeling-event-nudge-label">Adjust event on this frame</span>
@@ -1203,14 +1216,16 @@ export default function Labeling() {
                   const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
                   const isSelected = selectedEventIndex === i;
                   const hasSpacingError = spacingIssueIndices.has(i);
+                  const isSearchMatch = matchesEventSearch(eventSearchQuery, ev.eventType);
+                  const isSearchDimmed = eventSearchActive && !isSearchMatch;
                   return (
                   <div
                     key={`${ev.eventType}-${ev.frameTime}-${i}`}
                     ref={isActive ? activeEventRef : null}
-                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}`}
+                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}${isSearchMatch ? ' event-search-match' : ''}${isSearchDimmed ? ' event-search-dimmed' : ''}`}
                   >
                     <div
-                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}`}
+                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}${isSearchMatch ? ' event-search-match' : ''}`}
                       onClick={() => selectEvent(i, ev.frameTime)}
                       role="button"
                       tabIndex={0}
@@ -1287,6 +1302,11 @@ export default function Labeling() {
                 })
               )}
             </div>
+            {eventSearchActive && eventSearchMatchCount === 0 && events.length > 0 && (
+              <p className="event-search-empty">
+                No events match &ldquo;{eventSearchQuery.trim()}&rdquo;
+              </p>
+            )}
           </div>
 
           <div className="events-panel-footer">

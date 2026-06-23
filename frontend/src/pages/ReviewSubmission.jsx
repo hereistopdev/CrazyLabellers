@@ -9,6 +9,7 @@ import ReviewTimeline from '../components/ReviewTimeline';
 import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import CompareIssuesPanel from '../components/CompareIssuesPanel';
 import DiscussionEventsPanel, { getDiscussionEvents } from '../components/DiscussionEventsPanel';
+import SubmissionEventsListPanel from '../components/SubmissionEventsListPanel';
 import EventPickerModal from '../components/EventPickerModal';
 import { isEditableTarget, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
@@ -1078,7 +1079,7 @@ export default function ReviewSubmission() {
       {message && <div className="alert alert-success">{message}</div>}
 
       <div className="review-workspace">
-        <div className={`review-video-row${!isPreview && comparison ? ' has-compare-sidebar' : ''}`}>
+        <div className={`review-video-row${!isPreview ? ' has-compare-sidebar' : ''}`}>
           <div className="video-panel review-video-panel">
             <FrameMagnifier
             videoRef={videoRef}
@@ -1204,6 +1205,18 @@ export default function ReviewSubmission() {
             fps={fps}
             previewMode={isPreview}
           />
+
+          {!isPreview && (
+            <SubmissionEventsListPanel
+              events={submissionEvents}
+              eventRows={eventRows}
+              currentTime={currentTime}
+              fps={fps}
+              onSeek={handleScrub}
+              selectedIndex={selectedSubmissionIndex}
+              onSelect={setSelectedSubmissionIndex}
+            />
+          )}
 
           {!isPreview && (
             <DiscussionEventsPanel events={submissionEvents} onSeek={handleScrub} fps={fps} />
