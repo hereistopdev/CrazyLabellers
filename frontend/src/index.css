@@ -4117,6 +4117,43 @@ tbody tr:hover {
   opacity: 0.6;
 }
 
+.open-video-by-url-card {
+  padding: 1rem 1.1rem;
+}
+
+.open-video-by-url-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.open-video-by-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.open-video-by-url-input {
+  flex: 1;
+  min-width: min(100%, 280px);
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.open-video-by-url-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .labeller-assign-select {
   min-width: 140px;
   max-width: 180px;

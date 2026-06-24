@@ -30,6 +30,10 @@ const {
   initializeLabellerSubmission,
   resetLabellerSubmissionFromReference,
 } = require('../services/referenceDraftSeed');
+const {
+  resolveAssignmentFromUrlInput,
+  canLabellerOpenAssignment,
+} = require('../services/resolveAssignmentUrl');
 
 const router = express.Router();
 
@@ -88,7 +92,49 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-router.get('/:id', auth, async (req, res) => {
+ router.get('/resolve-url', auth, async (req, res) => {
+  try {
+    const input = req.query.url || req.query.videoUrl || '';
+    if (!String(input).trim()) {
+      return res.status(400).json({ message: 'Enter a video URL or labeling link' });
+    }
+
+    const assignment = await resolveAssignmentFromUrlInput(input);
+    if (!assignment) {
+      return res.status(404).json({ message: 'No task found for that video URL' });
+    }
+
+    let accessUser = req.user;
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      (assignment.kind || 'production') === 'pretest'
+    ) {
+      const User = require('../models/User');
+      accessUser = await User.findById(req.user._id);
+    }
+
+    const access = canLabellerOpenAssignment(accessUser, assignment);
+    if (!access.allowed) {
+      return res.status(access.status || 403).json({ message: access.message });
+    }
+
+    const populated = await VideoAssignment.findById(assignment._id)
+      .populate('assignedTo', 'name email')
+      .populate('groupId', 'name');
+
+    return res.json({
+      assignmentId: assignment._id,
+      assignment: populated,
+      needsClaim: Boolean(access.needsClaim),
+      isAssigned: isAssignedLabeller(req.user, assignment),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+ router.get('/:id', auth, async (req, res) => {
   try {
     const assignment = await VideoAssignment.findById(req.params.id).populate(
       'assignedTo',

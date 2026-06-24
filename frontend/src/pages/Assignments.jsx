@@ -8,6 +8,7 @@ import { useTableData } from '../hooks/useTableData';
 import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
 import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
+import OpenVideoByUrl from '../components/OpenVideoByUrl';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -23,6 +24,7 @@ export default function Assignments() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [urlMessage, setUrlMessage] = useState('');
   const [claiming, setClaiming] = useState(null);
 
   const load = () => {
@@ -123,6 +125,20 @@ export default function Assignments() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+      {urlMessage && <div className="alert alert-success">{urlMessage}</div>}
+
+      <div className="card open-video-by-url-card" style={{ marginBottom: '1.25rem' }}>
+        <OpenVideoByUrl
+          onError={(message) => {
+            setUrlMessage('');
+            setError(message);
+          }}
+          onSuccess={(message) => {
+            setError('');
+            setUrlMessage(message);
+          }}
+        />
+      </div>
 
       <div className="card table-wrap" style={{ marginBottom: '1.25rem' }}>
         <TableToolbar
