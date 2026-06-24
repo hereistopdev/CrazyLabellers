@@ -3,6 +3,9 @@ const path = require('path');
 const express = require('express');
 const { isSafeVideoFilename, getVideoExtension } = require('../utils/clipId');
 const { findLocalVideoPath } = require('../services/videoStorage');
+const { authFromHeaderOrQuery } = require('../middleware/auth');
+const { isLabeller, isAdmin, isValidator } = require('../config/roles');
+const { validateProxyTargetUrl, proxyVideoResponse } = require('../services/videoProxy');
 
 const CONTENT_TYPES = {
   '.mp4': 'video/mp4',
@@ -14,6 +17,23 @@ const CONTENT_TYPES = {
 };
 
 const router = express.Router();
+
+function canUseVideoProxy(user) {
+  return isLabeller(user) || isAdmin(user) || isValidator(user);
+}
+
+router.get('/proxy', authFromHeaderOrQuery, async (req, res) => {
+  if (!canUseVideoProxy(req.user)) {
+    return res.status(403).json({ message: 'Labeler access required' });
+  }
+
+  try {
+    const targetUrl = validateProxyTargetUrl(req.query.url);
+    await proxyVideoResponse(targetUrl, req, res);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || 'Invalid video URL' });
+  }
+});
 
 router.get('/:clipFilename', (req, res) => {
   const clipFilename = decodeURIComponent(req.params.clipFilename);

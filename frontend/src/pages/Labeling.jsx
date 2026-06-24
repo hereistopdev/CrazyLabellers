@@ -41,7 +41,7 @@ import {
 } from '../utils/eventSpacingValidation';
 import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearch';
 import { canUseLabeler } from '../utils/labelerAccess';
-import { extractClipIdFromVideoUrl, isOpenableVideoUrl } from '../utils/videoUrl';
+import { extractClipIdFromVideoUrl, isOpenableVideoUrl, resolvePlaybackVideoUrl } from '../utils/videoUrl';
 import { loadPracticeLabels, savePracticeLabels, clearPracticeLabels } from '../utils/practiceLabelStorage';
 import { downloadAnnotationExport } from '../utils/exportAnnotation';
 
@@ -90,6 +90,7 @@ export default function Labeling() {
 
   const fps = assignment?.fps || FPS;
   const frameDuration = 1 / fps;
+  const playbackVideoUrl = resolvePlaybackVideoUrl(assignment?.videoUrl);
   const maxTime = resolvePlaybackDuration(mediaDuration, assignment?.durationSeconds);
   const currentFrame = getFrameNumber(currentTime, fps);
   const isPaused = playMode === 'paused' || playMode === 'frame-auto';
@@ -1122,7 +1123,7 @@ export default function Labeling() {
           >
             <video
               ref={videoRef}
-              src={assignment?.videoUrl}
+              src={playbackVideoUrl}
               crossOrigin="anonymous"
               preload="auto"
               onLoadedMetadata={handleLoadedMetadata}

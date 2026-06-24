@@ -38,4 +38,11 @@ const requireVideoManagerAccess = (req, res, next) => {
   return next();
 };
 
-module.exports = { auth, requireRole, requireVideoManagerAccess };
+const authFromHeaderOrQuery = async (req, res, next) => {
+  if (!req.headers.authorization && typeof req.query?.token === 'string' && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  return auth(req, res, next);
+};
+
+module.exports = { auth, authFromHeaderOrQuery, requireRole, requireVideoManagerAccess };

@@ -67,3 +67,33 @@ export function extractAssignmentIdFromLabelUrl(input) {
   const match = String(input).match(/\/label\/([a-f0-9]{24})/i);
   return match ? match[1] : null;
 }
+
+function getApiBase() {
+  return import.meta.env.VITE_API_URL || '/api';
+}
+
+export function needsVideoProxy(videoUrl) {
+  const trimmed = String(videoUrl || '').trim();
+  if (!trimmed) return false;
+
+  if (trimmed.startsWith('/api/videos/')) return false;
+
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    if (parsed.pathname.startsWith('/api/videos/')) return false;
+    if (parsed.origin === window.location.origin) return false;
+    return /^https?:$/i.test(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+export function resolvePlaybackVideoUrl(videoUrl) {
+  const trimmed = String(videoUrl || '').trim();
+  if (!trimmed || !needsVideoProxy(trimmed)) return trimmed;
+
+  const token = localStorage.getItem('token');
+  const params = new URLSearchParams({ url: trimmed });
+  if (token) params.set('token', token);
+  return `${getApiBase()}/videos/proxy?${params.toString()}`;
+}
