@@ -979,20 +979,21 @@ body.nav-open {
 }
 
 .labeling-layout.video-workspace-row.has-workspace-aside {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto;
 }
 
-.labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-display {
-  grid-column: 1;
-  grid-row: 1;
+.video-workspace-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 1.25rem;
+  align-items: start;
+  min-width: 0;
 }
 
-.labeling-layout.video-workspace-row.has-workspace-aside > .events-panel--labeling {
-  grid-column: 2;
+.labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-top {
+  grid-column: 1;
   grid-row: 1;
-  align-self: stretch;
-  min-height: 0;
 }
 
 .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-chrome {
@@ -1148,20 +1149,19 @@ body.nav-open {
     grid-template-rows: auto auto auto;
   }
 
-  .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-display {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .labeling-layout.video-workspace-row.has-workspace-aside > .events-panel--labeling {
-    grid-column: 1;
-    grid-row: 2;
-    max-height: min(420px, 50vh);
+  .video-workspace-top {
+    grid-template-columns: 1fr;
+    gap: 1rem;
   }
 
   .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-chrome {
     grid-column: 1;
-    grid-row: 3;
+    grid-row: 2;
+  }
+
+  .events-panel--labeling {
+    max-height: min(420px, 50vh) !important;
+    height: auto !important;
   }
 
   .video-workspace-aside {
@@ -1564,13 +1564,29 @@ body.nav-open {
 .events-panel--labeling {
   position: relative;
   top: auto;
-  align-self: stretch;
+  align-self: start;
   max-height: none;
-  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+}
+
+.events-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.events-panel-search--inline {
+  flex-shrink: 0;
+  padding: 0 0 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
 }
 
 .events-panel--labeling.video-workspace-aside {

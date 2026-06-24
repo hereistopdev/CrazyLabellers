@@ -27,6 +27,7 @@ import { resolvePlaybackDuration } from '../utils/videoDuration';
 import { isEditableTarget, LABELING_HOTKEYS, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
 import { displayAssignmentTitle } from '../utils/displayTitle';
 import { useToasts } from '../hooks/useToasts';
+import { useSyncElementHeight } from '../hooks/useSyncElementHeight';
 import {
   getFrameNumber,
   getTimeForFrame,
@@ -61,6 +62,7 @@ export default function Labeling() {
   const isPracticeMode = id === 'practice';
   const practiceVideoUrl = isPracticeMode ? searchParams.get('url')?.trim() || '' : '';
   const videoRef = useRef(null);
+  const videoDisplayRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const activeEventRef = useRef(null);
   const eventsRef = useRef([]);
@@ -979,6 +981,11 @@ export default function Labeling() {
         .filter(({ ev }) => matchesEventSearch(eventSearchQuery, ev.eventType))
     : events.map((ev, i) => ({ ev, i }));
 
+  const asideHeight = useSyncElementHeight(
+    videoDisplayRef,
+    Boolean(assignment) && !isTutorial && !tutorialLabellerMode
+  );
+
   const videoChrome = (
     <>
       <div className="video-controls">
@@ -1181,7 +1188,14 @@ export default function Labeling() {
         </aside>
 
         <div className={`labeling-layout video-workspace-row${!isTutorial ? ' has-workspace-aside' : ''}${isTutorial ? ' labeling-layout--tutorial' : ''}`}>
-        <div className={isTutorial ? 'video-workspace-main' : 'video-workspace-display'}>
+        <div
+          className={!isTutorial ? 'video-workspace-top' : undefined}
+          style={isTutorial ? { display: 'contents' } : undefined}
+        >
+        <div
+          className={isTutorial ? 'video-workspace-main' : 'video-workspace-display'}
+          ref={isTutorial ? null : videoDisplayRef}
+        >
         <div className={`video-panel${!isTutorial ? ' video-panel--display' : ''}`}>
           <FrameMagnifier
             videoRef={videoRef}
@@ -1264,7 +1278,10 @@ export default function Labeling() {
             )}
           </div>
         ) : (
-        <div className="events-panel events-panel--labeling video-workspace-aside">
+        <div
+          className="events-panel events-panel--labeling video-workspace-aside"
+          style={asideHeight ? { height: asideHeight, maxHeight: asideHeight } : undefined}
+        >
           <div className="events-panel-fixed">
             {showReference && (
               <ReferenceEventsPanel
@@ -1319,25 +1336,25 @@ export default function Labeling() {
             </section>
           </div>
 
-          {!tutorialLabellerMode && events.length > 0 && (
-            <div className="events-panel-search video-workspace-aside-section video-workspace-aside-search">
-              <div className="video-workspace-aside-title">Find events</div>
-              <EventSearchInput
-                value={eventSearchQuery}
-                onChange={setEventSearchQuery}
-                matchCount={eventSearchMatchCount}
-                totalCount={events.length}
-              />
-              {eventSearchActive && (
-                <p className="event-search-shortlist-hint">
-                  Showing {eventSearchMatchCount} matching event
-                  {eventSearchMatchCount !== 1 ? 's' : ''}
-                </p>
-              )}
-            </div>
-          )}
-
+          <div className="events-panel-body">
           <div className="events-panel-scroll video-workspace-aside-events">
+            {!tutorialLabellerMode && events.length > 0 && (
+              <div className="events-panel-search events-panel-search--inline">
+                <div className="video-workspace-aside-title">Find events</div>
+                <EventSearchInput
+                  value={eventSearchQuery}
+                  onChange={setEventSearchQuery}
+                  matchCount={eventSearchMatchCount}
+                  totalCount={events.length}
+                />
+                {eventSearchActive && (
+                  <p className="event-search-shortlist-hint">
+                    Showing {eventSearchMatchCount} matching event
+                    {eventSearchMatchCount !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+            )}
             <h3>
               Events ({events.length})
               {discussionEventCount > 0 && (
@@ -1458,6 +1475,7 @@ export default function Labeling() {
               )}
             </div>
           </div>
+          </div>
 
           <div className="events-panel-footer">
             <div className="actions-row">
@@ -1531,6 +1549,8 @@ export default function Labeling() {
           </div>
         </div>
         )}
+
+        </div>
 
         {!isTutorial && (
           <div className="video-workspace-chrome">{videoChrome}</div>
