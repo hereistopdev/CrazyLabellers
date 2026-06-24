@@ -903,6 +903,21 @@ export default function ReviewSubmission() {
 
   const asideHeight = useSyncElementHeight(videoDisplayRef, !isPreview && Boolean(reviewData));
 
+  const checkSpacingRules = useCallback(() => {
+    const spacing = validateEventSpacing(submissionEvents, fps);
+    if (spacing.valid) {
+      setSpacingIssueIndices(new Set());
+      setError('');
+      setMessage('All labeling rules pass for this submission');
+      return;
+    }
+    setSpacingIssueIndices(new Set(spacing.affectedIndices));
+    setMessage('');
+    setError(
+      `Labeling rules not met — ${spacing.issues.length} issue(s). See highlighted events in the list.`
+    );
+  }, [submissionEvents, fps]);
+
   if (loading) return <div className="loading">Loading review...</div>;
   if (error && !reviewData) return <div className="alert alert-error">{error}</div>;
 
@@ -925,21 +940,6 @@ export default function ReviewSubmission() {
     ? 'Auto score (reference comparison)'
     : 'Correction score (manual review)';
   const playbackVideoUrl = resolvePlaybackVideoUrl(assignment?.videoUrl);
-
-  const checkSpacingRules = useCallback(() => {
-    const spacing = validateEventSpacing(submissionEvents, fps);
-    if (spacing.valid) {
-      setSpacingIssueIndices(new Set());
-      setError('');
-      setMessage('All labeling rules pass for this submission');
-      return;
-    }
-    setSpacingIssueIndices(new Set(spacing.affectedIndices));
-    setMessage('');
-    setError(
-      `Labeling rules not met — ${spacing.issues.length} issue(s). See highlighted events in the list.`
-    );
-  }, [submissionEvents, fps]);
 
   const spacingAlert =
     spacingIssueIndices.size > 0 ? (
