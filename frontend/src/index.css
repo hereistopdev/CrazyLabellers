@@ -1589,6 +1589,23 @@ body.nav-open {
   background: transparent;
 }
 
+.events-panel--review .events-panel-scroll h3 {
+  margin-top: 0;
+}
+
+.events-panel-review-section {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.events-panel-review-discussion {
+  margin-top: 0.85rem;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
 .events-panel--labeling.video-workspace-aside {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -3119,8 +3136,18 @@ tbody tr:hover {
   display: block;
 }
 
+.review-page .labeling-layout.video-workspace-row.has-workspace-aside {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+}
+
+.review-page .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-chrome {
+  grid-column: 1;
+  grid-row: 2;
+}
+
 .review-page .review-video-row,
-.review-page .video-workspace-row {
+.review-page .video-workspace-row:not(.labeling-layout) {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
@@ -3129,7 +3156,7 @@ tbody tr:hover {
 }
 
 .review-page .review-video-row.has-compare-sidebar,
-.review-page .video-workspace-row.has-workspace-aside {
+.review-page .video-workspace-row:not(.labeling-layout).has-workspace-aside {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
 }
 
@@ -3166,8 +3193,23 @@ tbody tr:hover {
 
 @media (max-width: 1100px) {
   .review-page .review-video-row.has-compare-sidebar,
-  .review-page .video-workspace-row.has-workspace-aside {
+  .review-page .video-workspace-row:not(.labeling-layout).has-workspace-aside {
     grid-template-columns: 1fr;
+  }
+
+  .review-page .labeling-layout.video-workspace-row.has-workspace-aside {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .review-page .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-chrome {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .review-page .events-panel--review {
+    max-height: min(420px, 50vh) !important;
+    height: auto !important;
   }
 
   .review-compare-sidebar {

@@ -10,8 +10,9 @@ import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import CompareIssuesPanel from '../components/CompareIssuesPanel';
 import DiscussionEventsPanel, { getDiscussionEvents } from '../components/DiscussionEventsPanel';
 import SubmissionEventsListPanel from '../components/SubmissionEventsListPanel';
-import VideoWorkspaceAside from '../components/VideoWorkspaceAside';
 import EventPickerModal from '../components/EventPickerModal';
+import { useSyncElementHeight } from '../hooks/useSyncElementHeight';
+import { resolvePlaybackVideoUrl } from '../utils/videoUrl';
 import { isEditableTarget, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
 import StarRating from '../components/StarRating';
@@ -40,6 +41,7 @@ export default function ReviewSubmission() {
   const canEditReference = canAccessReview(user);
   const isPreview = Boolean(assignmentId);
   const videoRef = useRef(null);
+  const videoDisplayRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const skippedEventFramesRef = useRef(new Set());
   const playModeRef = useRef('paused');
@@ -893,6 +895,8 @@ export default function ReviewSubmission() {
     showReferenceEventPicker,
   ]);
 
+  const asideHeight = useSyncElementHeight(videoDisplayRef, !isPreview && Boolean(reviewData));
+
   if (loading) return <div className="loading">Loading review...</div>;
   if (error && !reviewData) return <div className="alert alert-error">{error}</div>;
 
@@ -914,6 +918,135 @@ export default function ReviewSubmission() {
   const scoreLabel = reference?.hasReference
     ? 'Auto score (reference comparison)'
     : 'Correction score (manual review)';
+  const playbackVideoUrl = resolvePlaybackVideoUrl(assignment?.videoUrl);
+
+  const videoChrome = (
+    <>
+      <div className="video-controls">
+        <div className="video-controls-row">
+          <span className="time-display">{formatTime(currentTime)}</span>
+          <span className="frame-display">Frame {currentFrame}</span>
+          <input
+            type="range"
+            className="frame-slider"
+            min={0}
+            max={maxTime}
+            step={frameDuration}
+            value={currentTime}
+            onChange={(e) => handleScrub(parseFloat(e.target.value))}
+          />
+        </div>
+        {!isPreview && (
+          <div className="video-controls-row review-playback-options">
+            <span className="review-playback-label">Event playback</span>
+            <label className="review-playback-toggle">
+              <input
+                type="radio"
+                name="eventPlaybackMode"
+                checked={eventPlaybackMode === 'auto-pause'}
+                onChange={() => handleEventPlaybackModeChange('auto-pause')}
+              />
+              Auto-pause at events
+            </label>
+            <label className="review-playback-toggle">
+              <input
+                type="radio"
+                name="eventPlaybackMode"
+                checked={eventPlaybackMode === 'skip'}
+                onChange={() => handleEventPlaybackModeChange('skip')}
+              />
+              Skip events
+            </label>
+            {pausedAtEvent && eventPlaybackMode === 'auto-pause' && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={skipEventAndPlay}>
+                Skip &amp; play
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={goToPrevEvent}
+              disabled={findPrevEventFrame(currentFrame, eventFrames) == null}
+            >
+              Prev event
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={goToNextEvent}
+              disabled={findNextEventFrame(currentFrame, eventFrames) == null}
+            >
+              Next event
+            </button>
+          </div>
+        )}
+        <div className="video-controls-row playback-controls">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-5)}>
+            −5 frames
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-1)}>
+            −1 frame
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm${playMode === 'normal' ? ' btn-primary' : ' btn-secondary'}`}
+            onClick={togglePlayPause}
+          >
+            {playMode === 'normal' ? 'Pause' : 'Play'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(1)}>
+            +1 frame
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(5)}>
+            +5 frames
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm${playMode === 'frame-auto' ? ' btn-primary' : ' btn-secondary'}`}
+            onClick={toggleFrameAutoPlay}
+          >
+            {playMode === 'frame-auto' ? 'Stop frame play' : 'Frame play'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={pauseAll}>
+            Stop
+          </button>
+        </div>
+      </div>
+
+      <ReviewTimeline
+        currentTime={currentTime}
+        maxTime={maxTime}
+        fps={fps}
+        submissionEvents={submissionEvents}
+        referenceEvents={referenceEvents}
+        eventRows={eventRows}
+        comparison={comparison}
+        labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
+        hasReference={reference?.hasReference || (canEditReference && referenceEvents.length > 0)}
+        previewMode={isPreview}
+        saving={saving || savingReference || savingSubmission}
+        canEditReference={canEditReference}
+        referenceDirty={referenceDirty}
+        onAddReferenceEvent={openReferenceEventPicker}
+        onDeleteReferenceEvent={deleteReferenceEventAtFrame}
+        onNudgeReferenceEvent={nudgeReferenceEventAtFrame}
+        onSaveReference={saveReferenceEvents}
+        canEditSubmission={canEditSubmission}
+        submissionDirty={submissionDirty}
+        onAddSubmissionEvent={openSubmissionEventPicker}
+        onChangeSubmissionEventType={openChangeSubmissionEventPicker}
+        onDeleteSubmissionEvent={deleteSubmissionEventAtFrame}
+        onNudgeSubmissionEvent={nudgeSubmissionEventAtFrame}
+        onSaveSubmission={saveSubmissionEvents}
+        selectedSubmissionIndex={selectedSubmissionIndex}
+        onSelectSubmissionEvent={setSelectedSubmissionIndex}
+        onSeek={handleScrub}
+        onValidateEvent={validateEvent}
+        onValidateAll={validateAll}
+        onAutoValidate={autoValidateFromComparison}
+      />
+    </>
+  );
 
   return (
     <div className="labeling-page review-page">
@@ -1080,131 +1213,48 @@ export default function ReviewSubmission() {
       {message && <div className="alert alert-success">{message}</div>}
 
       <div className="review-workspace">
-        <div className={`video-workspace-row${!isPreview ? ' has-workspace-aside' : ''}`}>
-          <div className="video-workspace-main">
-          <div className="video-panel review-video-panel">
-            <FrameMagnifier
-            videoRef={videoRef}
-            currentTime={currentTime}
-            isPaused={isPaused}
-            enabled={magnifyEnabled}
-            onEnabledChange={setMagnifyEnabled}
-            submissionEvents={submissionEvents}
-            referenceEvents={referenceEvents}
-            fps={fps}
+        <div
+          className={`labeling-layout video-workspace-row${!isPreview ? ' has-workspace-aside' : ''}`}
+        >
+          <div
+            className={!isPreview ? 'video-workspace-top' : undefined}
+            style={isPreview ? { display: 'contents' } : undefined}
           >
-            <video
-              ref={videoRef}
-              src={assignment?.videoUrl}
-              crossOrigin="anonymous"
-              preload="auto"
-              onLoadedMetadata={handleLoadedMetadata}
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={pauseAll}
-              onPause={() => {
-                if (playMode === 'normal') setPlayMode('paused');
-              }}
-            />
-          </FrameMagnifier>
-
-          <div className="video-controls">
-            <div className="video-controls-row">
-              <span className="time-display">{formatTime(currentTime)}</span>
-              <span className="frame-display">Frame {currentFrame}</span>
-              <input
-                type="range"
-                className="frame-slider"
-                min={0}
-                max={maxTime}
-                step={frameDuration}
-                value={currentTime}
-                onChange={(e) => handleScrub(parseFloat(e.target.value))}
-              />
-            </div>
-            <div className="video-controls-row review-playback-options">
-              <span className="review-playback-label">Event playback</span>
-              <label className="review-playback-toggle">
-                <input
-                  type="radio"
-                  name="eventPlaybackMode"
-                  checked={eventPlaybackMode === 'auto-pause'}
-                  onChange={() => handleEventPlaybackModeChange('auto-pause')}
-                />
-                Auto-pause at events
-              </label>
-              <label className="review-playback-toggle">
-                <input
-                  type="radio"
-                  name="eventPlaybackMode"
-                  checked={eventPlaybackMode === 'skip'}
-                  onChange={() => handleEventPlaybackModeChange('skip')}
-                />
-                Skip events
-              </label>
-              {pausedAtEvent && eventPlaybackMode === 'auto-pause' && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={skipEventAndPlay}
+            <div
+              className={isPreview ? 'video-workspace-main' : 'video-workspace-display'}
+              ref={isPreview ? null : videoDisplayRef}
+            >
+              <div className={`video-panel review-video-panel${!isPreview ? ' video-panel--display' : ''}`}>
+                <FrameMagnifier
+                  videoRef={videoRef}
+                  currentTime={currentTime}
+                  isPaused={isPaused}
+                  enabled={magnifyEnabled}
+                  onEnabledChange={setMagnifyEnabled}
+                  submissionEvents={submissionEvents}
+                  referenceEvents={referenceEvents}
+                  fps={fps}
                 >
-                  Skip &amp; play
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={goToPrevEvent}
-                disabled={findPrevEventFrame(currentFrame, eventFrames) == null}
-              >
-                Prev event
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={goToNextEvent}
-                disabled={findNextEventFrame(currentFrame, eventFrames) == null}
-              >
-                Next event
-              </button>
+                  <video
+                    ref={videoRef}
+                    src={playbackVideoUrl}
+                    crossOrigin="anonymous"
+                    preload="auto"
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={pauseAll}
+                    onPause={() => {
+                      if (playMode === 'normal') setPlayMode('paused');
+                    }}
+                  />
+                </FrameMagnifier>
+                {isPreview && videoChrome}
+              </div>
             </div>
-            <div className="video-controls-row playback-controls">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-5)}>
-                −5 frames
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-1)}>
-                −1 frame
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm${playMode === 'normal' ? ' btn-primary' : ' btn-secondary'}`}
-                onClick={togglePlayPause}
-              >
-                {playMode === 'normal' ? 'Pause' : 'Play'}
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(1)}>
-                +1 frame
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(5)}>
-                +5 frames
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm${playMode === 'frame-auto' ? ' btn-primary' : ' btn-secondary'}`}
-                onClick={toggleFrameAutoPlay}
-              >
-                {playMode === 'frame-auto' ? 'Stop frame play' : 'Frame play'}
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={pauseAll}>
-                Stop
-              </button>
-            </div>
-          </div>
-          </div>
-          </div>
 
-          {!isPreview && (
-            <VideoWorkspaceAside>
+            {!isPreview && (
               <SubmissionEventsListPanel
+                asideHeight={asideHeight}
                 events={submissionEvents}
                 eventRows={eventRows}
                 currentTime={currentTime}
@@ -1229,44 +1279,13 @@ export default function ReviewSubmission() {
                   />
                 }
               />
-            </VideoWorkspaceAside>
-          )}
+            )}
+          </div>
+
+          {!isPreview && <div className="video-workspace-chrome">{videoChrome}</div>}
         </div>
 
-        <ReviewTimeline
-            currentTime={currentTime}
-            maxTime={maxTime}
-            fps={fps}
-            submissionEvents={submissionEvents}
-            referenceEvents={referenceEvents}
-            eventRows={eventRows}
-            comparison={comparison}
-            labellerName={isPreview ? 'No submission yet' : submission?.userId?.name || 'Submitter'}
-            hasReference={reference?.hasReference || (canEditReference && referenceEvents.length > 0)}
-            previewMode={isPreview}
-            saving={saving || savingReference || savingSubmission}
-            canEditReference={canEditReference}
-            referenceDirty={referenceDirty}
-            onAddReferenceEvent={openReferenceEventPicker}
-            onDeleteReferenceEvent={deleteReferenceEventAtFrame}
-            onNudgeReferenceEvent={nudgeReferenceEventAtFrame}
-            onSaveReference={saveReferenceEvents}
-            canEditSubmission={canEditSubmission}
-            submissionDirty={submissionDirty}
-            onAddSubmissionEvent={openSubmissionEventPicker}
-            onChangeSubmissionEventType={openChangeSubmissionEventPicker}
-            onDeleteSubmissionEvent={deleteSubmissionEventAtFrame}
-            onNudgeSubmissionEvent={nudgeSubmissionEventAtFrame}
-            onSaveSubmission={saveSubmissionEvents}
-            selectedSubmissionIndex={selectedSubmissionIndex}
-            onSelectSubmissionEvent={setSelectedSubmissionIndex}
-            onSeek={handleScrub}
-            onValidateEvent={validateEvent}
-            onValidateAll={validateAll}
-            onAutoValidate={autoValidateFromComparison}
-          />
-
-          {!isPreview && submission?.status === 'submitted' && (
+        {!isPreview && submission?.status === 'submitted' && (
             <div className="review-final-bar">
               {!reference?.hasReference && autoScore == null && (
                 <p className="alert alert-info" style={{ marginBottom: '1rem' }}>
