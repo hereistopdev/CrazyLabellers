@@ -268,10 +268,13 @@ export default function ReviewQueue() {
                         >
                           Review with video
                         </Link>
-                        {submission.status === 'approved' && submission.assignmentId?.clipId && (
+                        {submission.status === 'approved' &&
+                          (submission.assignmentId?.title || submission.assignmentId?.clipId) && (
                           <ExportSubmissionButtons
                             submissionId={submission._id}
-                            clipId={submission.assignmentId.clipId}
+                            exportName={
+                              submission.assignmentId?.title || submission.assignmentId?.clipId
+                            }
                             hasReference={submission.hasReference}
                             compact
                             className="table-export-actions"

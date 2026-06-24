@@ -44,7 +44,7 @@ import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearc
 import { canUseLabeler } from '../utils/labelerAccess';
 import { extractClipIdFromVideoUrl, isOpenableVideoUrl, resolvePlaybackVideoUrl } from '../utils/videoUrl';
 import { loadPracticeLabels, savePracticeLabels, clearPracticeLabels } from '../utils/practiceLabelStorage';
-import { downloadAnnotationExport } from '../utils/exportAnnotation';
+import { downloadAnnotationExport, resolveExportBasename } from '../utils/exportAnnotation';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -911,7 +911,7 @@ export default function Labeling() {
       return;
     }
     try {
-      await api.exportLabels(id, variant);
+      await api.exportLabels(id, variant, resolveExportBasename(assignment) || assignment?.clipId);
     } catch (err) {
       pushToast(err.message, { type: 'error', duration: 4000 });
     }

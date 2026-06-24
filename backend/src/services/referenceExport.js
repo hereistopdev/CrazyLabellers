@@ -1,6 +1,11 @@
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
-const { exportAnnotation, getExportFilename, isValidClipId } = require('../utils/exportAnnotation');
+const {
+  exportAnnotation,
+  getExportFilename,
+  resolveExportBasename,
+  isValidClipId,
+} = require('../utils/exportAnnotation');
 const { loadReferenceForClip } = require('./referenceStorage');
 
 function getReferenceDownloadFilename(clipId, variant = 'post') {
@@ -23,14 +28,15 @@ async function buildReferenceExportForSubmission(submissionId, variant = 'post')
   }
 
   const assignment = await VideoAssignment.findById(submission.assignmentId);
-  if (!assignment?.clipId) {
-    const error = new Error('Assignment has no clipId for export');
+  const exportBasename = resolveExportBasename(assignment);
+  if (!exportBasename) {
+    const error = new Error('Assignment has no title or clip ID for export');
     error.status = 400;
     throw error;
   }
 
   const exportVariant = variant === 'raw' ? 'raw' : 'post';
-  const reference = await loadReferenceForClip(assignment.clipId, exportVariant);
+  const reference = await loadReferenceForClip(assignment.clipId || exportBasename, exportVariant);
   if (!reference.hasReference || !reference.events?.length) {
     const error = new Error('No reference annotations for this clip');
     error.status = 404;
@@ -41,7 +47,7 @@ async function buildReferenceExportForSubmission(submissionId, variant = 'post')
     gameTime: assignment.gameTime || '1 - 00:00',
     variant: exportVariant,
   });
-  const filename = getReferenceDownloadFilename(assignment.clipId, exportVariant);
+  const filename = getReferenceDownloadFilename(exportBasename, exportVariant);
 
   return { payload, filename, submission, assignment, reference };
 }

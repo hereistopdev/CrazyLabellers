@@ -28,6 +28,11 @@ import {
   nudgeFrameTime,
 } from '../utils/reviewPlayback';
 import { formatEventTime } from '../utils/frameTime';
+import {
+  validateEventSpacing,
+  getEventSpacingRuleSummary,
+  getEventPairTimingRuleSummary,
+} from '../utils/eventSpacingValidation';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -77,6 +82,7 @@ export default function ReviewSubmission() {
   const [submissionEditIndex, setSubmissionEditIndex] = useState(null);
   const [selectedSubmissionIndex, setSelectedSubmissionIndex] = useState(null);
   const [savingSubmission, setSavingSubmission] = useState(false);
+  const [spacingIssueIndices, setSpacingIssueIndices] = useState(() => new Set());
 
   const assignment = reviewData?.assignment;
   const submission = reviewData?.submission;
@@ -920,6 +926,29 @@ export default function ReviewSubmission() {
     : 'Correction score (manual review)';
   const playbackVideoUrl = resolvePlaybackVideoUrl(assignment?.videoUrl);
 
+  const checkSpacingRules = useCallback(() => {
+    const spacing = validateEventSpacing(submissionEvents, fps);
+    if (spacing.valid) {
+      setSpacingIssueIndices(new Set());
+      setError('');
+      setMessage('All labeling rules pass for this submission');
+      return;
+    }
+    setSpacingIssueIndices(new Set(spacing.affectedIndices));
+    setMessage('');
+    setError(
+      `Labeling rules not met — ${spacing.issues.length} issue(s). See highlighted events in the list.`
+    );
+  }, [submissionEvents, fps]);
+
+  const spacingAlert =
+    spacingIssueIndices.size > 0 ? (
+      <div className="labeling-spacing-alert" role="alert">
+        <strong>Labeling rules not met.</strong> {getEventSpacingRuleSummary()}{' '}
+        {getEventPairTimingRuleSummary()} Highlighted events below violate current rules.
+      </div>
+    ) : null;
+
   const videoChrome = (
     <>
       <div className="video-controls">
@@ -1202,7 +1231,7 @@ export default function ReviewSubmission() {
           <div className="actions-row" style={{ marginTop: '0.75rem' }}>
             <ExportSubmissionButtons
               submissionId={submission._id}
-              clipId={assignment.clipId}
+              exportName={assignment?.title || assignment?.clipId}
               hasReference={reference?.hasReference}
             />
           </div>
@@ -1262,6 +1291,10 @@ export default function ReviewSubmission() {
                 onSeek={handleScrub}
                 selectedIndex={selectedSubmissionIndex}
                 onSelect={setSelectedSubmissionIndex}
+                spacingIssueIndices={spacingIssueIndices}
+                spacingAlert={spacingAlert}
+                onCheckSpacingRules={checkSpacingRules}
+                showCheckRules
                 compareSection={
                   <CompareIssuesPanel
                     embedded

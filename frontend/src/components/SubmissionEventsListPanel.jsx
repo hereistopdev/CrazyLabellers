@@ -30,6 +30,10 @@ export default function SubmissionEventsListPanel({
   compareSection = null,
   discussionSection = null,
   asideHeight = null,
+  spacingIssueIndices = null,
+  spacingAlert = null,
+  onCheckSpacingRules = null,
+  showCheckRules = false,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const searchActive = Boolean(normalizeEventSearchText(searchQuery));
@@ -53,6 +57,7 @@ export default function SubmissionEventsListPanel({
   );
 
   const currentFrame = getFrameNumber(currentTime, fps);
+  const spacingIssues = spacingIssueIndices instanceof Set ? spacingIssueIndices : null;
 
   return (
     <div
@@ -84,6 +89,8 @@ export default function SubmissionEventsListPanel({
 
           <h3>Events ({events.length})</h3>
 
+          {spacingAlert}
+
           <div className="events-list events-list--labeling review-events-list">
             {events.length === 0 ? (
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No submission events</p>
@@ -98,6 +105,7 @@ export default function SubmissionEventsListPanel({
                 const isSelected = selectedIndex === index;
                 const validationStatus = row?.validation?.status || 'pending';
                 const comparisonStatus = row?.comparisonStatus;
+                const hasSpacingError = spacingIssues?.has(index);
 
                 return (
                   <div
@@ -109,6 +117,7 @@ export default function SubmissionEventsListPanel({
                       isSelected ? 'selected' : '',
                       event.needsDiscussion ? 'needs-discussion' : '',
                       searchActive ? 'event-search-match' : '',
+                      hasSpacingError ? 'spacing-error' : '',
                       !previewMode ? `validation-${validationStatus}` : '',
                     ]
                       .filter(Boolean)
@@ -121,6 +130,7 @@ export default function SubmissionEventsListPanel({
                         isActive ? 'active' : '',
                         isSelected ? 'selected' : '',
                         event.needsDiscussion ? 'needs-discussion' : '',
+                        hasSpacingError ? 'spacing-error' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
@@ -166,6 +176,21 @@ export default function SubmissionEventsListPanel({
           ) : null}
         </div>
       </div>
+
+      {showCheckRules && onCheckSpacingRules && (
+        <div className="events-panel-footer">
+          <div className="actions-row">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onCheckSpacingRules}
+              disabled={events.length === 0}
+            >
+              Check rules
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

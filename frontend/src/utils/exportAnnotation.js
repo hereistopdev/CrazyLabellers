@@ -32,9 +32,31 @@ export function exportAnnotation(events, { gameTime = '1 - 00:00', variant = 'po
   };
 }
 
-export function getExportFilename(clipId, variant) {
-  const safe = String(clipId || 'practice').replace(/[^\w.-]+/g, '_');
+export function getExportFilename(basename, variant) {
+  const safe = String(basename || 'export')
+    .trim()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\w.-]+/g, '_');
   return variant === 'post' ? `${safe}_post.json` : `${safe}.json`;
+}
+
+export function getReferenceExportFilename(basename, variant) {
+  const safe = String(basename || 'export')
+    .trim()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\w.-]+/g, '_');
+  return variant === 'post' ? `${safe}_reference_post.json` : `${safe}_reference.json`;
+}
+
+export function resolveExportBasename({ title, clipId } = {}) {
+  for (const value of [title, clipId]) {
+    const safe = String(value || '')
+      .trim()
+      .replace(/\.[^.]+$/, '')
+      .replace(/[^\w.-]+/g, '_');
+    if (safe && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(safe)) return safe;
+  }
+  return null;
 }
 
 export function downloadAnnotationExport(events, { clipId, variant = 'post', fps = FPS } = {}) {

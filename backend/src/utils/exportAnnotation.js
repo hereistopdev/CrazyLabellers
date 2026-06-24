@@ -1,4 +1,4 @@
-const { isSafeClipId } = require('./clipId');
+const { isSafeClipId, sanitizeClipId } = require('./clipId');
 
 // Legacy alias kept for existing imports.
 const CLIP_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
@@ -40,11 +40,26 @@ function exportAnnotation(events, { gameTime = '1 - 00:00', variant = 'post' } =
   };
 }
 
-function getExportFilename(clipId, variant) {
-  if (!isValidClipId(clipId)) {
-    throw new Error('Invalid clip ID');
+function resolveExportBasename({ title, clipId } = {}) {
+  for (const value of [title, clipId]) {
+    const stem = sanitizeClipId(value);
+    if (stem && isSafeClipId(stem)) return stem;
   }
-  return variant === 'post' ? `${clipId}_post.json` : `${clipId}.json`;
+  return null;
 }
 
-module.exports = { exportAnnotation, getExportFilename, CLIP_ID_PATTERN, isValidClipId };
+function getExportFilename(basename, variant) {
+  const stem = sanitizeClipId(basename) || String(basename || '').trim();
+  if (!isValidClipId(stem)) {
+    throw new Error('Invalid export name');
+  }
+  return variant === 'post' ? `${stem}_post.json` : `${stem}.json`;
+}
+
+module.exports = {
+  exportAnnotation,
+  getExportFilename,
+  resolveExportBasename,
+  CLIP_ID_PATTERN,
+  isValidClipId,
+};

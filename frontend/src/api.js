@@ -1,3 +1,5 @@
+import { getExportFilename, getReferenceExportFilename } from './utils/exportAnnotation';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 function getToken() {
@@ -41,6 +43,27 @@ async function request(path, options = {}) {
   return data;
 }
 
+function parseDownloadFilename(disposition, fallbackFilename) {
+  if (!disposition) return fallbackFilename;
+
+  const quoted = disposition.match(/filename="([^"]+)"/i);
+  if (quoted?.[1]) return quoted[1];
+
+  const unquoted = disposition.match(/filename=([^;]+)/i);
+  if (unquoted?.[1]) return unquoted[1].trim().replace(/^["']|["']$/g, '');
+
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encoded?.[1]) {
+    try {
+      return decodeURIComponent(encoded[1]);
+    } catch {
+      return encoded[1];
+    }
+  }
+
+  return fallbackFilename;
+}
+
 async function downloadRequest(path, fallbackFilename) {
   const headers = {};
   const token = getToken();
@@ -55,9 +78,10 @@ async function downloadRequest(path, fallbackFilename) {
   }
 
   const blob = await response.blob();
-  const disposition = response.headers.get('Content-Disposition') || '';
-  const match = disposition.match(/filename="([^"]+)"/);
-  const filename = match?.[1] || fallbackFilename;
+  const filename = parseDownloadFilename(
+    response.headers.get('Content-Disposition') || '',
+    fallbackFilename
+  );
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -155,17 +179,26 @@ export const api = {
     request(`/assignments/${id}/labels`, { method: 'PUT', body: JSON.stringify(body) }),
   resetLabelsFromReference: (id) =>
     request(`/assignments/${id}/labels/reset-from-reference`, { method: 'POST' }),
-  exportLabels: (id, variant = 'post') =>
-    downloadRequest(`/assignments/${id}/export?variant=${variant}`, `labels_${variant}.json`),
-  exportReviewSubmission: (id, variant = 'post') =>
-    downloadRequest(`/review/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
-  exportReviewReference: (id, variant = 'post') =>
+  exportLabels: (id, variant = 'post', exportName) =>
+    downloadRequest(
+      `/assignments/${id}/export?variant=${variant}`,
+      exportName ? getExportFilename(exportName, variant) : `labels_${variant}.json`
+    ),
+  exportReviewSubmission: (id, variant = 'post', exportName) =>
+    downloadRequest(
+      `/review/submissions/${id}/export?variant=${variant}`,
+      exportName ? getExportFilename(exportName, variant) : `labels_${variant}.json`
+    ),
+  exportReviewReference: (id, variant = 'post', exportName) =>
     downloadRequest(
       `/review/submissions/${id}/reference-export?variant=${variant}`,
-      `reference_${variant}.json`
+      exportName ? getReferenceExportFilename(exportName, variant) : `reference_${variant}.json`
     ),
-  exportSubmission: (id, variant = 'post') =>
-    downloadRequest(`/review/submissions/${id}/export?variant=${variant}`, `labels_${variant}.json`),
+  exportSubmission: (id, variant = 'post', exportName) =>
+    downloadRequest(
+      `/review/submissions/${id}/export?variant=${variant}`,
+      exportName ? getExportFilename(exportName, variant) : `labels_${variant}.json`
+    ),
   getAdminStats: () => request('/admin/stats'),
   createLabeller: (body) =>
     request('/admin/labellers', { method: 'POST', body: JSON.stringify(body) }),

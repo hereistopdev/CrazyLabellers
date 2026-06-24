@@ -1,6 +1,6 @@
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
-const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
+const { exportAnnotation, getExportFilename, resolveExportBasename } = require('../utils/exportAnnotation');
 
 async function buildSubmissionExport(submissionId, variant = 'post') {
   const submission = await LabelSubmission.findById(submissionId);
@@ -11,8 +11,9 @@ async function buildSubmissionExport(submissionId, variant = 'post') {
   }
 
   const assignment = await VideoAssignment.findById(submission.assignmentId);
-  if (!assignment?.clipId) {
-    const error = new Error('Assignment has no clipId for export');
+  const exportBasename = resolveExportBasename(assignment);
+  if (!exportBasename) {
+    const error = new Error('Assignment has no title or clip ID for export');
     error.status = 400;
     throw error;
   }
@@ -22,7 +23,7 @@ async function buildSubmissionExport(submissionId, variant = 'post') {
     gameTime: assignment.gameTime || '1 - 00:00',
     variant: exportVariant,
   });
-  const filename = getExportFilename(assignment.clipId, exportVariant);
+  const filename = getExportFilename(exportBasename, exportVariant);
 
   return { payload, filename, submission, assignment };
 }

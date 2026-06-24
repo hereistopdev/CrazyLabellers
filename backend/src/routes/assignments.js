@@ -305,10 +305,6 @@ router.get('/:id/export', auth, async (req, res) => {
       return res.status(403).json({ message: 'You are not assigned to this video' });
     }
 
-    if (!assignment.clipId) {
-      return res.status(400).json({ message: 'Assignment has no clipId for export' });
-    }
-
     const filter = { assignmentId: req.params.id };
     if (isLabeller(req.user)) {
       filter.userId = req.user._id;
@@ -319,13 +315,18 @@ router.get('/:id/export', auth, async (req, res) => {
       return res.status(404).json({ message: 'No labels found' });
     }
 
-    const { exportAnnotation, getExportFilename } = require('../utils/exportAnnotation');
+    const { exportAnnotation, getExportFilename, resolveExportBasename } = require('../utils/exportAnnotation');
+    const exportBasename = resolveExportBasename(assignment);
+    if (!exportBasename) {
+      return res.status(400).json({ message: 'Assignment has no title or clip ID for export' });
+    }
+
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
     const payload = exportAnnotation(submission.events, {
       gameTime: assignment.gameTime || '1 - 00:00',
       variant,
     });
-    const filename = getExportFilename(assignment.clipId, variant);
+    const filename = getExportFilename(exportBasename, variant);
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

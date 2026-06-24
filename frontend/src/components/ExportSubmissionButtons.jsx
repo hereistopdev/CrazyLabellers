@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { api } from '../api';
+import { getExportFilename, getReferenceExportFilename } from '../utils/exportAnnotation';
 
 export default function ExportSubmissionButtons({
   submissionId,
+  exportName,
   clipId,
   hasReference = false,
   compact = false,
@@ -11,7 +13,8 @@ export default function ExportSubmissionButtons({
   const [exporting, setExporting] = useState(null);
   const [error, setError] = useState('');
 
-  if (!submissionId || !clipId) return null;
+  const basename = exportName || clipId;
+  if (!submissionId || !basename) return null;
 
   const handleExport = async (kind, variant, event) => {
     event?.stopPropagation?.();
@@ -21,9 +24,9 @@ export default function ExportSubmissionButtons({
     setError('');
     try {
       if (kind === 'reference') {
-        await api.exportReviewReference(submissionId, variant);
+        await api.exportReviewReference(submissionId, variant, basename);
       } else {
-        await api.exportReviewSubmission(submissionId, variant);
+        await api.exportReviewSubmission(submissionId, variant, basename);
       }
     } catch (err) {
       setError(err.message);
@@ -42,7 +45,7 @@ export default function ExportSubmissionButtons({
           type="button"
           className="btn btn-secondary btn-sm"
           disabled={Boolean(exporting)}
-          title={`Download labeller ${clipId}_post.json`}
+          title={`Download ${getExportFilename(basename, 'post')}`}
           onClick={(e) => handleExport('labeller', 'post', e)}
         >
           {compact ? 'L: Post' : isBusy('labeller', 'post') ? '…' : 'Labeller _post.json'}
@@ -51,7 +54,7 @@ export default function ExportSubmissionButtons({
           type="button"
           className="btn btn-secondary btn-sm"
           disabled={Boolean(exporting)}
-          title={`Download labeller ${clipId}.json`}
+          title={`Download ${getExportFilename(basename, 'raw')}`}
           onClick={(e) => handleExport('labeller', 'raw', e)}
         >
           {compact ? 'L: Raw' : isBusy('labeller', 'raw') ? '…' : 'Labeller .json'}
@@ -64,7 +67,7 @@ export default function ExportSubmissionButtons({
             type="button"
             className="btn btn-secondary btn-sm"
             disabled={Boolean(exporting)}
-            title={`Download reference ${clipId}_post.json`}
+            title={`Download ${getReferenceExportFilename(basename, 'post')}`}
             onClick={(e) => handleExport('reference', 'post', e)}
           >
             {compact ? 'Ref: Post' : isBusy('reference', 'post') ? '…' : 'Reference _post.json'}
@@ -73,7 +76,7 @@ export default function ExportSubmissionButtons({
             type="button"
             className="btn btn-secondary btn-sm"
             disabled={Boolean(exporting)}
-            title={`Download reference ${clipId}.json`}
+            title={`Download ${getReferenceExportFilename(basename, 'raw')}`}
             onClick={(e) => handleExport('reference', 'raw', e)}
           >
             {compact ? 'Ref: Raw' : isBusy('reference', 'raw') ? '…' : 'Reference .json'}
