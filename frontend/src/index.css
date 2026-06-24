@@ -980,6 +980,42 @@ body.nav-open {
 
 .labeling-layout.video-workspace-row.has-workspace-aside {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-rows: auto auto;
+}
+
+.labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-display {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.labeling-layout.video-workspace-row.has-workspace-aside > .events-panel--labeling {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-chrome {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.video-workspace-display {
+  min-width: 0;
+  min-height: 0;
+}
+
+.video-panel--display {
+  display: flex;
+  flex-direction: column;
+}
+
+.video-workspace-chrome {
+  min-width: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .video-workspace-row {
@@ -1109,6 +1145,23 @@ body.nav-open {
   .labeling-layout.video-workspace-row.has-workspace-aside,
   .video-workspace-row.has-workspace-aside {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-display {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .labeling-layout.video-workspace-row.has-workspace-aside > .events-panel--labeling {
+    grid-column: 1;
+    grid-row: 2;
+    max-height: min(420px, 50vh);
+  }
+
+  .labeling-layout.video-workspace-row.has-workspace-aside > .video-workspace-chrome {
+    grid-column: 1;
+    grid-row: 3;
   }
 
   .video-workspace-aside {
@@ -1513,6 +1566,7 @@ body.nav-open {
   top: auto;
   align-self: stretch;
   max-height: none;
+  height: 100%;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -1634,10 +1688,13 @@ body.nav-open {
 }
 
 .events-panel-scroll {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.85rem 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .events-panel-scroll.video-workspace-aside-events {
@@ -1646,6 +1703,11 @@ body.nav-open {
 
 .events-panel-scroll h3 {
   margin-bottom: 0.65rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-card);
+  padding-bottom: 0.35rem;
 }
 
 .events-panel-footer {
@@ -1661,6 +1723,12 @@ body.nav-open {
 
 .events-list--labeling {
   max-height: none;
+  overflow: visible;
+}
+
+.events-panel--labeling .events-list {
+  max-height: none;
+  overflow: visible;
 }
 
 .events-panel--labeling .reference-events-panel {

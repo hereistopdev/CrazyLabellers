@@ -979,6 +979,78 @@ export default function Labeling() {
         .filter(({ ev }) => matchesEventSearch(eventSearchQuery, ev.eventType))
     : events.map((ev, i) => ({ ev, i }));
 
+  const videoChrome = (
+    <>
+      <div className="video-controls">
+        <div className="video-controls-row">
+          <span className="time-display">{formatTime(currentTime)}</span>
+          <span className="frame-display">Frame {currentFrame}</span>
+          <input
+            type="range"
+            className="frame-slider"
+            min={0}
+            max={maxTime}
+            step={frameDuration}
+            value={currentTime}
+            onChange={(e) => handleScrub(parseFloat(e.target.value))}
+          />
+        </div>
+        <div className="video-controls-row playback-controls">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-5)}>
+            −5 frames
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-1)}>
+            −1 frame
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm${playMode === 'normal' ? ' btn-primary' : ' btn-secondary'}`}
+            onClick={togglePlayPause}
+          >
+            {playMode === 'normal' ? 'Pause' : 'Play'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(1)}>
+            +1 frame
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(5)}>
+            +5 frames
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm${playMode === 'frame-auto' ? ' btn-primary' : ' btn-secondary'}`}
+            onClick={toggleFrameAutoPlay}
+          >
+            {playMode === 'frame-auto' ? 'Stop frame play' : 'Frame play'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={pauseAll}>
+            Stop
+          </button>
+        </div>
+      </div>
+
+      {showReference && (
+        <ReviewTimeline
+          currentTime={currentTime}
+          maxTime={maxTime}
+          fps={fps}
+          submissionEvents={events}
+          referenceEvents={referenceEvents}
+          labellerName={labellerMode && !adminMode ? 'Your labels' : 'Draft labels'}
+          hasReference
+          previewMode
+          onSeek={handleScrub}
+          canEditSubmission={canAdjustEvents}
+          onChangeSubmissionEventType={openChangeEventPicker}
+          onDeleteSubmissionEvent={deleteSelectedEvent}
+          onNudgeSubmissionEvent={nudgeEventAtFrame}
+          selectedSubmissionIndex={selectedEventIndex}
+          onSelectSubmissionEvent={setSelectedEventIndex}
+          saving={saving}
+        />
+      )}
+    </>
+  );
+
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) {
     return (
@@ -1109,8 +1181,8 @@ export default function Labeling() {
         </aside>
 
         <div className={`labeling-layout video-workspace-row${!isTutorial ? ' has-workspace-aside' : ''}${isTutorial ? ' labeling-layout--tutorial' : ''}`}>
-        <div className="video-workspace-main">
-        <div className="video-panel">
+        <div className={isTutorial ? 'video-workspace-main' : 'video-workspace-display'}>
+        <div className={`video-panel${!isTutorial ? ' video-panel--display' : ''}`}>
           <FrameMagnifier
             videoRef={videoRef}
             currentTime={currentTime}
@@ -1141,73 +1213,7 @@ export default function Labeling() {
               />
             )}
           </FrameMagnifier>
-          <div className="video-controls">
-            <div className="video-controls-row">
-              <span className="time-display">{formatTime(currentTime)}</span>
-              <span className="frame-display">Frame {currentFrame}</span>
-              <input
-                type="range"
-                className="frame-slider"
-                min={0}
-                max={maxTime}
-                step={frameDuration}
-                value={currentTime}
-                onChange={(e) => handleScrub(parseFloat(e.target.value))}
-              />
-            </div>
-            <div className="video-controls-row playback-controls">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-5)}>
-                −5 frames
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(-1)}>
-                −1 frame
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm${playMode === 'normal' ? ' btn-primary' : ' btn-secondary'}`}
-                onClick={togglePlayPause}
-              >
-                {playMode === 'normal' ? 'Pause' : 'Play'}
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(1)}>
-                +1 frame
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepFrames(5)}>
-                +5 frames
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm${playMode === 'frame-auto' ? ' btn-primary' : ' btn-secondary'}`}
-                onClick={toggleFrameAutoPlay}
-              >
-                {playMode === 'frame-auto' ? 'Stop frame play' : 'Frame play'}
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={pauseAll}>
-                Stop
-              </button>
-            </div>
-          </div>
-
-          {showReference && (
-            <ReviewTimeline
-              currentTime={currentTime}
-              maxTime={maxTime}
-              fps={fps}
-              submissionEvents={events}
-              referenceEvents={referenceEvents}
-              labellerName={labellerMode && !adminMode ? 'Your labels' : 'Draft labels'}
-              hasReference
-              previewMode
-              onSeek={handleScrub}
-              canEditSubmission={canAdjustEvents}
-              onChangeSubmissionEventType={openChangeEventPicker}
-              onDeleteSubmissionEvent={deleteSelectedEvent}
-              onNudgeSubmissionEvent={nudgeEventAtFrame}
-              selectedSubmissionIndex={selectedEventIndex}
-              onSelectSubmissionEvent={setSelectedEventIndex}
-              saving={saving}
-            />
-          )}
+          {isTutorial && videoChrome}
         </div>
         </div>
 
@@ -1524,6 +1530,10 @@ export default function Labeling() {
             </div>
           </div>
         </div>
+        )}
+
+        {!isTutorial && (
+          <div className="video-workspace-chrome">{videoChrome}</div>
         )}
         </div>
       </div>
