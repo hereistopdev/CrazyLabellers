@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { isAdmin, isLabeller } from '../utils/roles';
@@ -40,6 +40,10 @@ import {
   getEventPairTimingRuleSummary,
 } from '../utils/eventSpacingValidation';
 import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearch';
+import { canUseLabeler } from '../utils/labelerAccess';
+import { extractClipIdFromVideoUrl, isOpenableVideoUrl } from '../utils/videoUrl';
+import { loadPracticeLabels, savePracticeLabels, clearPracticeLabels } from '../utils/practiceLabelStorage';
+import { downloadAnnotationExport } from '../utils/exportAnnotation';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -49,10 +53,13 @@ function formatTime(seconds, fps = FPS) {
 
 export default function Labeling() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const adminMode = isAdmin(user);
   const labellerMode = isLabeller(user);
+  const isPracticeMode = id === 'practice';
+  const practiceVideoUrl = isPracticeMode ? searchParams.get('url')?.trim() || '' : '';
   const videoRef = useRef(null);
   const frameAutoTimerRef = useRef(null);
   const activeEventRef = useRef(null);
@@ -97,6 +104,66 @@ export default function Labeling() {
       setError('');
       setAssignment(null);
       setEvents([]);
+
+      if (isPracticeMode) {
+        if (!user) {
+          if (!cancelled) {
+            setError('Log in to practice label videos');
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!canUseLabeler(user)) {
+          if (!cancelled) {
+            setError('Labeller access required for practice labeling');
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!practiceVideoUrl) {
+          if (!cancelled) {
+            setError('Missing video URL — paste a link from Assignments');
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!isOpenableVideoUrl(practiceVideoUrl)) {
+          if (!cancelled) {
+            setError('Invalid video URL');
+            setLoading(false);
+          }
+          return;
+        }
+
+        try {
+          const clipId = extractClipIdFromVideoUrl(practiceVideoUrl);
+          const saved = loadPracticeLabels(practiceVideoUrl);
+          const [types] = await Promise.all([api.getEvents()]);
+          if (cancelled) return;
+
+          setAssignment({
+            kind: 'practice',
+            title: clipId ? `Practice — ${clipId}` : 'Practice labeling',
+            description:
+              'Free practice — labels stay in your browser only and are not submitted for review.',
+            videoUrl: practiceVideoUrl,
+            clipId: clipId || undefined,
+            fps: FPS,
+            durationSeconds: 30,
+          });
+          setEventTypes(types);
+          setEvents(saved.events || []);
+          setSubmissionStatus('draft');
+        } catch (err) {
+          if (!cancelled) setError(err.message);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+        return;
+      }
 
       try {
         let assign;
@@ -154,7 +221,7 @@ export default function Labeling() {
     return () => {
       cancelled = true;
     };
-  }, [id, labellerMode, navigate]);
+  }, [id, labellerMode, navigate, isPracticeMode, practiceVideoUrl, user]);
 
   useEffect(() => {
     if (!labellerMode || assignment?.kind !== 'tutorial') {
@@ -172,7 +239,7 @@ export default function Labeling() {
   }, [id, labellerMode, assignment?.kind]);
 
   useEffect(() => {
-    if (!id) {
+    if (isPracticeMode || !id) {
       setReference(null);
       return;
     }
@@ -314,6 +381,40 @@ export default function Labeling() {
     setShowEventPicker(true);
   }, [pauseAll]);
 
+  const reportSpacingValidationFailure = useCallback(
+    (validation, summaryMessage) => {
+      setSpacingIssueIndices(new Set(validation.affectedIndices));
+      pushToast(summaryMessage, { type: 'error', duration: 5000 });
+      for (const issue of validation.issues) {
+        pushToast(issue.message, { type: 'error', duration: 6500 });
+      }
+    },
+    [pushToast]
+  );
+
+  const persistEvents = useCallback(
+    async (newEvents, toastMessage) => {
+      if (isPracticeMode) {
+        savePracticeLabels(practiceVideoUrl, newEvents);
+        if (toastMessage) pushToast(toastMessage);
+        return;
+      }
+      await api.saveLabels(id, { events: newEvents, status: 'draft' });
+      if (toastMessage) pushToast(toastMessage);
+    },
+    [isPracticeMode, practiceVideoUrl, id, pushToast]
+  );
+
+  const checkSpacingRules = useCallback(() => {
+    const spacing = validateEventSpacing(events, fps);
+    if (spacing.valid) {
+      setSpacingIssueIndices(new Set());
+      pushToast('All event spacing rules pass');
+      return;
+    }
+    reportSpacingValidationFailure(spacing, 'Spacing violations found — fix before exporting');
+  }, [events, fps, pushToast, reportSpacingValidationFailure]);
+
   const markEvent = useCallback(
     async (eventType) => {
       pauseAll();
@@ -348,15 +449,15 @@ export default function Labeling() {
       setError('');
 
       try {
-        await api.saveLabels(id, { events: newEvents, status: 'draft' });
-        pushToast(
+        await persistEvents(
+          newEvents,
           `Marked ${eventType} at ${formatTime(adjustedTime, fps)} (${formatOffset(offset)} frames) — saved`
         );
       } catch (err) {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [pauseAll, currentTime, lastEvent, events, id, fps, pushToast]
+    [pauseAll, currentTime, lastEvent, events, fps, pushToast, persistEvents]
   );
 
   const resolveSelectedEventIndex = useCallback(() => {
@@ -409,18 +510,17 @@ export default function Labeling() {
       setEditEventIndex(null);
 
       try {
-        await api.saveLabels(id, { events: newEvents, status: 'draft' });
+        await persistEvents(newEvents, `Changed to ${eventType} at ${formatTime(adjustedTime, fps)} — saved`);
         const nextIndex = newEvents.findIndex(
           (event) =>
             event.eventType === eventType && getFrameNumber(event.frameTime, fps) === getFrameNumber(adjustedTime, fps)
         );
         if (nextIndex >= 0) setSelectedEventIndex(nextIndex);
-        pushToast(`Changed to ${eventType} at ${formatTime(adjustedTime, fps)} — saved`);
       } catch (err) {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [editEventIndex, events, fps, id, pauseAll, pushToast]
+    [editEventIndex, events, fps, pauseAll, pushToast, persistEvents]
   );
 
   const openChangeEventPicker = useCallback(
@@ -444,13 +544,12 @@ export default function Labeling() {
       setEvents(newEvents);
       setSelectedEventIndex(null);
       try {
-        await api.saveLabels(id, { events: newEvents, status: 'draft' });
-        pushToast('Event removed — saved');
+        await persistEvents(newEvents, 'Event removed — saved');
       } catch (err) {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [events, id, pushToast, resolveSelectedEventIndex]
+    [events, pushToast, resolveSelectedEventIndex, persistEvents]
   );
 
   const handleEventPickerSelect = useCallback(
@@ -473,19 +572,16 @@ export default function Labeling() {
     [pauseAll, seekTo]
   );
 
-  const reportSpacingValidationFailure = useCallback(
-    (validation, summaryMessage) => {
-      setSpacingIssueIndices(new Set(validation.affectedIndices));
-      pushToast(summaryMessage, { type: 'error', duration: 5000 });
-      for (const issue of validation.issues) {
-        pushToast(issue.message, { type: 'error', duration: 6500 });
-      }
-    },
-    [pushToast]
-  );
-
   const save = useCallback(
     async (status = 'draft') => {
+      if (isPracticeMode) {
+        if (status === 'submitted') return;
+        savePracticeLabels(practiceVideoUrl, events);
+        setSpacingIssueIndices(new Set());
+        pushToast('Practice labels saved in your browser');
+        return;
+      }
+
       if (
         status === 'submitted' &&
         labellerMode &&
@@ -565,6 +661,8 @@ export default function Labeling() {
       navigate,
       pushToast,
       reportSpacingValidationFailure,
+      isPracticeMode,
+      practiceVideoUrl,
     ]
   );
 
@@ -592,8 +690,7 @@ export default function Labeling() {
     const newEvents = events.filter((_, i) => i !== index);
     setEvents(newEvents);
     try {
-      await api.saveLabels(id, { events: newEvents, status: 'draft' });
-      pushToast('Event removed — saved');
+      await persistEvents(newEvents, 'Event removed — saved');
     } catch (err) {
       pushToast(err.message, { type: 'error', duration: 4000 });
     }
@@ -616,15 +713,15 @@ export default function Labeling() {
 
     setEvents(newEvents);
     try {
-      await api.saveLabels(id, { events: newEvents, status: 'draft' });
+      await persistEvents(
+        newEvents,
+        flagged ? 'Event flagged for discussion — saved' : 'Discussion flag removed — saved'
+      );
       if (flagged) {
         discussionNotesRef.current[index] = newEvents[index].notes || '';
       } else {
         delete discussionNotesRef.current[index];
       }
-      pushToast(
-        flagged ? 'Event flagged for discussion — saved' : 'Discussion flag removed — saved'
-      );
     } catch (err) {
       pushToast(err.message, { type: 'error', duration: 4000 });
     }
@@ -644,9 +741,8 @@ export default function Labeling() {
     if (next === prev) return;
 
     try {
-      await api.saveLabels(id, { events: snapshot, status: 'draft' });
+      await persistEvents(snapshot, 'Discussion note saved');
       discussionNotesRef.current[index] = next;
-      pushToast('Discussion note saved');
     } catch (err) {
       pushToast(err.message, { type: 'error', duration: 4000 });
     }
@@ -669,15 +765,15 @@ export default function Labeling() {
       seekTo(newFrameTime);
 
       try {
-        await api.saveLabels(id, { events: newEvents, status: 'draft' });
-        pushToast(
+        await persistEvents(
+          newEvents,
           `Moved ${target.eventType} to frame ${getFrameNumber(newFrameTime, fps)} — saved`
         );
       } catch (err) {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [events, fps, id, pauseAll, seekTo, pushToast]
+    [events, fps, pauseAll, seekTo, pushToast, persistEvents]
   );
 
   const nudgeEventAtFrame = useCallback(
@@ -794,6 +890,23 @@ export default function Labeling() {
   ]);
 
   const handleExport = async (variant) => {
+    if (isPracticeMode) {
+      const spacing = validateEventSpacing(events, fps);
+      if (!spacing.valid) {
+        reportSpacingValidationFailure(
+          spacing,
+          'Fix spacing violations before exporting practice labels'
+        );
+        return;
+      }
+      downloadAnnotationExport(events, {
+        clipId: assignment?.clipId || 'practice',
+        variant,
+        fps,
+      });
+      pushToast(`Downloaded ${variant === 'post' ? '_post.json' : '.json'}`);
+      return;
+    }
     try {
       await api.exportLabels(id, variant);
     } catch (err) {
@@ -835,6 +948,7 @@ export default function Labeling() {
   };
 
   const isTutorial = assignment?.kind === 'tutorial';
+  const isPractice = isPracticeMode || assignment?.kind === 'practice';
   const tutorialLabellerMode = labellerMode && isTutorial;
   const showTutorialEditor = adminMode && isTutorial;
   const showTutorialGuide = tutorialLabellerMode;
@@ -870,8 +984,8 @@ export default function Labeling() {
       <div>
         <div className="alert alert-error">{error}</div>
         {labellerMode && (
-          <Link to="/tutorials" className="btn btn-secondary btn-sm">
-            Back to tutorials
+          <Link to={isPracticeMode ? '/assignments' : '/tutorials'} className="btn btn-secondary btn-sm">
+            Back to {isPracticeMode ? 'assignments' : 'tutorials'}
           </Link>
         )}
       </div>
@@ -880,7 +994,9 @@ export default function Labeling() {
 
   const backTo = adminMode
     ? '/admin/videos'
-    : isTutorial
+    : isPractice
+      ? '/assignments'
+      : isTutorial
       ? '/tutorials'
       : assignment?.kind === 'pretest'
         ? '/labeling-test'
@@ -888,7 +1004,9 @@ export default function Labeling() {
 
   const backLabel = adminMode
     ? 'videos'
-    : isTutorial
+    : isPractice
+      ? 'assignments'
+      : isTutorial
       ? 'tutorials'
       : assignment?.kind === 'pretest'
         ? 'labeling test'
@@ -946,6 +1064,13 @@ export default function Labeling() {
             <>
               {' '}
               · <strong>Pre-test</strong> — submit to see your auto score vs reference (free practice).
+            </>
+          )}
+          {isPractice && (
+            <>
+              {' '}
+              · <strong>Free practice</strong> — labels are saved in your browser only; export JSON when
+              done. No submission or admin approval required.
             </>
           )}
         </p>
@@ -1329,13 +1454,13 @@ export default function Labeling() {
 
           <div className="events-panel-footer">
             <div className="actions-row">
-              {assignment?.clipId && (
+              {(assignment?.clipId || isPractice) && (
                 <>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => handleExport('post')}
-                    title={`Download ${assignment.clipId}_post.json`}
+                    title={`Download ${assignment?.clipId || 'practice'}_post.json`}
                   >
                     Export _post.json
                   </button>
@@ -1343,16 +1468,42 @@ export default function Labeling() {
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => handleExport('raw')}
-                    title={`Download ${assignment.clipId}.json`}
+                    title={`Download ${assignment?.clipId || 'practice'}.json`}
                   >
                     Export .json
                   </button>
                 </>
               )}
+              {isPractice && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={checkSpacingRules}
+                    disabled={events.length === 0}
+                  >
+                    Check spacing rules
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      if (!window.confirm('Clear all practice labels for this video?')) return;
+                      clearPracticeLabels(practiceVideoUrl);
+                      setEvents([]);
+                      setSpacingIssueIndices(new Set());
+                      pushToast('Practice labels cleared');
+                    }}
+                    disabled={events.length === 0}
+                  >
+                    Clear labels
+                  </button>
+                </>
+              )}
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => save('draft')} disabled={saving || submissionLocked}>
-                Save draft
+                {isPractice ? 'Save locally' : 'Save draft'}
               </button>
-              {labellerMode && canAdjustEvents && (
+              {labellerMode && canAdjustEvents && !isPractice && (
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"

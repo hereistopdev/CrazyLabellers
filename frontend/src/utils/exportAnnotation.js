@@ -1,0 +1,50 @@
+import { FPS } from '../config/frameOffsets';
+import { snapTimeToFrame } from './frameTime';
+
+function toExportLabel(eventType, variant) {
+  const snake = eventType.trim().replace(/\s+/g, '_');
+  return variant === 'post' ? snake.toLowerCase() : snake.toUpperCase();
+}
+
+function getEventTimeSeconds(event, variant) {
+  if (variant === 'post') {
+    return event.frameTime;
+  }
+  return event.playheadTime ?? event.frameTime;
+}
+
+export function exportAnnotation(events, { gameTime = '1 - 00:00', variant = 'post', fps = FPS } = {}) {
+  const sorted = [...(events || [])].sort(
+    (a, b) => getEventTimeSeconds(a, variant) - getEventTimeSeconds(b, variant)
+  );
+
+  return {
+    annotations: sorted.map((event) => {
+      const timeSec = snapTimeToFrame(getEventTimeSeconds(event, variant), fps);
+      return {
+        gameTime,
+        label: toExportLabel(event.eventType, variant),
+        position: String(Math.round(timeSec * 1000)),
+        team: 'not applicable',
+        visibility: 'visible',
+      };
+    }),
+  };
+}
+
+export function getExportFilename(clipId, variant) {
+  const safe = String(clipId || 'practice').replace(/[^\w.-]+/g, '_');
+  return variant === 'post' ? `${safe}_post.json` : `${safe}.json`;
+}
+
+export function downloadAnnotationExport(events, { clipId, variant = 'post', fps = FPS } = {}) {
+  const payload = exportAnnotation(events, { variant, fps });
+  const filename = getExportFilename(clipId, variant);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

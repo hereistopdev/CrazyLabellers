@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import {
+  extractAssignmentIdFromLabelUrl,
+  isOpenableVideoUrl,
+  practiceLabelPath,
+} from '../utils/videoUrl';
 
 export default function OpenVideoByUrl({ onError, onSuccess, className = '' } = {}) {
   const navigate = useNavigate();
@@ -11,19 +15,27 @@ export default function OpenVideoByUrl({ onError, onSuccess, className = '' } = 
     event.preventDefault();
     const trimmed = videoUrl.trim();
     if (!trimmed) {
-      onError?.('Enter a video URL or labeling link');
+      onError?.('Enter a video URL');
+      return;
+    }
+
+    const assignmentId = extractAssignmentIdFromLabelUrl(trimmed);
+    if (assignmentId) {
+      onSuccess?.('Opening task…');
+      navigate(`/label/${assignmentId}`);
+      return;
+    }
+
+    if (!isOpenableVideoUrl(trimmed)) {
+      onError?.('Enter a valid video URL (https://… ending in .mp4 or similar)');
       return;
     }
 
     setOpening(true);
     onError?.('');
     try {
-      const result = await api.resolveAssignmentUrl(trimmed);
-      if (result.needsClaim) {
-        await api.claimAssignment(result.assignmentId);
-      }
-      onSuccess?.(result.assignment?.title || 'Task opened');
-      navigate(`/label/${result.assignmentId}`);
+      onSuccess?.('Opening practice video…');
+      navigate(practiceLabelPath(trimmed));
     } catch (err) {
       onError?.(err.message || 'Could not open that video');
     } finally {
@@ -37,7 +49,7 @@ export default function OpenVideoByUrl({ onError, onSuccess, className = '' } = 
       onSubmit={openVideo}
     >
       <label className="open-video-by-url-label" htmlFor="open-video-url-input">
-        Open task by video URL
+        Open video by URL
       </label>
       <div className="open-video-by-url-row">
         <input
@@ -54,9 +66,8 @@ export default function OpenVideoByUrl({ onError, onSuccess, className = '' } = 
         </button>
       </div>
       <p className="open-video-by-url-hint">
-        Example:{' '}
+        Paste any video URL to practice labeling for free — no task assignment needed. Example:{' '}
         <code>https://scoredata.me/chunks/ce3738c2ab4a4cfa94e1abeb5f411b.mp4</code>
-        — also works with labeling links or local <code>/api/videos/…</code> URLs.
       </p>
     </form>
   );
