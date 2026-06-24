@@ -46,15 +46,17 @@ export default function OpenVideoByUrl({ onError, onSuccess, className = '' } = 
           className="open-video-by-url-input"
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
-          placeholder="Paste video URL or /label/… link"
+          placeholder="https://scoredata.me/chunks/….mp4"
           disabled={opening}
         />
         <button type="submit" className="btn btn-secondary btn-sm" disabled={opening || !videoUrl.trim()}>
-          {opening ? 'Opening…' : 'Open video task to label it.'}
+          {opening ? 'Opening…' : 'Open'}
         </button>
       </div>
       <p className="open-video-by-url-hint">
-        Works with the task video URL, clip file path, or a direct labeling link.
+        Example:{' '}
+        <code>https://scoredata.me/chunks/ce3738c2ab4a4cfa94e1abeb5f411b.mp4</code>
+        — also works with labeling links or local <code>/api/videos/…</code> URLs.
       </p>
     </form>
   );

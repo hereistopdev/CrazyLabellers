@@ -16,12 +16,38 @@ function normalizeUrlInput(input) {
   return String(input || '').trim();
 }
 
+function normalizeUrlForComparison(input) {
+  const trimmed = normalizeUrlInput(input);
+  if (!trimmed) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    return `${parsed.protocol}//${parsed.host.toLowerCase()}${pathname}${parsed.search}`;
+  } catch {
+    return trimmed.replace(/\/+$/, '');
+  }
+}
+
 function extractAssignmentIdFromLabelUrl(input) {
   const match = String(input).match(/\/label\/([a-f0-9]{24})/i);
   return match ? match[1] : null;
 }
 
+function extractChunkFilename(input) {
+  const chunksMatch = String(input).match(/\/chunks\/([^/?#]+)/i);
+  if (chunksMatch) {
+    return decodeURIComponent(chunksMatch[1]);
+  }
+  return null;
+}
+
 function extractClipIdFromVideoUrl(input) {
+  const chunkFilename = extractChunkFilename(input);
+  if (chunkFilename) {
+    return chunkFilename.replace(/\.[^.]+$/i, '');
+  }
+
   const apiMatch = String(input).match(/\/api\/videos\/([^/?#]+)/i);
   if (apiMatch) {
     return decodeURIComponent(apiMatch[1]).replace(/\.[^.]+$/i, '');
@@ -45,6 +71,44 @@ function extractClipIdFromVideoUrl(input) {
   return null;
 }
 
+async function findByVideoUrlLoose(trimmed) {
+  const normalized = normalizeUrlForComparison(trimmed);
+  if (normalized) {
+    const byNormalized = await VideoAssignment.findOne({
+      videoUrl: { $regex: new RegExp(`${escapeRegex(normalized)}$`, 'i') },
+    });
+    if (byNormalized) return byNormalized;
+  }
+
+  const byExactCi = await VideoAssignment.findOne({
+    videoUrl: { $regex: new RegExp(`^${escapeRegex(trimmed)}$`, 'i') },
+  });
+  if (byExactCi) return byExactCi;
+
+  const filename = trimmed.split('/').pop()?.split('?')[0]?.split('#')[0];
+  if (filename) {
+    const byFilename = await VideoAssignment.findOne({
+      videoUrl: { $regex: new RegExp(`${escapeRegex(filename)}$`, 'i') },
+    });
+    if (byFilename) return byFilename;
+  }
+
+  const chunkFilename = extractChunkFilename(trimmed);
+  if (chunkFilename) {
+    const chunkId = chunkFilename.replace(/\.[^.]+$/i, '');
+    const byChunk = await VideoAssignment.findOne({
+      $or: [
+        { videoUrl: { $regex: new RegExp(`/chunks/${escapeRegex(chunkFilename)}$`, 'i') } },
+        { videoUrl: { $regex: new RegExp(`${escapeRegex(chunkId)}`, 'i') } },
+        { clipId: { $regex: new RegExp(`^${escapeRegex(chunkId)}$`, 'i') } },
+      ],
+    });
+    if (byChunk) return byChunk;
+  }
+
+  return null;
+}
+
 async function resolveAssignmentFromUrlInput(input) {
   const trimmed = normalizeUrlInput(input);
   if (!trimmed) return null;
@@ -56,6 +120,9 @@ async function resolveAssignmentFromUrlInput(input) {
 
   const exact = await VideoAssignment.findOne({ videoUrl: trimmed });
   if (exact) return exact;
+
+  const loose = await findByVideoUrlLoose(trimmed);
+  if (loose) return loose;
 
   const clipId = extractClipIdFromVideoUrl(trimmed);
   if (clipId) {
@@ -138,4 +205,6 @@ module.exports = {
   canLabellerOpenAssignment,
   extractAssignmentIdFromLabelUrl,
   extractClipIdFromVideoUrl,
+  extractChunkFilename,
+  normalizeUrlForComparison,
 };
