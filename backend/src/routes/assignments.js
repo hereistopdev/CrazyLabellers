@@ -457,7 +457,8 @@ router.put('/:id/labels', auth, async (req, res) => {
       const spacing = validateEventSpacing(normalizedEvents, assignment.fps);
       if (!spacing.valid) {
         return res.status(400).json({
-          message: 'Fix event spacing before submitting — only one event per frame, with at least one blank frame between events',
+          message:
+            'Fix labeling rules before submitting — one event per frame, blank frame between events, and ≥ 6 even-frame gaps for paired events',
           code: 'EVENT_SPACING_INVALID',
           issues: spacing.issues,
           affectedIndices: spacing.affectedIndices,

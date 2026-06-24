@@ -1,4 +1,9 @@
 import { frameOffsetSummary } from '../config/frameOffsets';
+import {
+  getEventSpacingRuleSummary,
+  getEventPairTimingRuleSummary,
+  getTackleFoulRuleSummary,
+} from '../utils/eventSpacingValidation';
 
 export default function LabelingHelpModal({ open, onClose }) {
   if (!open) return null;
@@ -25,12 +30,19 @@ export default function LabelingHelpModal({ open, onClose }) {
             <kbd>Del</kbd> to remove it.
           </p>
           <p>
-            <strong>Spacing rules:</strong> only one event per frame, with at least one blank frame
-            between any two events. Submit is blocked until these rules are met.
+            <strong>Spacing rules:</strong> {getEventSpacingRuleSummary()} Submit is blocked until
+            these rules are met.
+          </p>
+          <p>
+            <strong>Pair timing:</strong> {getEventPairTimingRuleSummary()}
+          </p>
+          <p>
+            <strong>Tackle / Foul / Referee:</strong> {getTackleFoulRuleSummary()}
           </p>
           <p>
             <strong>Take on / Take on End:</strong> mark Take on when the attacker commits to
-            beating a defender; mark Take on End when the duel is clearly finished.
+            beating a defender; mark Take on End when the duel is clearly finished (≥ 6 even frames
+            apart).
           </p>
           <p>
             <strong>Interception / Interception 2:</strong> Interception for a nearby cut-out attempt;

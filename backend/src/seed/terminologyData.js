@@ -6,7 +6,7 @@ const OFFICIAL_DEFINITIONS = {
   Recovery:
     'A player gains possession after no team has possession of the ball or the ball is directed to them by an opponent. Active attempts to intercept the ball are excluded.',
   Tackle:
-    'A player tries to stop an opposing player from progressing further with the ball or takes possession from an opposing player.',
+    'An opponent challenges a player who has the ball (e.g. after Pass Received or Recovery). Mark Tackle only when the referee does not stop play — include tackle attempts even if possession is not won. When the ball carrier is tackled and the referee stops play, mark Tackle, Foul, and Referee (with required frame spacing).',
   Interception:
     'A player tries to intercept an opposing pass near the intended receiver — the defending player is close to the pass line or receiver when attempting the cut-out.',
   'Interception 2':
@@ -17,7 +17,7 @@ const OFFICIAL_DEFINITIONS = {
   'Take on':
     'Mark when a player in control of the ball is willing to start a take-on — they commit to trying to beat an opponent with the ball. Award to the offensive player performing the take-on.',
   'Take on End':
-    'Mark when the take-on sequence appears finished — the attacker has completed beating (or failing to beat) the defender and the dribbling duel is clearly over.',
+    'Mark when the take-on sequence appears finished — the attacker has completed beating (or failing to beat) the defender and the dribbling duel is clearly over. When paired with Take on, leave ≥ 6 even frames between them.',
   Substitution:
     'Refers to the event when a player enters the match to replace a teammate. This occurs during a stoppage in play.',
   Block: 'A player blocks a shot by an opposing player.',
@@ -27,7 +27,7 @@ const OFFICIAL_DEFINITIONS = {
     'A Shot is an attempt made by a player to score a goal by striking or directing the ball towards the opponent\'s goal.',
   Save: 'When the goalkeeper stops the ball from entering the net after a shot.',
   Foul:
-    'Occurs when a player breaks the laws of the game through unfair play or actions such as tripping, pushing, or handling the ball, resulting in a free kick or penalty for the opposing team. Excluding offside events and advantages. Referee needs to stop play.',
+    'Unfair play (tripping, pushing, handling, etc.) when the referee stops play. Mark Foul with Tackle + Referee when a ball carrier is fouled and play stops. Mark Foul only (without Tackle) when the foul occurs after the pass is already complete and the receiver no longer has the ball. Never mark Foul if the referee allows advantage and play continues.',
   Goal:
     'To be awarded, the ball must pass completely over the goal line in the area between the posts and beneath the crossbar. Always comes with a shot event at the same time.',
   'Highlight Start':
@@ -35,7 +35,7 @@ const OFFICIAL_DEFINITIONS = {
   'Highlight End':
     'Mark when non-main-board footage ends and live match action resumes on the main game board.',
   Referee:
-    'Mark when the referee blows the whistle to confirm a stoppage in play. Pair with Foul (infringement confirmed), Ball Out of Play (restart after the ball left the field), or Goal (goal confirmed). Use at 0 frames on the whistle — not for advantage or offside.',
+    'Mark when the referee blows the whistle to confirm a stoppage in play. Pair with Foul (infringement confirmed), Ball Out of Play (restart after the ball left the field), or Goal (goal confirmed). Use at 0 frames on the whistle — not for advantage or offside. When paired with Foul or Ball Out of Play, leave ≥ 6 even frames between the events.',
   Invalid:
     'Mark when a player receives or throws/kicks the ball to or from someone who is not an on-pitch player — e.g. ball to/from coaching staff, ball boy, or other non-player personnel at the touchline. Pair with Ball Out of Play when the ball leaves the field as part of that exchange.',
 };
@@ -70,8 +70,17 @@ const terminologies = [
     title: 'Tackle',
     order: 4,
     definition: OFFICIAL_DEFINITIONS.Tackle,
-    criteria: ['Opponent had the ball', 'Player stops progress or wins possession from that opponent'],
-    commonMistakes: ['Labeling interception as tackle', 'Labeling a foul as a successful tackle'],
+    criteria: [
+      'Opponent tackles or attempts to tackle a player in possession (after Pass Received or Recovery)',
+      'Tackle only: challenge while play continues — no Referee whistle for that incident',
+      'Tackle + Foul + Referee: same challenge but the referee stops play',
+      'Winning possession is not required — a tackle attempt is enough',
+    ],
+    commonMistakes: [
+      'Marking Foul when only a legal tackle attempt occurred and play continues',
+      'Omitting Tackle when marking Foul on a ball carrier with stoppage',
+      'Labeling interception as tackle',
+    ],
   },
   {
     eventType: 'Interception',
@@ -107,7 +116,7 @@ const terminologies = [
     title: 'Ball Out of Play',
     order: 6,
     definition: OFFICIAL_DEFINITIONS['Ball Out of Play'],
-    criteria: ['Ball has left the field of play', 'Pair with Referee when the whistle confirms the restart'],
+    criteria: ['Ball has left the field of play', 'Pair with Referee when the whistle confirms the restart — gap ≥ 6 even frames'],
     commonMistakes: ['Marking when the player kicks it instead of when it goes out', 'Forgetting Referee when the whistle is shown'],
   },
   {
@@ -142,7 +151,7 @@ const terminologies = [
     criteria: [
       'The take-on sequence is clearly finished',
       'Attacker has completed beating or failing to beat the defender',
-      'Pair with Take on at the start of the same duel when applicable',
+      'Pair with Take on at the start of the same duel — gap ≥ 6 even frames',
     ],
     commonMistakes: [
       'Marking Take on End at the start of the attempt — use Take on',
@@ -200,12 +209,16 @@ const terminologies = [
     order: 14,
     definition: OFFICIAL_DEFINITIONS.Foul,
     criteria: [
-      'Unfair play: tripping, pushing, handling, etc.',
-      'Pair with Referee when the whistle confirms the foul',
-      'Excludes offside and advantage situations',
+      'Referee stops play for unfair play (tripping, pushing, handling, etc.)',
+      'With Tackle + Referee when a ball carrier is fouled and play stops',
+      'Foul only when the passer no longer has possession (pass already done)',
+      'Never mark Foul if the referee plays advantage',
+      'Gap ≥ 6 even frames to paired Tackle (before) and Referee (after)',
     ],
     commonMistakes: [
-      'Marking Referee instead of Foul at the infringement',
+      'Marking Foul when the referee does not stop play (advantage)',
+      'Marking Foul on a ball carrier without Tackle when play stops',
+      'Marking Referee instead of Foul at the infringement frame',
       'Labeling offside as foul',
     ],
   },
@@ -255,6 +268,7 @@ const terminologies = [
       'Referee whistle confirms a stoppage',
       'Pair with Foul, Ball Out of Play, or Goal when the whistle confirms that event',
       'Not used for advantage or offside',
+      'Gap ≥ 6 even frames after Foul or Ball Out of Play when both are marked',
     ],
     commonMistakes: [
       'Marking Referee instead of Foul at the contact frame',

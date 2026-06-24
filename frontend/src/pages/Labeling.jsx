@@ -34,7 +34,11 @@ import {
   formatEventTime,
   nudgeFrameTime,
 } from '../utils/frameTime';
-import { validateEventSpacing, getEventSpacingRuleSummary } from '../utils/eventSpacingValidation';
+import {
+  validateEventSpacing,
+  getEventSpacingRuleSummary,
+  getEventPairTimingRuleSummary,
+} from '../utils/eventSpacingValidation';
 import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearch';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
@@ -854,6 +858,11 @@ export default function Labeling() {
   const discussionEventCount = events.filter((event) => event.needsDiscussion).length;
   const eventSearchActive = Boolean(eventSearchQuery.trim());
   const eventSearchMatchCount = countEventSearchMatches(eventSearchQuery, events);
+  const visibleEventEntries = eventSearchActive
+    ? events
+        .map((ev, i) => ({ ev, i }))
+        .filter(({ ev }) => matchesEventSearch(eventSearchQuery, ev.eventType))
+    : events.map((ev, i) => ({ ev, i }));
 
   if (loading) return <div className="loading">Loading labeler...</div>;
   if (error && !assignment) {
@@ -973,7 +982,8 @@ export default function Labeling() {
           </div>
         </aside>
 
-        <div className={`labeling-layout${isTutorial ? ' labeling-layout--tutorial' : ''}`}>
+        <div className={`labeling-layout video-workspace-row${!isTutorial ? ' has-workspace-aside' : ''}${isTutorial ? ' labeling-layout--tutorial' : ''}`}>
+        <div className="video-workspace-main">
         <div className="video-panel">
           <FrameMagnifier
             videoRef={videoRef}
@@ -1073,6 +1083,7 @@ export default function Labeling() {
             />
           )}
         </div>
+        </div>
 
         {showTutorialEditor && (
           <TutorialEditorPanel
@@ -1121,7 +1132,7 @@ export default function Labeling() {
             )}
           </div>
         ) : (
-        <div className="events-panel events-panel--labeling">
+        <div className="events-panel events-panel--labeling video-workspace-aside">
           <div className="events-panel-fixed">
             {showReference && (
               <ReferenceEventsPanel
@@ -1176,7 +1187,25 @@ export default function Labeling() {
             </section>
           </div>
 
-          <div className="events-panel-scroll">
+          {!tutorialLabellerMode && events.length > 0 && (
+            <div className="events-panel-search video-workspace-aside-section video-workspace-aside-search">
+              <div className="video-workspace-aside-title">Find events</div>
+              <EventSearchInput
+                value={eventSearchQuery}
+                onChange={setEventSearchQuery}
+                matchCount={eventSearchMatchCount}
+                totalCount={events.length}
+              />
+              {eventSearchActive && (
+                <p className="event-search-shortlist-hint">
+                  Showing {eventSearchMatchCount} matching event
+                  {eventSearchMatchCount !== 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="events-panel-scroll video-workspace-aside-events">
             <h3>
               Events ({events.length})
               {discussionEventCount > 0 && (
@@ -1185,14 +1214,6 @@ export default function Labeling() {
                 </span>
               )}
             </h3>
-            {events.length > 0 && (
-              <EventSearchInput
-                value={eventSearchQuery}
-                onChange={setEventSearchQuery}
-                matchCount={eventSearchMatchCount}
-                totalCount={events.length}
-              />
-            )}
             {canAdjustEvents && events.some((ev) => getFrameNumber(ev.frameTime, fps) === currentFrame) && (
               <div className="labeling-event-nudge-panel">
                 <span className="labeling-event-nudge-label">Adjust event on this frame</span>
@@ -1204,28 +1225,30 @@ export default function Labeling() {
             )}
             {spacingIssueIndices.size > 0 && (
               <div className="labeling-spacing-alert" role="alert">
-                <strong>Event spacing rules not met.</strong>{' '}
-                {getEventSpacingRuleSummary()} Fix the highlighted events before submitting.
+                <strong>Labeling rules not met.</strong> {getEventSpacingRuleSummary()}{' '}
+                {getEventPairTimingRuleSummary()} Fix the highlighted events before submitting.
               </div>
             )}
             <div className="events-list events-list--labeling">
               {events.length === 0 ? (
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No events marked yet</p>
+              ) : visibleEventEntries.length === 0 ? (
+                <p className="event-search-empty">
+                  No events match &ldquo;{eventSearchQuery.trim()}&rdquo;
+                </p>
               ) : (
-                events.map((ev, i) => {
+                visibleEventEntries.map(({ ev, i }) => {
                   const isActive = getFrameNumber(ev.frameTime, fps) === currentFrame;
                   const isSelected = selectedEventIndex === i;
                   const hasSpacingError = spacingIssueIndices.has(i);
-                  const isSearchMatch = matchesEventSearch(eventSearchQuery, ev.eventType);
-                  const isSearchDimmed = eventSearchActive && !isSearchMatch;
                   return (
                   <div
                     key={`${ev.eventType}-${ev.frameTime}-${i}`}
                     ref={isActive ? activeEventRef : null}
-                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}${isSearchMatch ? ' event-search-match' : ''}${isSearchDimmed ? ' event-search-dimmed' : ''}`}
+                    className={`event-row-wrap${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}${eventSearchActive ? ' event-search-match' : ''}`}
                   >
                     <div
-                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}${isSearchMatch ? ' event-search-match' : ''}`}
+                      className={`event-row${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}${ev.needsDiscussion ? ' needs-discussion' : ''}${hasSpacingError ? ' spacing-error' : ''}`}
                       onClick={() => selectEvent(i, ev.frameTime)}
                       role="button"
                       tabIndex={0}
@@ -1302,11 +1325,6 @@ export default function Labeling() {
                 })
               )}
             </div>
-            {eventSearchActive && eventSearchMatchCount === 0 && events.length > 0 && (
-              <p className="event-search-empty">
-                No events match &ldquo;{eventSearchQuery.trim()}&rdquo;
-              </p>
-            )}
           </div>
 
           <div className="events-panel-footer">

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FPS } from '../config/frameOffsets';
 import { formatEventTime, getFrameNumber } from '../utils/frameTime';
-import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearch';
+import { countEventSearchMatches, matchesEventSearch, normalizeEventSearchText } from '../utils/eventSearch';
 import EventSearchInput from './EventSearchInput';
 
 function formatTime(seconds, fps = FPS) {
@@ -27,10 +27,11 @@ export default function SubmissionEventsListPanel({
   selectedIndex = null,
   onSelect,
   previewMode = false,
-  className = '',
+  compareSection = null,
+  discussionSection = null,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const searchActive = Boolean(searchQuery.trim());
+  const searchActive = Boolean(normalizeEventSearchText(searchQuery));
 
   const sortedItems = useMemo(
     () =>
@@ -39,6 +40,11 @@ export default function SubmissionEventsListPanel({
         .sort((a, b) => a.event.frameTime - b.event.frameTime || a.index - b.index),
     [events]
   );
+
+  const displayItems = useMemo(() => {
+    if (!searchActive) return sortedItems;
+    return sortedItems.filter(({ event }) => matchesEventSearch(searchQuery, event.eventType));
+  }, [sortedItems, searchQuery, searchActive]);
 
   const matchCount = useMemo(
     () => countEventSearchMatches(searchQuery, events),
@@ -50,89 +56,108 @@ export default function SubmissionEventsListPanel({
   if (!events.length) return null;
 
   return (
-    <aside className={`review-events-sidebar${className ? ` ${className}` : ''}`}>
-      <div className="review-attention-panel review-events-sidebar-panel">
-        <div className="review-attention-title">Events ({events.length})</div>
+    <>
+      <div className="video-workspace-aside-section video-workspace-aside-search">
+        <div className="video-workspace-aside-title">Events ({events.length})</div>
         <EventSearchInput
           value={searchQuery}
           onChange={setSearchQuery}
           matchCount={matchCount}
           totalCount={events.length}
         />
-        <div className="events-list review-events-list">
-          {sortedItems.map(({ event, index }) => {
-            const row = eventRows[index];
-            const isActive = getFrameNumber(event.frameTime, fps) === currentFrame;
-            const isSelected = selectedIndex === index;
-            const isMatch = matchesEventSearch(searchQuery, event.eventType);
-            const dimmed = searchActive && !isMatch;
-            const validationStatus = row?.validation?.status || 'pending';
-            const comparisonStatus = row?.comparisonStatus;
+        {searchActive && (
+          <p className="event-search-shortlist-hint">
+            Showing {matchCount} matching event{matchCount !== 1 ? 's' : ''}
+          </p>
+        )}
+      </div>
 
-            return (
-              <div
-                key={`review-event-${index}-${event.eventType}-${event.frameTime}`}
-                className={[
-                  'event-row-wrap',
-                  'review-event-row-wrap',
-                  isActive ? 'active' : '',
-                  isSelected ? 'selected' : '',
-                  event.needsDiscussion ? 'needs-discussion' : '',
-                  isMatch ? 'event-search-match' : '',
-                  dimmed ? 'event-search-dimmed' : '',
-                  !previewMode ? `validation-${validationStatus}` : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
+      {compareSection ? (
+        <div className="video-workspace-aside-section video-workspace-aside-compare">{compareSection}</div>
+      ) : null}
+
+      <div className="video-workspace-aside-section video-workspace-aside-events">
+        <div className="events-list review-events-list">
+          {displayItems.length === 0 ? (
+            searchActive ? (
+              <p className="event-search-empty">
+                No events match &ldquo;{searchQuery.trim()}&rdquo;
+              </p>
+            ) : null
+          ) : (
+            displayItems.map(({ event, index }) => {
+              const row = eventRows[index];
+              const isActive = getFrameNumber(event.frameTime, fps) === currentFrame;
+              const isSelected = selectedIndex === index;
+              const validationStatus = row?.validation?.status || 'pending';
+              const comparisonStatus = row?.comparisonStatus;
+
+              return (
                 <div
+                  key={`review-event-${index}-${event.eventType}-${event.frameTime}`}
                   className={[
-                    'event-row',
-                    'review-event-row',
+                    'event-row-wrap',
+                    'review-event-row-wrap',
                     isActive ? 'active' : '',
                     isSelected ? 'selected' : '',
                     event.needsDiscussion ? 'needs-discussion' : '',
-                    isMatch ? 'event-search-match' : '',
+                    searchActive ? 'event-search-match' : '',
+                    !previewMode ? `validation-${validationStatus}` : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={() => {
-                    onSelect?.(index);
-                    onSeek?.(event.frameTime);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
+                >
+                  <div
+                    className={[
+                      'event-row',
+                      'review-event-row',
+                      isActive ? 'active' : '',
+                      isSelected ? 'selected' : '',
+                      event.needsDiscussion ? 'needs-discussion' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
                       onSelect?.(index);
                       onSeek?.(event.frameTime);
-                    }
-                  }}
-                >
-                  <div className="review-event-main">
-                    <span className="time">{formatTime(event.frameTime, fps)}</span>
-                    <span className="type">{event.eventType}</span>
-                    {event.needsDiscussion && (
-                      <span className="review-discussion-badge" title={event.notes || undefined}>
-                        ⚑
-                      </span>
-                    )}
-                    {comparisonStatus && (
-                      <span className={`comparison-badge comparison-${comparisonStatus}`}>
-                        {comparisonLabel(comparisonStatus, row?.frameDiff)}
-                      </span>
-                    )}
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelect?.(index);
+                        onSeek?.(event.frameTime);
+                      }
+                    }}
+                  >
+                    <div className="review-event-main">
+                      <span className="time">{formatTime(event.frameTime, fps)}</span>
+                      <span className="type">{event.eventType}</span>
+                      {event.needsDiscussion && (
+                        <span className="review-discussion-badge" title={event.notes || undefined}>
+                          ⚑
+                        </span>
+                      )}
+                      {comparisonStatus && (
+                        <span className={`comparison-badge comparison-${comparisonStatus}`}>
+                          {comparisonLabel(comparisonStatus, row?.frameDiff)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
-        {searchActive && matchCount === 0 && (
-          <p className="event-search-empty">No events match &ldquo;{searchQuery.trim()}&rdquo;</p>
-        )}
       </div>
-    </aside>
+
+      {discussionSection ? (
+        <div className="video-workspace-aside-section video-workspace-aside-discussion">
+          {discussionSection}
+        </div>
+      ) : null}
+    </>
   );
 }

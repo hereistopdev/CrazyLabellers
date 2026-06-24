@@ -49,6 +49,7 @@ export default function CompareIssuesPanel({
   onSeek,
   fps = FPS,
   previewMode = false,
+  embedded = false,
   className = '',
 }) {
   const attentionItems = useMemo(() => buildCompareAttentionItems(comparison), [comparison]);
@@ -56,38 +57,46 @@ export default function CompareIssuesPanel({
 
   if (previewMode || !comparison) return null;
 
+  const panel = (
+    <div className={`review-attention-panel review-compare-sidebar-panel${embedded ? ' review-compare-embedded' : ''}`}>
+      <div className="review-attention-title">
+        Compare issues
+        {offFrameCount > 0 && (
+          <>
+            {' '}
+            — {offFrameCount} matched event{offFrameCount !== 1 ? 's' : ''} ≥2 frames off
+          </>
+        )}
+        {comparison?.summary?.missingCount > 0 &&
+          ` · ${comparison.summary.missingCount} missing`}
+        {comparison?.summary?.extraCount > 0 && ` · ${comparison.summary.extraCount} extra`}
+      </div>
+      {attentionItems.length > 0 ? (
+        <div className="review-attention-chips review-compare-sidebar-chips">
+          {attentionItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={`review-attention-chip review-attention-chip-${item.kind}`}
+              onClick={() => onSeek(item.time)}
+            >
+              {item.label} @ {formatTime(item.time, fps)}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="review-compare-empty">No frame mismatches, missing, or extra events.</p>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return panel;
+  }
+
   return (
     <aside className={`review-compare-sidebar${className ? ` ${className}` : ''}`}>
-      <div className="review-attention-panel review-compare-sidebar-panel">
-        <div className="review-attention-title">
-          Compare issues
-          {offFrameCount > 0 && (
-            <>
-              {' '}
-              — {offFrameCount} matched event{offFrameCount !== 1 ? 's' : ''} ≥2 frames off
-            </>
-          )}
-          {comparison?.summary?.missingCount > 0 &&
-            ` · ${comparison.summary.missingCount} missing`}
-          {comparison?.summary?.extraCount > 0 && ` · ${comparison.summary.extraCount} extra`}
-        </div>
-        {attentionItems.length > 0 ? (
-          <div className="review-attention-chips review-compare-sidebar-chips">
-            {attentionItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`review-attention-chip review-attention-chip-${item.kind}`}
-                onClick={() => onSeek(item.time)}
-              >
-                {item.label} @ {formatTime(item.time, fps)}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="review-compare-empty">No frame mismatches, missing, or extra events.</p>
-        )}
-      </div>
+      {panel}
     </aside>
   );
 }

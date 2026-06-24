@@ -1,6 +1,38 @@
 import { FPS } from '../config/frameOffsets';
 import { getFrameNumber } from './frameTime';
 
+/** Paired events: gap = second.frame - first.frame must be >= minGap and even. */
+export const PAIR_TIMING_RULES = [
+  {
+    id: 'take-on-end',
+    first: 'Take on',
+    second: 'Take on End',
+    minGap: 6,
+    label: 'Take on → Take on End',
+  },
+  {
+    id: 'tackle-foul',
+    first: 'Tackle',
+    second: 'Foul',
+    minGap: 6,
+    label: 'Tackle → Foul',
+  },
+  {
+    id: 'foul-referee',
+    first: 'Foul',
+    second: 'Referee',
+    minGap: 6,
+    label: 'Foul → Referee',
+  },
+  {
+    id: 'ball-out-referee',
+    first: 'Ball Out of Play',
+    second: 'Referee',
+    minGap: 6,
+    label: 'Ball Out of Play → Referee',
+  },
+];
+
 function buildEventFrames(events, fps = FPS) {
   return (events || []).map((event, index) => ({
     index,
@@ -8,6 +40,57 @@ function buildEventFrames(events, fps = FPS) {
     frame: getFrameNumber(event.frameTime, fps),
     frameTime: event.frameTime,
   }));
+}
+
+function isValidPairGap(gap, minGap = 6) {
+  return gap >= minGap && gap % 2 === 0;
+}
+
+function pairTimingMessage(rule, first, second, gap) {
+  const problems = [];
+  if (gap < rule.minGap) {
+    problems.push(`gap is ${gap} frames (need ≥ ${rule.minGap})`);
+  } else if (gap % 2 !== 0) {
+    problems.push(`gap is ${gap} frames (must be an even number)`);
+  }
+  return `${rule.label}: ${first.eventType} (F${first.frame}) and ${second.eventType} (F${second.frame}) — ${problems.join(' and ')}`;
+}
+
+function validatePairTiming(items) {
+  const issues = [];
+
+  for (const rule of PAIR_TIMING_RULES) {
+    const firstItems = items
+      .filter((item) => item.eventType === rule.first)
+      .sort((a, b) => a.frame - b.frame || a.index - b.index);
+    const secondItems = items
+      .filter((item) => item.eventType === rule.second)
+      .sort((a, b) => a.frame - b.frame || a.index - b.index);
+    const usedSecond = new Set();
+
+    for (const first of firstItems) {
+      const second = secondItems.find(
+        (candidate) => !usedSecond.has(candidate.index) && candidate.frame > first.frame
+      );
+      if (!second) continue;
+
+      usedSecond.add(second.index);
+      const gap = second.frame - first.frame;
+      if (!isValidPairGap(gap, rule.minGap)) {
+        issues.push({
+          kind: 'pair_timing',
+          ruleId: rule.id,
+          gap,
+          frameA: first.frame,
+          frameB: second.frame,
+          events: [first, second],
+          message: pairTimingMessage(rule, first, second, gap),
+        });
+      }
+    }
+  }
+
+  return issues;
 }
 
 export function validateEventSpacing(events, fps = FPS) {
@@ -51,6 +134,8 @@ export function validateEventSpacing(events, fps = FPS) {
     }
   }
 
+  issues.push(...validatePairTiming(items));
+
   const affectedIndices = [...new Set(issues.flatMap((issue) => issue.events.map((e) => e.index)))];
 
   return {
@@ -62,4 +147,16 @@ export function validateEventSpacing(events, fps = FPS) {
 
 export function getEventSpacingRuleSummary() {
   return 'Only one event per frame, with at least one blank frame between any two events.';
+}
+
+export function getEventPairTimingRuleSummary() {
+  return 'Paired timings need a gap of ≥ 6 even frames: Take on → Take on End; Tackle → Foul; Foul → Referee; Ball Out of Play → Referee.';
+}
+
+export function getTackleFoulRuleSummary() {
+  return [
+    'Tackle + Foul + Referee: ball carrier (after Pass Received / Recovery) is tackled and the referee stops play.',
+    'Tackle only: tackle attempt while play continues (no Referee whistle for that challenge).',
+    'Foul only: foul when the passer no longer has the ball — do not mark Foul on advantage (play continues).',
+  ].join(' ');
 }

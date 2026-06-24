@@ -10,6 +10,7 @@ import ExportSubmissionButtons from '../components/ExportSubmissionButtons';
 import CompareIssuesPanel from '../components/CompareIssuesPanel';
 import DiscussionEventsPanel, { getDiscussionEvents } from '../components/DiscussionEventsPanel';
 import SubmissionEventsListPanel from '../components/SubmissionEventsListPanel';
+import VideoWorkspaceAside from '../components/VideoWorkspaceAside';
 import EventPickerModal from '../components/EventPickerModal';
 import { isEditableTarget, getNumpadFrameNudgeDelta } from '../config/labelingHotkeys';
 import { formatMoney, calcTaskEarnings, effectiveTaskPrice } from '../utils/money';
@@ -1079,7 +1080,8 @@ export default function ReviewSubmission() {
       {message && <div className="alert alert-success">{message}</div>}
 
       <div className="review-workspace">
-        <div className={`review-video-row${!isPreview ? ' has-compare-sidebar' : ''}`}>
+        <div className={`video-workspace-row${!isPreview ? ' has-workspace-aside' : ''}`}>
+          <div className="video-workspace-main">
           <div className="video-panel review-video-panel">
             <FrameMagnifier
             videoRef={videoRef}
@@ -1197,29 +1199,37 @@ export default function ReviewSubmission() {
               </button>
             </div>
           </div>
-        </div>
-
-          <CompareIssuesPanel
-            comparison={comparison}
-            onSeek={handleScrub}
-            fps={fps}
-            previewMode={isPreview}
-          />
+          </div>
+          </div>
 
           {!isPreview && (
-            <SubmissionEventsListPanel
-              events={submissionEvents}
-              eventRows={eventRows}
-              currentTime={currentTime}
-              fps={fps}
-              onSeek={handleScrub}
-              selectedIndex={selectedSubmissionIndex}
-              onSelect={setSelectedSubmissionIndex}
-            />
-          )}
-
-          {!isPreview && (
-            <DiscussionEventsPanel events={submissionEvents} onSeek={handleScrub} fps={fps} />
+            <VideoWorkspaceAside>
+              <SubmissionEventsListPanel
+                events={submissionEvents}
+                eventRows={eventRows}
+                currentTime={currentTime}
+                fps={fps}
+                onSeek={handleScrub}
+                selectedIndex={selectedSubmissionIndex}
+                onSelect={setSelectedSubmissionIndex}
+                compareSection={
+                  <CompareIssuesPanel
+                    embedded
+                    comparison={comparison}
+                    onSeek={handleScrub}
+                    fps={fps}
+                  />
+                }
+                discussionSection={
+                  <DiscussionEventsPanel
+                    embedded
+                    events={submissionEvents}
+                    onSeek={handleScrub}
+                    fps={fps}
+                  />
+                }
+              />
+            </VideoWorkspaceAside>
           )}
         </div>
 
