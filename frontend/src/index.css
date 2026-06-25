@@ -5219,7 +5219,31 @@ tbody tr:hover {
 }
 
 .task-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 0.75rem;
+}
+
+.task-group-header-main {
+  min-width: 0;
+}
+
+.production-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.download-group-export-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .task-group-header h2 {

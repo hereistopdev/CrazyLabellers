@@ -184,6 +184,12 @@ export const api = {
       `/assignments/${id}/export?variant=${variant}`,
       exportName ? getExportFilename(exportName, variant) : `labels_${variant}.json`
     ),
+  exportGroupLabels: (groupId, variant = 'post') =>
+    downloadRequest(`/assignments/groups/${groupId}/export?variant=${variant}`, 'group.zip'),
+  exportAdminGroupLabels: (groupId, variant = 'post') =>
+    downloadRequest(`/admin/tasks/groups/${groupId}/export?variant=${variant}`, 'group.zip'),
+  exportReviewGroupLabels: (groupId, variant = 'post') =>
+    downloadRequest(`/review/groups/${groupId}/export?variant=${variant}`, 'group.zip'),
   exportReviewSubmission: (id, variant = 'post', exportName) =>
     downloadRequest(
       `/review/submissions/${id}/export?variant=${variant}`,

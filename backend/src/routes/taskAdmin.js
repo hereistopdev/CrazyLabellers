@@ -31,6 +31,20 @@ router.get('/groups', auth, requireVideoManagerAccess, async (_req, res) => {
   }
 });
 
+router.get('/groups/:groupId/export', auth, requireVideoManagerAccess, async (req, res) => {
+  try {
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const { buildApprovedGroupExport, sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildApprovedGroupExport({
+      groupId: req.params.groupId,
+      variant,
+    });
+    return sendGroupExportZip(res, result);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
 router.post('/groups', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const { name, description, sortOrder, active } = req.body;

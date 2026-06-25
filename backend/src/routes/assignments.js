@@ -92,6 +92,31 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+router.get('/groups/:groupId/export', auth, async (req, res) => {
+  try {
+    if (
+      isLabeller(req.user) &&
+      !isAdmin(req.user) &&
+      !canAccessProduction(req.user)
+    ) {
+      return res.status(403).json({
+        message: 'Pass the labeling pre-test before exporting group labels',
+      });
+    }
+
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const { buildLabellerGroupExport, sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildLabellerGroupExport({
+      groupId: req.params.groupId,
+      userId: req.user._id,
+      variant,
+    });
+    return sendGroupExportZip(res, result);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
  router.get('/resolve-url', auth, async (req, res) => {
   try {
     const input = req.query.url || req.query.videoUrl || '';

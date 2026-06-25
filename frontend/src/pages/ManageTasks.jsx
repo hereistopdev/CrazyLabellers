@@ -14,6 +14,7 @@ import AssignmentStatusBadge from '../components/AssignmentStatusBadge';
 import { ASSIGNMENT_STATUS_LABELS } from '../utils/assignmentStatus';
 import { GROUP_NEW, validateGroupChoice } from '../components/UploadGroupSelect';
 import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
+import DownloadGroupExportButton from '../components/DownloadGroupExportButton';
 
 const MIN_PRICE = 0.3;
 const MAX_PRICE = 2;
@@ -821,20 +822,30 @@ export default function ManageTasks() {
                         <td>{formatTimestamp(g.createdAt)}</td>
                         <td>{formatTimestamp(g.updatedAt)}</td>
                         <td>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => startEditGroup(g)}
-                          >
-                            Edit
-                          </button>{' '}
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            onClick={() => handleDeleteGroup(g._id)}
-                          >
-                            Delete
-                          </button>
+                          <div className="actions-row">
+                            <DownloadGroupExportButton
+                              groupId={g._id}
+                              groupName={g.name}
+                              scope="admin"
+                              variant="post"
+                              compact
+                              label="JSON zip"
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => startEditGroup(g)}
+                            >
+                              Edit
+                            </button>{' '}
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleDeleteGroup(g._id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1098,13 +1109,35 @@ export default function ManageTasks() {
               <>
                 {groupedProduction.map((group) => (
                   <div key={group.id} className="production-group-block">
-                    <h3>
-                      {group.name}{' '}
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        ({group.tasks.length} on this page)
-                      </span>
-                    </h3>
-                    {group.description && <p className="group-desc">{group.description}</p>}
+                    <div className="production-group-header">
+                      <div>
+                        <h3>
+                          {group.name}{' '}
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            ({group.tasks.length} on this page)
+                          </span>
+                        </h3>
+                        {group.description && <p className="group-desc">{group.description}</p>}
+                      </div>
+                      {group.id !== 'ungrouped' && managerUser && (
+                        <div className="actions-row">
+                          <DownloadGroupExportButton
+                            groupId={group.id}
+                            groupName={group.name}
+                            scope="admin"
+                            variant="post"
+                          />
+                          <DownloadGroupExportButton
+                            groupId={group.id}
+                            groupName={group.name}
+                            scope="admin"
+                            variant="raw"
+                            compact
+                            label="Download _post.json zip"
+                          />
+                        </div>
+                      )}
+                    </div>
                     <div className="admin-table-wrap">
                       <table className="admin-table">
                         <thead>

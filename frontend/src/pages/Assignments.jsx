@@ -9,6 +9,7 @@ import TableToolbar from '../components/TableToolbar';
 import Pagination from '../components/Pagination';
 import { groupProductionTasks, matchesDateRange } from '../utils/tableFilter';
 import OpenVideoByUrl from '../components/OpenVideoByUrl';
+import DownloadGroupExportButton from '../components/DownloadGroupExportButton';
 
 const STATUS_LABELS = {
   available: 'Available',
@@ -229,9 +230,29 @@ export default function Assignments() {
         grouped.map((group) => (
           <section key={group.id} className="task-group-section">
             <div className="task-group-header">
-              <h2>{group.name}</h2>
-              {group.description && (
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>{group.description}</p>
+              <div className="task-group-header-main">
+                <h2>{group.name}</h2>
+                {group.description && (
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>{group.description}</p>
+                )}
+              </div>
+              {group.id !== 'ungrouped' && (
+                <div className="task-group-header-actions actions-row">
+                  <DownloadGroupExportButton
+                    groupId={group.id}
+                    groupName={group.name}
+                    scope="labeller"
+                    variant="post"
+                  />
+                  <DownloadGroupExportButton
+                    groupId={group.id}
+                    groupName={group.name}
+                    scope="labeller"
+                    variant="raw"
+                    compact
+                    label="Download _post.json zip"
+                  />
+                </div>
               )}
             </div>
             <div className="card-grid">

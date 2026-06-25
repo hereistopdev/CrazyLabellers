@@ -505,6 +505,20 @@ router.post('/submissions/:id/reopen-for-relabel', auth, requireReviewerRole, as
   }
 });
 
+router.get('/groups/:groupId/export', auth, requireReviewerRole, async (req, res) => {
+  try {
+    const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const { buildApprovedGroupExport, sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildApprovedGroupExport({
+      groupId: req.params.groupId,
+      variant,
+    });
+    return sendGroupExportZip(res, result);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
 router.get('/submissions/:id/export', auth, requireReviewerRole, async (req, res) => {
   try {
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
