@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { formatTutorialTime, getActiveTutorialStep } from '../utils/tutorialFormat';
+import { getFrameNumber, toDisplayFrame } from '../utils/frameTime';
 
 const EMPTY_STEP = { frameTime: 0, eventType: '', title: '', explanation: '' };
 
@@ -23,7 +24,7 @@ export default function TutorialEditorPanel({
     setSteps(assignment?.tutorialSteps?.length ? [...assignment.tutorialSteps] : []);
   }, [assignment?._id, assignment?.tutorialIntro, assignment?.tutorialSteps]);
 
-  const currentFrame = Math.round(currentTime * fps);
+  const currentFrame = getFrameNumber(currentTime, fps);
   const activeStep = getActiveTutorialStep(steps, currentTime, fps);
   const activeIndex = activeStep ? steps.indexOf(activeStep) : -1;
 
@@ -101,7 +102,7 @@ export default function TutorialEditorPanel({
 
       <div className="tutorial-editor-toolbar">
         <button type="button" className="btn btn-secondary btn-sm" onClick={addAtCurrentFrame}>
-          + Add step at frame {currentFrame}
+          + Add step at frame {toDisplayFrame(currentFrame)}
         </button>
         <span className="tutorial-editor-time">{formatTutorialTime(currentTime)}</span>
       </div>
@@ -122,7 +123,7 @@ export default function TutorialEditorPanel({
           </div>
         ) : (
           steps.map((step, index) => {
-            const frame = Math.round(step.frameTime * fps);
+            const frame = getFrameNumber(step.frameTime, fps);
             const isActive = Math.abs(frame - currentFrame) <= 1;
             return (
               <article
@@ -181,7 +182,7 @@ export default function TutorialEditorPanel({
                       className="btn btn-secondary btn-sm"
                       onClick={() => onJumpToStep?.(Number(step.frameTime) || 0)}
                     >
-                      Go to frame {frame}
+                      Go to frame {toDisplayFrame(frame)}
                     </button>
                     <button
                       type="button"

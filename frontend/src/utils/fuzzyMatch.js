@@ -45,8 +45,8 @@ export function nameSimilarity(left, right) {
 export function classifyJsonVariant(filename) {
   const lower = String(filename || '').toLowerCase();
   if (!lower.endsWith('.json')) return null;
-  if (lower.endsWith('_post.json')) return 'post';
-  return 'raw';
+  if (lower.endsWith('_post.json')) return 'raw';
+  return 'post';
 }
 
 export function pickBestMatch(targetName, candidates, usedKeys, threshold = MATCH_THRESHOLD) {

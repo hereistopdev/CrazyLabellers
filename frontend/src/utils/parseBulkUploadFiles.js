@@ -52,7 +52,7 @@ function matchJsonToClip(clipId, videoStem, jsonFiles, usedJson, variant, layout
 /**
  * Match videos to optional JSON files from a selected folder.
  * Supports:
- * - Clip folders: ClipID/video.mkv + labeling/ClipID_post.json (clip ID from folder name)
+ * - Clip folders: ClipID/video.mkv + labeling/ClipID.json (clip ID from folder name)
  * - Group folder: VideoID.mkv + Labeling/VideoID....json (clip ID prefix match)
  * - Legacy: data/*.mp4 + annotations/*.json (80%+ fuzzy match)
  * - Flat folder: videos + optional JSON at same level

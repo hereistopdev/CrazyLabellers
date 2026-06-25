@@ -34,6 +34,7 @@ import {
   snapTimeToFrame,
   formatEventTime,
   nudgeFrameTime,
+  toDisplayFrame,
 } from '../utils/frameTime';
 import {
   validateEventSpacing,
@@ -44,7 +45,7 @@ import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearc
 import { canUseLabeler } from '../utils/labelerAccess';
 import { extractClipIdFromVideoUrl, isOpenableVideoUrl, resolvePlaybackVideoUrl } from '../utils/videoUrl';
 import { loadPracticeLabels, savePracticeLabels, clearPracticeLabels } from '../utils/practiceLabelStorage';
-import { downloadAnnotationExport, resolveExportBasename } from '../utils/exportAnnotation';
+import { downloadAnnotationExport, resolveExportBasename, getExportFilename } from '../utils/exportAnnotation';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -770,7 +771,7 @@ export default function Labeling() {
       try {
         await persistEvents(
           newEvents,
-          `Moved ${target.eventType} to frame ${getFrameNumber(newFrameTime, fps)} — saved`
+          `Moved ${target.eventType} to frame ${toDisplayFrame(getFrameNumber(newFrameTime, fps))} — saved`
         );
       } catch (err) {
         pushToast(err.message, { type: 'error', duration: 4000 });
@@ -907,7 +908,7 @@ export default function Labeling() {
         variant,
         fps,
       });
-      pushToast(`Downloaded ${variant === 'post' ? '_post.json' : '.json'}`);
+      pushToast(`Downloaded ${getExportFilename(resolveExportBasename(assignment) || assignment?.clipId || 'practice', variant)}`);
       return;
     }
     try {
@@ -991,7 +992,7 @@ export default function Labeling() {
       <div className="video-controls">
         <div className="video-controls-row">
           <span className="time-display">{formatTime(currentTime)}</span>
-          <span className="frame-display">Frame {currentFrame}</span>
+          <span className="frame-display">Frame {toDisplayFrame(currentFrame)}</span>
           <input
             type="range"
             className="frame-slider"
@@ -1485,17 +1486,17 @@ export default function Labeling() {
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => handleExport('post')}
-                    title={`Download ${assignment?.clipId || 'practice'}_post.json`}
+                    title={`Download ${getExportFilename(assignment?.clipId || 'practice', 'post')}`}
                   >
-                    Export _post.json
+                    Export .json
                   </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => handleExport('raw')}
-                    title={`Download ${assignment?.clipId || 'practice'}.json`}
+                    title={`Download ${getExportFilename(assignment?.clipId || 'practice', 'raw')}`}
                   >
-                    Export .json
+                    Export _post.json
                   </button>
                 </>
               )}

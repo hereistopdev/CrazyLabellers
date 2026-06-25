@@ -1,4 +1,5 @@
 import { formatTutorialTime, getActiveTutorialStep } from '../utils/tutorialFormat';
+import { getFrameNumber, toDisplayFrame } from '../utils/frameTime';
 
 export default function TutorialPanel({ assignment, currentTime, fps, onJumpToStep }) {
   const steps = assignment?.tutorialSteps || [];
@@ -53,8 +54,8 @@ export default function TutorialPanel({ assignment, currentTime, fps, onJumpToSt
 
       <div className="tutorial-step-track">
         {steps.map((step, index) => {
-          const frame = Math.round(step.frameTime * fps);
-          const isActive = Math.abs(frame - Math.round(currentTime * fps)) <= 1;
+          const frame = getFrameNumber(step.frameTime, fps);
+          const isActive = Math.abs(frame - getFrameNumber(currentTime, fps)) <= 1;
           return (
             <article
               key={step._id || `${step.frameTime}-${index}`}
@@ -71,7 +72,7 @@ export default function TutorialPanel({ assignment, currentTime, fps, onJumpToSt
                   onClick={() => onJumpToStep?.(step.frameTime)}
                 >
                   <span className="tutorial-step-frame">
-                    Frame {frame} · {formatTutorialTime(step.frameTime)}
+                    Frame {toDisplayFrame(frame)} · {formatTutorialTime(step.frameTime)}
                   </span>
                   {step.eventType ? (
                     <span className="tutorial-event-pill">{step.eventType}</span>

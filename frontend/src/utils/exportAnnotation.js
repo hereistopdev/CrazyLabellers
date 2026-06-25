@@ -37,7 +37,7 @@ export function getExportFilename(basename, variant) {
     .trim()
     .replace(/\.[^.]+$/, '')
     .replace(/[^\w.-]+/g, '_');
-  return variant === 'post' ? `${safe}_post.json` : `${safe}.json`;
+  return variant === 'raw' ? `${safe}_post.json` : `${safe}.json`;
 }
 
 export function getReferenceExportFilename(basename, variant) {
@@ -45,7 +45,7 @@ export function getReferenceExportFilename(basename, variant) {
     .trim()
     .replace(/\.[^.]+$/, '')
     .replace(/[^\w.-]+/g, '_');
-  return variant === 'post' ? `${safe}_reference_post.json` : `${safe}_reference.json`;
+  return variant === 'raw' ? `${safe}_reference_post.json` : `${safe}_reference.json`;
 }
 
 export function resolveExportBasename({ title, clipId } = {}) {

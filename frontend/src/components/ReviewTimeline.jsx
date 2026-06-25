@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import { FPS } from '../config/frameOffsets';
-import { formatEventTime, getFrameNumber } from '../utils/frameTime';
+import { formatEventTime, getFrameNumber, toDisplayFrame } from '../utils/frameTime';
 import { countOffFrameIssues } from './CompareIssuesPanel';
 import FrameNudgeRow from './FrameNudgeRow';
 
@@ -445,7 +445,7 @@ export default function ReviewTimeline({
           </div>
         )}
         <span className="review-timeline-current">
-          Frame {getFrameNumber(currentTime, fps)} · {formatTime(currentTime, fps)}
+          Frame {toDisplayFrame(getFrameNumber(currentTime, fps))} · {formatTime(currentTime, fps)}
           {offFrameCount > 0 && (
             <span className="review-timeline-attention-count">
               · {offFrameCount} event{offFrameCount !== 1 ? 's' : ''} ≥2f off

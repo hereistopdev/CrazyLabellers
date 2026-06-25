@@ -27,7 +27,7 @@ import {
   snapTimeToFrame,
   nudgeFrameTime,
 } from '../utils/reviewPlayback';
-import { formatEventTime } from '../utils/frameTime';
+import { formatEventTime, toDisplayFrame } from '../utils/frameTime';
 import {
   validateEventSpacing,
   getEventSpacingRuleSummary,
@@ -954,7 +954,7 @@ export default function ReviewSubmission() {
       <div className="video-controls">
         <div className="video-controls-row">
           <span className="time-display">{formatTime(currentTime)}</span>
-          <span className="frame-display">Frame {currentFrame}</span>
+          <span className="frame-display">Frame {toDisplayFrame(currentFrame)}</span>
           <input
             type="range"
             className="frame-slider"
@@ -1477,7 +1477,7 @@ export default function ReviewSubmission() {
           currentTime={currentTime}
           title={
             submissionPickerMode === 'change'
-              ? `Change event type · frame ${currentFrame}`
+              ? `Change event type · frame ${toDisplayFrame(currentFrame)}`
               : undefined
           }
           subtitle={

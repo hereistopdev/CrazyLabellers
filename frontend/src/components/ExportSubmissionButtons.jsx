@@ -48,7 +48,7 @@ export default function ExportSubmissionButtons({
           title={`Download ${getExportFilename(basename, 'post')}`}
           onClick={(e) => handleExport('labeller', 'post', e)}
         >
-          {compact ? 'L: Post' : isBusy('labeller', 'post') ? '…' : 'Labeller _post.json'}
+          {compact ? 'L: Post' : isBusy('labeller', 'post') ? '…' : 'Labeller .json'}
         </button>
         <button
           type="button"
@@ -57,7 +57,7 @@ export default function ExportSubmissionButtons({
           title={`Download ${getExportFilename(basename, 'raw')}`}
           onClick={(e) => handleExport('labeller', 'raw', e)}
         >
-          {compact ? 'L: Raw' : isBusy('labeller', 'raw') ? '…' : 'Labeller .json'}
+          {compact ? 'L: Raw' : isBusy('labeller', 'raw') ? '…' : 'Labeller _post.json'}
         </button>
       </span>
       {hasReference && (
@@ -70,7 +70,7 @@ export default function ExportSubmissionButtons({
             title={`Download ${getReferenceExportFilename(basename, 'post')}`}
             onClick={(e) => handleExport('reference', 'post', e)}
           >
-            {compact ? 'Ref: Post' : isBusy('reference', 'post') ? '…' : 'Reference _post.json'}
+            {compact ? 'Ref: Post' : isBusy('reference', 'post') ? '…' : 'Reference .json'}
           </button>
           <button
             type="button"
@@ -79,7 +79,7 @@ export default function ExportSubmissionButtons({
             title={`Download ${getReferenceExportFilename(basename, 'raw')}`}
             onClick={(e) => handleExport('reference', 'raw', e)}
           >
-            {compact ? 'Ref: Raw' : isBusy('reference', 'raw') ? '…' : 'Reference .json'}
+            {compact ? 'Ref: Raw' : isBusy('reference', 'raw') ? '…' : 'Reference _post.json'}
           </button>
         </span>
       )}

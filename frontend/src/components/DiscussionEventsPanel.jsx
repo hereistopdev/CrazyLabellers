@@ -1,5 +1,5 @@
 import { FPS } from '../config/frameOffsets';
-import { formatEventTime, getFrameNumber } from '../utils/frameTime';
+import { formatEventTime, getFrameNumber, toDisplayFrame } from '../utils/frameTime';
 
 function formatTime(seconds, fps = FPS) {
   return formatEventTime(seconds, fps);
@@ -41,7 +41,7 @@ export default function DiscussionEventsPanel({
           >
             <span className="review-discussion-chip-label">
               {event.eventType} @ {formatTime(event.frameTime, fps)} · F
-              {getFrameNumber(event.frameTime, fps)}
+              {toDisplayFrame(getFrameNumber(event.frameTime, fps))}
             </span>
             {event.notes ? (
               <span className="review-discussion-chip-note">{event.notes}</span>

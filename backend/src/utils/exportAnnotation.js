@@ -53,7 +53,7 @@ function getExportFilename(basename, variant) {
   if (!isValidClipId(stem)) {
     throw new Error('Invalid export name');
   }
-  return variant === 'post' ? `${stem}_post.json` : `${stem}.json`;
+  return variant === 'raw' ? `${stem}_post.json` : `${stem}.json`;
 }
 
 module.exports = {

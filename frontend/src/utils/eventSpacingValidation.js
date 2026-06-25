@@ -1,5 +1,5 @@
 import { FPS } from '../config/frameOffsets';
-import { getFrameNumber } from './frameTime';
+import { getFrameNumber, toDisplayFrame } from './frameTime';
 
 /** Paired events: gap = second.frame - first.frame must be >= minGap and even. */
 export const PAIR_TIMING_RULES = [
@@ -53,7 +53,7 @@ function pairTimingMessage(rule, first, second, gap) {
   } else if (gap % 2 !== 0) {
     problems.push(`gap is ${gap} frames (must be an even number)`);
   }
-  return `${rule.label}: ${first.eventType} (F${first.frame}) and ${second.eventType} (F${second.frame}) — ${problems.join(' and ')}`;
+  return `${rule.label}: ${first.eventType} (F${toDisplayFrame(first.frame)}) and ${second.eventType} (F${toDisplayFrame(second.frame)}) — ${problems.join(' and ')}`;
 }
 
 function validatePairTiming(items) {
@@ -113,7 +113,7 @@ export function validateEventSpacing(events, fps = FPS) {
         kind: 'same_frame',
         frame,
         events: frameItems,
-        message: `Frame ${frame} has ${frameItems.length} events (${frameItems.map((i) => i.eventType).join(', ')}) — only one event per frame is allowed`,
+        message: `Frame ${toDisplayFrame(frame)} has ${frameItems.length} events (${frameItems.map((i) => i.eventType).join(', ')}) — only one event per frame is allowed`,
       });
     }
   }
@@ -129,7 +129,7 @@ export function validateEventSpacing(events, fps = FPS) {
         frameA: current.frame,
         frameB: next.frame,
         events: [current, next],
-        message: `${current.eventType} (F${current.frame}) and ${next.eventType} (F${next.frame}) are on consecutive frames — leave at least one blank frame between events`,
+        message: `${current.eventType} (F${toDisplayFrame(current.frame)}) and ${next.eventType} (F${toDisplayFrame(next.frame)}) are on consecutive frames — leave at least one blank frame between events`,
       });
     }
   }

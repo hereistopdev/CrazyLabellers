@@ -1,3 +1,5 @@
+import { getFrameNumber, toDisplayFrame } from '../utils/frameTime';
+
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = (seconds % 60).toFixed(2);
@@ -13,9 +15,9 @@ export default function ReferenceEventsPanel({
 }) {
   if (!referenceEvents.length) return null;
 
-  const currentFrame = Math.round(currentTime * fps);
+  const currentFrame = getFrameNumber(currentTime, fps);
   const onFrame = referenceEvents.filter(
-    (event) => Math.round(event.frameTime * fps) === currentFrame
+    (event) => getFrameNumber(event.frameTime, fps) === currentFrame
   );
 
   return (
@@ -30,7 +32,7 @@ export default function ReferenceEventsPanel({
 
       {onFrame.length > 0 && (
         <div className="reference-on-frame">
-          <span className="reference-on-frame-label">On frame {currentFrame}</span>
+          <span className="reference-on-frame-label">On frame {toDisplayFrame(currentFrame)}</span>
           <div className="reference-on-frame-pills">
             {onFrame.map((event, index) => (
               <span key={`${event.eventType}-${index}`} className="reference-event-pill">
@@ -45,13 +47,13 @@ export default function ReferenceEventsPanel({
         {[...referenceEvents]
           .sort((a, b) => a.frameTime - b.frameTime)
           .map((event, index) => {
-            const frame = Math.round(event.frameTime * fps);
+            const frame = getFrameNumber(event.frameTime, fps);
             const isActive = frame === currentFrame;
             return (
               <li key={`${event.eventType}-${event.frameTime}-${index}`} className={isActive ? 'active' : ''}>
                 <button type="button" className="reference-event-row" onClick={() => onSeek(event.frameTime)}>
                   <span className="reference-event-time">{formatTime(event.frameTime)}</span>
-                  <span className="reference-event-frame">F{frame}</span>
+                  <span className="reference-event-frame">F{toDisplayFrame(frame)}</span>
                   <span className="reference-event-name">{event.eventType}</span>
                 </button>
               </li>

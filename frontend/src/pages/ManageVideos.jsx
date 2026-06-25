@@ -871,7 +871,7 @@ export default function ManageVideos() {
           <li>
             <strong>Clip folders</strong> — one folder per clip ID containing <code>video.mkv</code>{' '}
             (or mp4, avi, etc.), plus a sibling <code>labeling/</code> folder with{' '}
-            <code>ClipID_post.json</code> / <code>ClipID.json</code> reference files.
+            <code>ClipID.json</code> / <code>ClipID_post.json</code> reference files.
           </li>
           <li>
             <strong>Group folder</strong> — videos named by clip ID at the group root, with JSON in{' '}
@@ -898,7 +898,7 @@ export default function ManageVideos() {
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
             Example clip-folder batch: <code>3753973_1_p000/video.mkv</code>,{' '}
             <code>3753973_1_p001/video.mkv</code>, … and{' '}
-            <code>labeling/3753973_1_p000_post.json</code>. Extra JSON inside clip folders (e.g.{' '}
+            <code>labeling/3753973_1_p000.json</code>. Extra JSON inside clip folders (e.g.{' '}
             Labels-ball.json) is ignored.
           </p>
         </div>
@@ -1122,7 +1122,7 @@ export default function ManageVideos() {
               onChange={(e) => setReferenceFile(e.target.files?.[0] || null)}
             />
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-              Optional prior work / gold-standard annotation file ({'{clipId}'}_post.json format).
+              Optional prior work / gold-standard annotation file ({'{clipId}'}.json format).
             </p>
           </div>
           <div className="form-group">

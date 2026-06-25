@@ -12,7 +12,7 @@ function getReferenceDownloadFilename(clipId, variant = 'post') {
   if (!isValidClipId(clipId)) {
     throw new Error('Invalid clip ID');
   }
-  return variant === 'post' ? `${clipId}_reference_post.json` : `${clipId}_reference.json`;
+  return variant === 'raw' ? `${clipId}_reference_post.json` : `${clipId}_reference.json`;
 }
 
 function getSubmissionDownloadFilename(clipId, variant = 'post') {

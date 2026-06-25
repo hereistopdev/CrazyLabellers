@@ -1,5 +1,16 @@
 export const DEFAULT_FPS = 25;
 
+/** Origin labeling app shows frame 1 at clip start; internal math stays 0-based. */
+export const DISPLAY_FRAME_BASE = 1;
+
+export function toDisplayFrame(internalFrame) {
+  return internalFrame + DISPLAY_FRAME_BASE;
+}
+
+export function fromDisplayFrame(displayFrame) {
+  return displayFrame - DISPLAY_FRAME_BASE;
+}
+
 export function getFrameNumber(time, fps = DEFAULT_FPS) {
   if (!Number.isFinite(time)) return 0;
   return Math.round(time * fps);
