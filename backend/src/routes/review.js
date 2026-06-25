@@ -508,8 +508,8 @@ router.post('/submissions/:id/reopen-for-relabel', auth, requireReviewerRole, as
 router.get('/groups/:groupId/export', auth, requireReviewerRole, async (req, res) => {
   try {
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
-    const { buildApprovedGroupExport, sendGroupExportZip } = require('../services/groupExport');
-    const result = await buildApprovedGroupExport({
+    const { buildGroupSubmissionsExport, sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildGroupSubmissionsExport({
       groupId: req.params.groupId,
       variant,
     });

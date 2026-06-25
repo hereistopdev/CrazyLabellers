@@ -34,8 +34,8 @@ router.get('/groups', auth, requireVideoManagerAccess, async (_req, res) => {
 router.get('/groups/:groupId/export', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
-    const { buildApprovedGroupExport, sendGroupExportZip } = require('../services/groupExport');
-    const result = await buildApprovedGroupExport({
+    const { buildGroupSubmissionsExport, sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildGroupSubmissionsExport({
       groupId: req.params.groupId,
       variant,
     });
