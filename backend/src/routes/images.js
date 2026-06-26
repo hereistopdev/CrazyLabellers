@@ -4,8 +4,8 @@ const path = require('path');
 const {
   findLocalImagePath,
   isRemoteImageStorage,
+  loadRemoteImageFile,
 } = require('../services/imageStorage');
-const { readImageFileFromVps } = require('../services/vpsStorage');
 const { isSafeClipId } = require('../utils/clipId');
 
 const router = express.Router();
@@ -18,6 +18,9 @@ function mimeForExtension(ext) {
       return 'image/webp';
     case '.gif':
       return 'image/gif';
+    case '.jpeg':
+    case '.jpg':
+      return 'image/jpeg';
     default:
       return 'image/jpeg';
   }
@@ -34,8 +37,8 @@ async function resolveImagePayload(raw) {
   }
 
   if (isRemoteImageStorage()) {
-    const remote = await readImageFileFromVps(raw);
-    if (remote) {
+    const remote = await loadRemoteImageFile(raw);
+    if (remote?.buffer?.length) {
       return {
         kind: 'buffer',
         buffer: remote.buffer,
@@ -61,6 +64,11 @@ function sendImagePayload(res, payload) {
 router.get('/:imageId', async (req, res) => {
   try {
     const raw = decodeURIComponent(req.params.imageId || '');
+    const stem = raw.replace(/\.[^.]+$/, '');
+    if (!isSafeClipId(stem)) {
+      return res.status(400).json({ message: 'Invalid image file' });
+    }
+
     const payload = await resolveImagePayload(raw);
 
     if (!payload) {
@@ -69,6 +77,7 @@ router.get('/:imageId', async (req, res) => {
 
     return sendImagePayload(res, payload);
   } catch (error) {
+    console.error('Image serve error:', error.message);
     return res.status(500).json({ message: error.message });
   }
 });

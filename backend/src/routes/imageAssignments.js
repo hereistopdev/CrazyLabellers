@@ -357,6 +357,49 @@ router.get('/groups/:groupId/export', auth, async (req, res) => {
     const result = await buildImageGroupExport({
       groupId: req.params.groupId,
       userId: req.user._id,
+      draft: false,
+    });
+    return sendGroupExportZip(res, result);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.post('/groups/:groupId/export', auth, async (req, res) => {
+  try {
+    if (!canAccessImageLabeling(req.user)) {
+      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
+    }
+
+    const submissions = Array.isArray(req.body.submissions) ? req.body.submissions : [];
+    if (!submissions.length) {
+      return res.status(400).json({ message: 'No labeling data to export' });
+    }
+
+    const groupFilter =
+      req.params.groupId === 'ungrouped' ? { groupId: null } : { groupId: req.params.groupId };
+    const assignmentIds = submissions.map((row) => row.assignmentId).filter(Boolean);
+    const assignments = await ImageAssignment.find({ ...groupFilter, _id: { $in: assignmentIds } });
+
+    if (assignments.length !== assignmentIds.length) {
+      return res.status(400).json({ message: 'One or more images do not belong to this project' });
+    }
+
+    if (isLabeller(req.user) && !isAdmin(req.user)) {
+      for (const assignment of assignments) {
+        if (!isAssignedToUserId(assignment.assignedTo, req.user._id)) {
+          return res.status(403).json({ message: 'Claim this project before downloading your draft' });
+        }
+      }
+    }
+
+    const { buildImageGroupExport } = require('../services/imageGroupExport');
+    const { sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildImageGroupExport({
+      groupId: req.params.groupId,
+      userId: req.user._id,
+      draft: true,
+      submissionRows: submissions,
     });
     return sendGroupExportZip(res, result);
   } catch (error) {

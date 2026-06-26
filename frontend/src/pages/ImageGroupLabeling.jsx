@@ -464,8 +464,15 @@ export default function ImageGroupLabeling() {
     setDownloading(true);
     setError('');
     try {
-      await api.exportImageGroup(groupId);
-      setMessage('Downloaded project JSON zip');
+      if (projectLocked) {
+        await api.exportImageGroup(groupId);
+        setMessage('Downloaded project JSON zip');
+      } else {
+        await api.exportImageGroupDraft(groupId, {
+          submissions: buildSubmissionsPayload(),
+        });
+        setMessage('Downloaded draft JSON zip');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -598,14 +605,18 @@ export default function ImageGroupLabeling() {
               {claiming ? 'Claiming…' : 'Claim project'}
             </button>
           )}
-          {labelableIds.size > 0 && hasExportableWork && (
+          {labelableIds.size > 0 && (projectLocked ? hasExportableWork : hasMarkedWork) && (
             <button
               type="button"
               className="btn btn-secondary btn-sm"
               disabled={downloading}
               onClick={handleDownloadGroup}
             >
-              {downloading ? 'Downloading…' : 'Download JSON'}
+              {downloading
+                ? 'Downloading…'
+                : projectLocked
+                  ? 'Download JSON'
+                  : 'Download draft JSON'}
             </button>
           )}
           {labelableIds.size > 0 && !projectLocked && (
@@ -648,8 +659,8 @@ export default function ImageGroupLabeling() {
 
       {workspace.access?.canClaim && !workspace.access?.canLabel && (
         <div className="alert alert-info">
-          Claim this project to mark keypoints. Save drafts anytime, then submit final results when every
-          frame is complete.
+          Claim this project to mark keypoints. Save drafts anytime, download draft JSON anytime, then
+          submit final results when every frame is complete.
         </div>
       )}
 

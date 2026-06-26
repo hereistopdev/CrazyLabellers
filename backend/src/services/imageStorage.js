@@ -5,6 +5,7 @@ const {
   isVpsStorageEnabled,
   uploadImageToVps,
   deleteImageFromVps,
+  readImageFileFromVps,
 } = require('./vpsStorage');
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
@@ -107,6 +108,42 @@ async function storeImageFile(imageId, fileBuffer, extension = '.png') {
   return { storage: 'local', filePath, extension: ext, imageUrl };
 }
 
+async function readImageFileFromMediaServer(imageIdOrFilename) {
+  const mediaBase = getImageBaseUrl();
+  if (!mediaBase || mediaBase.includes('localhost')) return null;
+
+  const base = path.basename(String(imageIdOrFilename || ''));
+  if (!base) return null;
+
+  const url = `${mediaBase}/api/images/${encodeURIComponent(base)}`;
+
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) return null;
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    if (!buffer.length) return null;
+
+    const ext = path.extname(base).toLowerCase() || '.jpg';
+    return { buffer, ext };
+  } catch {
+    return null;
+  }
+}
+
+async function loadRemoteImageFile(imageIdOrFilename) {
+  const mediaFile = await readImageFileFromMediaServer(imageIdOrFilename);
+  if (mediaFile) return mediaFile;
+
+  try {
+    return await readImageFileFromVps(imageIdOrFilename);
+  } catch (error) {
+    const message = String(error?.message || error);
+    throw new Error(`Failed to load image from VPS: ${message}`);
+  }
+}
+
 async function deleteImageFile(imageId) {
   if (isRemoteImageStorage()) {
     await deleteImageFromVps(imageId);
@@ -133,6 +170,7 @@ module.exports = {
   isRemoteImageStorage,
   resolveImageId,
   findLocalImagePath,
+  loadRemoteImageFile,
   storeImageFile,
   deleteImageFile,
 };

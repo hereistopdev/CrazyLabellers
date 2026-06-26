@@ -80,14 +80,19 @@ function parseDownloadFilename(disposition, fallbackFilename) {
   return fallbackFilename;
 }
 
-async function downloadRequest(path, fallbackFilename) {
-  const headers = {};
+async function downloadRequest(path, fallbackFilename, options = {}) {
+  const headers = { ...options.headers };
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { headers, cache: 'no-store' });
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body,
+    cache: 'no-store',
+  });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.message || `Download failed (${response.status})`);
@@ -369,6 +374,12 @@ export const api = {
     }),
   exportImageGroup: (groupId) =>
     downloadRequest(`/image-assignments/groups/${groupId}/export`, 'group_keypoints.zip'),
+  exportImageGroupDraft: (groupId, body) =>
+    downloadRequest(`/image-assignments/groups/${groupId}/export`, 'group_draft_keypoints.zip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   getImageAssignment: (id) => request(`/image-assignments/${id}`),
   getImageGroupNav: (groupId) => request(`/image-assignments/groups/${groupId}/nav`),
   claimImageAssignment: (id) => request(`/image-assignments/${id}/claim`, { method: 'POST' }),

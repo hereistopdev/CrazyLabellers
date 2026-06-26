@@ -181,5 +181,7 @@ To test VPS upload locally, add the same `VPS_*` vars to `backend/.env`.
 | SSH permission denied | Verify public key in VPS `~/.ssh/authorized_keys` |
 | mkdir / upload permission denied | `sudo mkdir -p /var/www/football-images && sudo chown administrator:administrator /var/www/football-images` |
 | Video uploads but won’t play | Check nginx on `media.crazylabel.us` and `VIDEO_BASE_URL` |
+| Image URL 404/500 on Render API | Ensure files are in `VPS_IMAGE_DIR`; add nginx `/api/images/` block; redeploy backend |
+| Direct `media.crazylabel.us/api/images/...` 404 | Add the `/api/images/` nginx location and reload nginx |
 | Only first 2–3 seconds play | nginx must send `Accept-Ranges: bytes`; test with `curl -I -H "Range: bytes=0-1023" ...` → expect **206** |
 | Upload works, import finds 0 | Clips must be valid 30-char hex `.mp4` names |

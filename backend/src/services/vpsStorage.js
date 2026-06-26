@@ -119,6 +119,31 @@ async function deleteFileFromVpsDir(remoteDir, fileId, extensions) {
 
 const IMAGE_EXTENSIONS_FOR_DELETE = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
 
+function parseImageFilename(imageIdOrFilename) {
+  const base = path.basename(String(imageIdOrFilename || ''));
+  const ext = path.extname(base).toLowerCase();
+  const stem =
+    ext && IMAGE_EXTENSIONS_FOR_DELETE.includes(ext)
+      ? path.basename(base, ext)
+      : base.replace(/\.[^.]+$/, '');
+
+  return { base, ext, stem };
+}
+
+function readStreamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+async function readRemoteFileBuffer(sftp, remotePath) {
+  const stream = sftp.createReadStream(remotePath);
+  return readStreamToBuffer(stream);
+}
+
 async function deleteVideoFromVps(clipId) {
   return deleteFileFromVpsDir(getVpsVideoDir(), clipId);
 }
@@ -130,27 +155,31 @@ async function deleteImageFromVps(imageId) {
 async function readImageFileFromVps(imageIdOrFilename) {
   if (!isVpsStorageEnabled()) return null;
 
-  const base = path.basename(String(imageIdOrFilename || ''));
-  const ext = path.extname(base).toLowerCase();
-  const imageId =
-    ext && IMAGE_EXTENSIONS_FOR_DELETE.includes(ext) ? path.basename(base, ext) : base.replace(/\.[^.]+$/, '');
+  const { base, ext, stem } = parseImageFilename(imageIdOrFilename);
+  if (!stem) return null;
 
   return withSftp(async (sftp) => {
     const dir = getVpsImageDir();
     if (!(await sftp.exists(dir))) return null;
 
-    const extensions =
-      ext && IMAGE_EXTENSIONS_FOR_DELETE.includes(ext) ? [ext] : IMAGE_EXTENSIONS_FOR_DELETE;
+    const files = await sftp.list(dir);
+    const match = files.find((file) => {
+      if (file.type !== '-') return false;
+      if (file.name === base) return true;
+      const fileStem = file.name.replace(/(\.[a-z0-9]+)$/i, '');
+      return fileStem === stem;
+    });
 
-    for (const candidateExt of extensions) {
-      const remotePath = `${dir}/${imageId}${candidateExt}`;
-      if (!(await sftp.exists(remotePath))) continue;
-      const data = await sftp.get(remotePath);
-      const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      return { buffer, ext: candidateExt };
-    }
+    if (!match) return null;
 
-    return null;
+    const remotePath = `${dir}/${match.name}`;
+    const buffer = await readRemoteFileBuffer(sftp, remotePath);
+    if (!buffer?.length) return null;
+
+    return {
+      buffer,
+      ext: path.extname(match.name).toLowerCase() || ext || '.jpg',
+    };
   });
 }
 
