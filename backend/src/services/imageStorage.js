@@ -146,6 +146,11 @@ async function loadRemoteImageFile(imageIdOrFilename) {
   const mediaFile = await readImageFileFromMediaServer(imageIdOrFilename);
   if (mediaFile) return mediaFile;
 
+  const mediaBase = getImageBaseUrl();
+  if (mediaBase && !mediaBase.includes('localhost')) {
+    return null;
+  }
+
   try {
     return await readImageFileFromVps(imageIdOrFilename);
   } catch (error) {

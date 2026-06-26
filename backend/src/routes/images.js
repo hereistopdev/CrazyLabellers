@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   findLocalImagePath,
+  getImageBaseUrl,
   isRemoteImageStorage,
   loadRemoteImageFile,
 } = require('../services/imageStorage');
@@ -24,6 +25,15 @@ function mimeForExtension(ext) {
     default:
       return 'image/jpeg';
   }
+}
+
+function buildRemoteImageRedirectUrl(raw) {
+  if (!isRemoteImageStorage()) return null;
+
+  const mediaBase = getImageBaseUrl();
+  if (!mediaBase || mediaBase.includes('localhost')) return null;
+
+  return `${mediaBase}/api/images/${encodeURIComponent(raw)}`;
 }
 
 async function resolveImagePayload(raw) {
@@ -69,6 +79,11 @@ router.get('/:imageId', async (req, res) => {
       return res.status(400).json({ message: 'Invalid image file' });
     }
 
+    const redirectUrl = buildRemoteImageRedirectUrl(raw);
+    if (redirectUrl) {
+      return res.redirect(307, redirectUrl);
+    }
+
     const payload = await resolveImagePayload(raw);
 
     if (!payload) {
@@ -88,6 +103,11 @@ router.head('/:imageId', async (req, res) => {
     const stem = raw.replace(/\.[^.]+$/, '');
     if (!isSafeClipId(stem)) {
       return res.status(404).end();
+    }
+
+    const redirectUrl = buildRemoteImageRedirectUrl(raw);
+    if (redirectUrl) {
+      return res.redirect(307, redirectUrl);
     }
 
     const payload = await resolveImagePayload(raw);
