@@ -12,6 +12,7 @@ export const IMAGE_KEYPOINT_LABELS = [
 ];
 
 export const IMAGE_KEYPOINT_LABEL_IDS = IMAGE_KEYPOINT_LABELS.map((item) => item.id);
+export const LABELLER_EXPORT_LABEL_IDS = IMAGE_KEYPOINT_LABEL_IDS.filter((id) => id.startsWith('kp'));
 
 export function getKeypointLabelMeta(id) {
   return IMAGE_KEYPOINT_LABELS.find((item) => item.id === id) || null;
@@ -70,6 +71,10 @@ export function normalizeKeypointsMap(input = []) {
 
 export function countMarkedKeypoints(map) {
   return IMAGE_KEYPOINT_LABEL_IDS.filter((id) => map?.[id]).length;
+}
+
+export function countLabellerExportKeypoints(map) {
+  return LABELLER_EXPORT_LABEL_IDS.filter((id) => map?.[id]).length;
 }
 
 export function keypointsMapToList(map) {

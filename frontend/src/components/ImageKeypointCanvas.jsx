@@ -3,7 +3,6 @@ import { IMAGE_KEYPOINT_LABELS } from '../config/imageKeypoints';
 
 const MAGNIFIER_SIZE = 150;
 const MAGNIFIER_ZOOM_LEVELS = [2, 3, 4];
-const OFFSET = 20;
 
 export { MAGNIFIER_ZOOM_LEVELS };
 
@@ -54,7 +53,6 @@ export default function ImageKeypointCanvas({
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [dragLabel, setDragLabel] = useState(null);
   const [lensVisible, setLensVisible] = useState(false);
-  const [lensPos, setLensPos] = useState({ left: 0, top: 0 });
   const [lensCoords, setLensCoords] = useState(null);
 
   useEffect(() => {
@@ -64,6 +62,8 @@ export default function ImageKeypointCanvas({
   useEffect(() => {
     lastNaturalSizeRef.current = { width: 0, height: 0 };
     setImageSize({ width: 0, height: 0, offsetX: 0, offsetY: 0 });
+    setLensVisible(false);
+    setLensCoords(null);
   }, [imageUrl]);
 
   const updateImageSize = useCallback(() => {
@@ -135,7 +135,6 @@ export default function ImageKeypointCanvas({
 
     const relX = clientX - layout.elementRect.left - layout.offsetX;
     const relY = clientY - layout.elementRect.top - layout.offsetY;
-    // Small tolerance for sub-pixel rounding at image edges.
     if (relX < -1 || relY < -1 || relX > layout.renderW + 1 || relY > layout.renderH + 1) {
       return null;
     }
@@ -144,8 +143,8 @@ export default function ImageKeypointCanvas({
     return { x, y };
   }, []);
 
-  const drawLens = useCallback(
-    (clientX, clientY) => {
+  const drawLensAtNormalized = useCallback(
+    (normX, normY) => {
       const img = imgRef.current;
       const lens = lensRef.current;
       if (!showMagnifier || !isActive || !img || !lens || !img.naturalWidth) {
@@ -161,34 +160,12 @@ export default function ImageKeypointCanvas({
         return;
       }
 
-      const relX = clientX - layout.elementRect.left;
-      const relY = clientY - layout.elementRect.top;
-      const contentX = relX - layout.offsetX;
-      const contentY = relY - layout.offsetY;
+      const x = Math.max(0, Math.min(1, normX));
+      const y = Math.max(0, Math.min(1, normY));
+      const pixelX = Math.round(x * layout.naturalWidth);
+      const pixelY = Math.round(y * layout.naturalHeight);
 
-      if (
-        contentX < 0 ||
-        contentY < 0 ||
-        contentX > layout.renderW ||
-        contentY > layout.renderH
-      ) {
-        setLensVisible(false);
-        setLensCoords(null);
-        return;
-      }
-
-      let left = clientX + OFFSET;
-      let top = clientY + OFFSET;
-      if (left + MAGNIFIER_SIZE > window.innerWidth) left = clientX - MAGNIFIER_SIZE - OFFSET;
-      if (top + MAGNIFIER_SIZE > window.innerHeight) top = clientY - MAGNIFIER_SIZE - OFFSET;
-
-      const normX = contentX / layout.renderW;
-      const normY = contentY / layout.renderH;
-      const pixelX = Math.round(normX * layout.naturalWidth);
-      const pixelY = Math.round(normY * layout.naturalHeight);
-
-      setLensPos({ left, top });
-      setLensCoords({ x: pixelX, y: pixelY, normX, normY });
+      setLensCoords({ x: pixelX, y: pixelY, normX: x, normY: y });
       setLensVisible(true);
 
       const ctx = lens.getContext('2d');
@@ -199,12 +176,11 @@ export default function ImageKeypointCanvas({
       lens.width = MAGNIFIER_SIZE;
       lens.height = MAGNIFIER_SIZE;
 
-      // Crop in display pixels so 2×/3×/4× matches what the labeller sees on screen.
       const cropDisplaySize = MAGNIFIER_SIZE / zoom;
       const srcW = cropDisplaySize / layout.scale;
       const srcH = cropDisplaySize / layout.scale;
-      const cx = (contentX / layout.renderW) * layout.naturalWidth;
-      const cy = (contentY / layout.renderH) * layout.naturalHeight;
+      const cx = x * layout.naturalWidth;
+      const cy = y * layout.naturalHeight;
       const sx = Math.max(0, Math.min(layout.naturalWidth - srcW, cx - srcW / 2));
       const sy = Math.max(0, Math.min(layout.naturalHeight - srcH, cy - srcH / 2));
 
@@ -229,7 +205,6 @@ export default function ImageKeypointCanvas({
       ctx.lineTo(MAGNIFIER_SIZE, MAGNIFIER_SIZE / 2);
       ctx.stroke();
 
-      // Exact point under cursor at lens center.
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
       ctx.arc(MAGNIFIER_SIZE / 2, MAGNIFIER_SIZE / 2, 2.5, 0, Math.PI * 2);
@@ -247,12 +222,26 @@ export default function ImageKeypointCanvas({
     [showMagnifier, isActive, magnifierZoom]
   );
 
+  const activePoint = activeLabel ? keypoints[activeLabel] : null;
+
+  useEffect(() => {
+    if (!showMagnifier || !isActive) {
+      setLensVisible(false);
+      setLensCoords(null);
+      return;
+    }
+    if (activePoint) {
+      drawLensAtNormalized(activePoint.x, activePoint.y);
+    }
+  }, [showMagnifier, isActive, activePoint, activeLabel, drawLensAtNormalized]);
+
   const handlePointerMove = useCallback(
     (event) => {
-      if (!showMagnifier || !isActive) return;
-      drawLens(event.clientX, event.clientY);
+      if (!showMagnifier || !isActive || activePoint) return;
+      const point = toNormalized(event.clientX, event.clientY);
+      if (point) drawLensAtNormalized(point.x, point.y);
     },
-    [showMagnifier, isActive, drawLens]
+    [showMagnifier, isActive, activePoint, toNormalized, drawLensAtNormalized]
   );
 
   const handleStagePointerDown = (event) => {
@@ -279,7 +268,6 @@ export default function ImageKeypointCanvas({
     const handleMove = (event) => {
       const point = toNormalized(event.clientX, event.clientY);
       if (point) onDragPoint?.(dragLabel, point);
-      drawLens(event.clientX, event.clientY);
     };
 
     const handleUp = () => setDragLabel(null);
@@ -290,22 +278,34 @@ export default function ImageKeypointCanvas({
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [dragLabel, onDragPoint, toNormalized, drawLens]);
-
-  useEffect(() => {
-    if (!showMagnifier || !isActive) {
-      setLensVisible(false);
-      setLensCoords(null);
-    }
-  }, [showMagnifier, isActive]);
+  }, [dragLabel, onDragPoint, toNormalized]);
 
   return (
     <div className="image-keypoint-canvas-wrap" ref={containerRef}>
+      {showMagnifier && isActive && (
+        <div className="image-keypoint-magnifier-dock">
+          <canvas
+            ref={lensRef}
+            className={`image-cursor-magnifier-lens image-cursor-magnifier-lens--docked${lensVisible ? ' visible' : ''}`}
+            aria-hidden
+          />
+          {lensVisible && lensCoords && (
+            <div className="image-cursor-magnifier-coords image-cursor-magnifier-coords--docked">
+              x: {lensCoords.x}, y: {lensCoords.y}
+            </div>
+          )}
+        </div>
+      )}
+
       <div
         className="image-keypoint-canvas-stage"
         onPointerDown={handleStagePointerDown}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
+          if (activePoint) {
+            drawLensAtNormalized(activePoint.x, activePoint.y);
+            return;
+          }
           setLensVisible(false);
           setLensCoords(null);
         }}
@@ -342,24 +342,6 @@ export default function ImageKeypointCanvas({
             );
           })}
       </div>
-      {showMagnifier && isActive && (
-        <>
-          <canvas
-            ref={lensRef}
-            className={`image-cursor-magnifier-lens${lensVisible ? ' visible' : ''}`}
-            style={{ left: `${lensPos.left}px`, top: `${lensPos.top}px` }}
-            aria-hidden
-          />
-          {lensVisible && lensCoords && (
-            <div
-              className="image-cursor-magnifier-coords"
-              style={{ left: `${lensPos.left}px`, top: `${lensPos.top + MAGNIFIER_SIZE + 4}px` }}
-            >
-              x: {lensCoords.x}, y: {lensCoords.y}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }

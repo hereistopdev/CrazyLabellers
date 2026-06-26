@@ -2,11 +2,12 @@ const ImageAssignment = require('../models/ImageAssignment');
 const ImageKeypointSubmission = require('../models/ImageKeypointSubmission');
 const TaskGroup = require('../models/TaskGroup');
 const {
-  buildKeypointExportPayload,
+  buildMergedKeypointExportPayload,
   getExportFilename,
   normalizeKeypoints,
-  countMarkedKeypoints,
+  countLabellerExportKeypoints,
 } = require('../utils/imageKeypointExport');
+const { loadReferenceRawJsonForImage } = require('./imageReferenceStorage');
 const { sendGroupExportZip, resolveGroupFolderName } = require('./groupExport');
 
 async function loadImageGroupAssignments(groupId) {
@@ -52,12 +53,10 @@ async function buildImageGroupExport({ groupId, userId }) {
     }).lean();
 
     const map = normalizeKeypoints(submission?.keypoints || []);
-    if (countMarkedKeypoints(map) === 0) continue;
+    if (countLabellerExportKeypoints(map) === 0) continue;
 
-    const payload = buildKeypointExportPayload(assignment, map, {
-      width: assignment.width,
-      height: assignment.height,
-    });
+    const referenceRaw = loadReferenceRawJsonForImage(assignment.imageId);
+    const payload = buildMergedKeypointExportPayload(assignment, map, referenceRaw);
     const filename = getExportFilename(assignment.imageId);
     files.push({
       path: `${folderName}/${filename}`,
@@ -66,7 +65,9 @@ async function buildImageGroupExport({ groupId, userId }) {
   }
 
   if (files.length === 0) {
-    const error = new Error('No labeled frames to export in this project');
+    const error = new Error(
+      'No exportable frames yet — mark kp0–kp8 on at least one frame before downloading'
+    );
     error.status = 404;
     throw error;
   }

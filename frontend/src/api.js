@@ -384,6 +384,8 @@ export const api = {
   getAdminImages: () => request('/admin/images'),
   uploadImages: (formData) => uploadRequest('/admin/images/upload', formData),
   deleteAdminImage: (id) => request(`/admin/images/${id}`, { method: 'DELETE' }),
+  bulkDeleteAdminImages: (body) =>
+    request('/admin/images/bulk-delete', { method: 'POST', body: JSON.stringify(body) }),
   reviewImageAssignment: (id, body) =>
     request(`/admin/images/assignments/${id}/review`, {
       method: 'PATCH',

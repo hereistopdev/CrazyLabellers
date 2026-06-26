@@ -43,7 +43,12 @@ function parseImageKeypointReference(data) {
   }
 
   if (keypoints.length === 0) {
-    throw new Error('Reference JSON has no valid keypoints');
+    return {
+      imageId,
+      width: hasDimensions ? width : null,
+      height: hasDimensions ? height : null,
+      keypoints,
+    };
   }
 
   return {

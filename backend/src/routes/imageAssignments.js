@@ -9,8 +9,9 @@ const {
   normalizeKeypoints,
   keypointsMapToArray,
   countMarkedKeypoints,
+  countLabellerExportKeypoints,
   REQUIRED_KEYPOINT_COUNT,
-  buildKeypointExportPayload,
+  buildMergedKeypointExportPayload,
   getExportFilename,
 } = require('../utils/imageKeypointExport');
 const { normalizeImageUrl } = require('../services/imageStorage');
@@ -674,11 +675,14 @@ router.get('/:id/export', auth, async (req, res) => {
     }
 
     const submission = await ImageKeypointSubmission.findOne(filter).sort({ updatedAt: -1 });
-    if (!submission?.keypoints?.length) {
-      return res.status(404).json({ message: 'No keypoints to export' });
+    const map = normalizeKeypoints(submission?.keypoints || []);
+    if (countLabellerExportKeypoints(map) === 0) {
+      return res.status(404).json({ message: 'No kp0–kp8 keypoints to export' });
     }
 
-    const payload = buildKeypointExportPayload(assignment, submission.keypoints);
+    const { loadReferenceRawJsonForImage } = require('../services/imageReferenceStorage');
+    const referenceRaw = loadReferenceRawJsonForImage(assignment.imageId);
+    const payload = buildMergedKeypointExportPayload(assignment, map, referenceRaw);
     const filename = getExportFilename(assignment.imageId);
 
     res.setHeader('Content-Type', 'application/json');

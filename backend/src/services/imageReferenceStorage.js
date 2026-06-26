@@ -17,9 +17,20 @@ function referenceFilePath(imageId) {
   return path.join(getImageReferenceDir(), getExportFilename(imageId));
 }
 
-function parseReferenceJson(raw) {
+function parseReferenceJsonObject(raw) {
   const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  return parseImageKeypointReference(data);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Reference JSON must be an object');
+  }
+  return data;
+}
+
+function extractReferenceKeypoints(data) {
+  try {
+    return parseImageKeypointReference(data).keypoints;
+  } catch {
+    return [];
+  }
 }
 
 async function saveReferenceForImage(imageId, rawJson, { sourceFilename = '' } = {}) {
@@ -27,42 +38,52 @@ async function saveReferenceForImage(imageId, rawJson, { sourceFilename = '' } =
     throw new Error('Invalid image ID');
   }
 
-  const parsed = parseReferenceJson(rawJson);
-  const storedId = parsed.imageId && isSafeClipId(parsed.imageId) ? parsed.imageId : imageId;
+  const rawString = typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson, null, 2);
+  const data = parseReferenceJsonObject(rawString);
+  const storedId = data.image && isSafeClipId(String(data.image).trim()) ? String(data.image).trim() : imageId;
+  const keypoints = extractReferenceKeypoints(data);
 
-  fs.writeFileSync(referenceFilePath(storedId), JSON.stringify(rawJson, null, 2));
+  fs.writeFileSync(referenceFilePath(storedId), rawString);
 
   return {
     imageId: storedId,
-    width: parsed.width,
-    height: parsed.height,
-    keypoints: parsed.keypoints,
+    width: Number.isFinite(Number(data.width)) ? Number(data.width) : null,
+    height: Number.isFinite(Number(data.height)) ? Number(data.height) : null,
+    keypoints,
     sourceFilename,
   };
 }
 
-async function loadReferenceForImage(imageId) {
-  if (!isSafeClipId(imageId)) {
-    return { hasReference: false, keypoints: [], width: null, height: null };
-  }
-
+function loadReferenceRawJsonForImage(imageId) {
+  if (!isSafeClipId(imageId)) return null;
   const filePath = referenceFilePath(imageId);
-  if (!fs.existsSync(filePath)) {
-    return { hasReference: false, keypoints: [], width: null, height: null };
-  }
-
+  if (!fs.existsSync(filePath)) return null;
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
-    const parsed = parseReferenceJson(raw);
-    return {
-      hasReference: true,
-      keypoints: parsed.keypoints,
-      width: parsed.width,
-      height: parsed.height,
-    };
+    let data = parseReferenceJsonObject(raw);
+    if (typeof data === 'string') {
+      data = parseReferenceJsonObject(data);
+    }
+    return data;
   } catch {
-    return { hasReference: false, keypoints: [], width: null, height: null };
+    return null;
   }
+}
+
+async function loadReferenceForImage(imageId) {
+  const raw = loadReferenceRawJsonForImage(imageId);
+  if (!raw) {
+    return { hasReference: false, keypoints: [], width: null, height: null, raw: null };
+  }
+
+  const keypoints = extractReferenceKeypoints(raw);
+  return {
+    hasReference: true,
+    keypoints,
+    width: Number.isFinite(Number(raw.width)) ? Number(raw.width) : null,
+    height: Number.isFinite(Number(raw.height)) ? Number(raw.height) : null,
+    raw,
+  };
 }
 
 function deleteReferenceForImage(imageId) {
@@ -82,6 +103,7 @@ module.exports = {
   getImageReferenceDir,
   saveReferenceForImage,
   loadReferenceForImage,
+  loadReferenceRawJsonForImage,
   deleteReferenceForImage,
   hasReferenceForImage,
 };

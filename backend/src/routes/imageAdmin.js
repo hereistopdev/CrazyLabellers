@@ -17,6 +17,7 @@ const {
   deleteReferenceForImage,
   hasReferenceForImage,
 } = require('../services/imageReferenceStorage');
+const { deleteImageAssignmentRecord, deleteImageAssignmentsByFilter } = require('../services/imageAssignmentDelete');
 const { validateTaskPrice } = require('../config/payments');
 const path = require('path');
 
@@ -24,10 +25,10 @@ const router = express.Router();
 
 const uploadImages = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024, files: 200 },
+  limits: { fileSize: 25 * 1024 * 1024, files: 500 },
 }).fields([
-  { name: 'images', maxCount: 100 },
-  { name: 'references', maxCount: 100 },
+  { name: 'images', maxCount: 250 },
+  { name: 'references', maxCount: 250 },
 ]);
 
 router.get('/', auth, requireVideoManagerAccess, async (_req, res) => {
@@ -140,6 +141,7 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
       return res.status(201).json({
         created: created.length,
         skipped: skipped.length,
+        matchedReferences: created.filter((row) => row.hasReference).length,
         items: created,
         skippedItems: skipped,
       });
@@ -149,6 +151,35 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
   });
 });
 
+router.post('/bulk-delete', auth, requireVideoManagerAccess, async (req, res) => {
+  try {
+    const { assignmentIds, groupId } = req.body || {};
+    let filter = null;
+
+    if (Array.isArray(assignmentIds) && assignmentIds.length > 0) {
+      filter = { _id: { $in: assignmentIds } };
+    } else if (groupId === 'ungrouped') {
+      filter = { groupId: null };
+    } else if (groupId) {
+      filter = { groupId };
+    } else {
+      return res.status(400).json({ message: 'Provide assignmentIds or groupId to delete' });
+    }
+
+    const deleted = await deleteImageAssignmentsByFilter(filter);
+    if (deleted === 0) {
+      return res.status(404).json({ message: 'No matching images to delete' });
+    }
+
+    return res.json({
+      message: `Deleted ${deleted} image${deleted === 1 ? '' : 's'}`,
+      deleted,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
 router.delete('/:id', auth, requireVideoManagerAccess, async (req, res) => {
   try {
     const assignment = await ImageAssignment.findById(req.params.id);
@@ -156,10 +187,7 @@ router.delete('/:id', auth, requireVideoManagerAccess, async (req, res) => {
       return res.status(404).json({ message: 'Image assignment not found' });
     }
 
-    await ImageKeypointSubmission.deleteMany({ assignmentId: assignment._id });
-    deleteImageFile(assignment.imageId);
-    deleteReferenceForImage(assignment.imageId);
-    await ImageAssignment.findByIdAndDelete(assignment._id);
+    await deleteImageAssignmentRecord(assignment);
 
     return res.json({ message: 'Image assignment deleted' });
   } catch (error) {

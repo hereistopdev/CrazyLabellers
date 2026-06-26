@@ -11,6 +11,7 @@ import UploadGroupSelect, {
   validateGroupChoice,
 } from '../components/UploadGroupSelect';
 import { resolveImageUrl } from '../utils/imageUrl';
+import { analyzeImageUploadFiles, buildImageUploadFormData } from '../utils/imageUploadFiles';
 import { matchesDateRange } from '../utils/tableFilter';
 
 const MIN_PRICE = 0.3;
@@ -40,6 +41,8 @@ export default function ManageImages() {
   const [shareReference, setShareReference] = useState(true);
   const [reviewing, setReviewing] = useState(null);
   const [sharingRef, setSharingRef] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deletingBulk, setDeletingBulk] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -90,18 +93,41 @@ export default function ManageImages() {
     [groups]
   );
 
-  const splitUploadFiles = (files) => {
-    const images = [];
-    const references = [];
-    for (const file of files) {
-      const lower = file.name.toLowerCase();
-      if (lower.endsWith('.json')) {
-        references.push(file);
-      } else if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(lower)) {
-        images.push(file);
-      }
+  const uploadAnalysis = useMemo(
+    () => analyzeImageUploadFiles(selectedFiles),
+    [selectedFiles]
+  );
+
+  const filteredGroupCount = useMemo(() => {
+    if (table.filters.group === 'all') return 0;
+    return images.filter((row) => {
+      const groupKey = row.groupId?._id || row.groupId || 'ungrouped';
+      if (table.filters.group === 'ungrouped') return groupKey === 'ungrouped';
+      return String(groupKey) === table.filters.group;
+    }).length;
+  }, [images, table.filters.group]);
+
+  const pageIds = table.paginated.map((row) => row._id);
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+
+  const toggleSelectAllPage = () => {
+    if (allPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      return;
     }
-    return { images, references };
+    setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+  };
+
+  const toggleSelectRow = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
+    );
+  };
+
+  const handleFilesChange = (event) => {
+    setSelectedFiles([...(event.target.files || [])]);
+    event.target.value = '';
   };
 
   const handleUpload = async (event) => {
@@ -120,8 +146,7 @@ export default function ManageImages() {
       return;
     }
 
-    const { images, references } = splitUploadFiles(selectedFiles);
-    if (!images.length) {
+    if (!uploadAnalysis.imageCount) {
       setError('No image files found. Include .png/.jpg files; add matching .json files to import references.');
       return;
     }
@@ -132,20 +157,20 @@ export default function ManageImages() {
       return;
     }
 
-    const formData = new FormData();
-    images.forEach((file) => formData.append('images', file));
-    references.forEach((file) => formData.append('references', file));
-    formData.append('description', description);
-    formData.append('taskPrice', String(price));
-    formData.append('allowLabellerReference', shareReference ? 'true' : 'false');
-    appendGroupFields(formData, groupChoice, newGroupName);
+    const { formData } = buildImageUploadFormData(selectedFiles, {
+      description,
+      taskPrice: String(price),
+      allowLabellerReference: shareReference ? 'true' : 'false',
+    });
+    appendGroupFields(formData, { choice: groupChoice, newName: newGroupName });
 
     setUploading(true);
     try {
       const result = await api.uploadImages(formData);
+      const matched = result.matchedReferences ?? uploadAnalysis.matchedCount;
       setMessage(
         `Uploaded ${result.created} image${result.created === 1 ? '' : 's'}` +
-          (references.length ? ` with ${references.length} reference JSON file(s)` : '') +
+          (matched ? ` with ${matched} paired reference JSON file(s)` : '') +
           (result.skipped ? ` (${result.skipped} skipped)` : '')
       );
       setSelectedFiles([]);
@@ -203,10 +228,66 @@ export default function ManageImages() {
     setError('');
     try {
       await api.deleteAdminImage(id);
+      setSelectedIds((prev) => prev.filter((rowId) => rowId !== id));
       setMessage('Image deleted');
       load();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${selectedIds.length} selected image task${selectedIds.length === 1 ? '' : 's'}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingBulk(true);
+    setError('');
+    try {
+      const result = await api.bulkDeleteAdminImages({ assignmentIds: selectedIds });
+      setMessage(result.message || `Deleted ${result.deleted} image(s)`);
+      setSelectedIds([]);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeletingBulk(false);
+    }
+  };
+
+  const handleDeleteFilteredGroup = async () => {
+    const groupFilter = table.filters.group;
+    if (groupFilter === 'all' || filteredGroupCount === 0) return;
+
+    const groupLabel =
+      groupFilter === 'ungrouped'
+        ? 'ungrouped images'
+        : groupOptions.find((group) => group._id === groupFilter)?.name || 'this group';
+
+    if (
+      !window.confirm(
+        `Delete all ${filteredGroupCount} image task${filteredGroupCount === 1 ? '' : 's'} in "${groupLabel}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingBulk(true);
+    setError('');
+    try {
+      const result = await api.bulkDeleteAdminImages({ groupId: groupFilter });
+      setMessage(result.message || `Deleted ${result.deleted} image(s)`);
+      setSelectedIds([]);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeletingBulk(false);
     }
   };
 
@@ -250,35 +331,52 @@ export default function ManageImages() {
       <form className="card" style={{ marginBottom: '1.25rem' }} onSubmit={handleUpload}>
         <h2>Upload images</h2>
         <p className="text-muted" style={{ marginBottom: '0.85rem', fontSize: '0.88rem' }}>
-          Select images and matching reference JSON files together (same base name as image ID, e.g.{' '}
-          <code>6a3e79880f1aaf13c05e9f03.png</code> + <code>6a3e79880f1aaf13c05e9f03.json</code>).
-          Or choose a folder with images and a <code>labeling/</code> subfolder of JSON files.
+          Pair each image with a JSON file that shares the same base name (e.g.{' '}
+          <code>frame_000107.jpg</code> + <code>frame_000107.json</code>). Choose files or an entire
+          folder — matching is automatic.
         </p>
         <div className="form-grid">
-          <label className="form-field form-field--wide">
-            <span>Image + JSON files</span>
+          <label className="form-field">
+            <span>Choose files</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,.json"
+              multiple
+              onChange={handleFilesChange}
+            />
+          </label>
+
+          <label className="form-field">
+            <span>Choose folder</span>
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif,.json"
               multiple
               webkitdirectory=""
               directory=""
-              onChange={(e) => setSelectedFiles([...(e.target.files || [])])}
+              onChange={handleFilesChange}
             />
-            {selectedFiles.length > 0 && (
-              <small className="text-muted">
-                {splitUploadFiles(selectedFiles).images.length} image(s),{' '}
-                {splitUploadFiles(selectedFiles).references.length} JSON file(s)
-              </small>
-            )}
           </label>
+
+          {selectedFiles.length > 0 && (
+            <div className="form-field form-field--wide">
+              <small className="text-muted">
+                {uploadAnalysis.imageCount} image(s), {uploadAnalysis.jsonCount} JSON file(s),{' '}
+                {uploadAnalysis.matchedCount} auto-paired
+                {uploadAnalysis.unmatchedJsonCount > 0
+                  ? ` (${uploadAnalysis.unmatchedJsonCount} JSON without matching image)`
+                  : ''}
+              </small>
+            </div>
+          )}
 
           <UploadGroupSelect
             groups={groupOptions}
-            groupChoice={groupChoice}
-            onGroupChoiceChange={setGroupChoice}
-            newGroupName={newGroupName}
-            onNewGroupNameChange={setNewGroupName}
+            value={groupChoice}
+            onChange={setGroupChoice}
+            newName={newGroupName}
+            onNewNameChange={setNewGroupName}
+            label="Task group"
           />
 
           <label className="form-field">
@@ -355,6 +453,36 @@ export default function ManageImages() {
           </select>
         </TableToolbar>
 
+        <div className="actions-row" style={{ marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            disabled={deletingBulk || selectedIds.length === 0}
+            onClick={handleBulkDelete}
+          >
+            {deletingBulk ? 'Deleting…' : `Delete selected${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
+          </button>
+          {table.filters.group !== 'all' && filteredGroupCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              disabled={deletingBulk}
+              onClick={handleDeleteFilteredGroup}
+            >
+              Delete all in filtered group ({filteredGroupCount})
+            </button>
+          )}
+          {selectedIds.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setSelectedIds([])}
+            >
+              Clear selection
+            </button>
+          )}
+        </div>
+
         <Pagination
           page={table.page}
           totalPages={table.totalPages}
@@ -371,6 +499,14 @@ export default function ManageImages() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={toggleSelectAllPage}
+                      title="Select all on this page"
+                    />
+                  </th>
                   <th>Preview</th>
                   <th>Image ID</th>
                   <th>Group</th>
@@ -385,6 +521,13 @@ export default function ManageImages() {
               <tbody>
                 {table.paginated.map((row) => (
                   <tr key={row._id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(row._id)}
+                        onChange={() => toggleSelectRow(row._id)}
+                      />
+                    </td>
                     <td>
                       <img
                         className="admin-image-thumb"

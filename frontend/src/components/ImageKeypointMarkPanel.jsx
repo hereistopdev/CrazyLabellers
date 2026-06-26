@@ -89,11 +89,7 @@ export default function ImageKeypointMarkPanel({
 
       {projectLocked ? (
         <p className="text-muted image-keypoint-hotkeys">Final submission sent — awaiting review</p>
-      ) : (
-        <p className="text-muted image-keypoint-hotkeys">
-          A / D prev/next · P pitch · 0–8 keypoints · Delete clear
-        </p>
-      )}
+      ) : null}
     </aside>
   );
 }

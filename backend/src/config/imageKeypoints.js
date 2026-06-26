@@ -13,6 +13,7 @@ const IMAGE_KEYPOINT_LABELS = [
 
 const LABEL_IDS = IMAGE_KEYPOINT_LABELS.map((item) => item.id);
 const LABEL_ID_SET = new Set(LABEL_IDS);
+const LABELLER_EXPORT_LABEL_IDS = LABEL_IDS.filter((id) => id.startsWith('kp'));
 
 function isValidKeypointLabel(label) {
   return LABEL_ID_SET.has(String(label || '').trim());
@@ -50,12 +51,18 @@ function countMarkedKeypoints(map) {
   return LABEL_IDS.filter((label) => map?.[label]).length;
 }
 
+function countLabellerExportKeypoints(map) {
+  return LABELLER_EXPORT_LABEL_IDS.filter((label) => map?.[label]).length;
+}
+
 module.exports = {
   IMAGE_KEYPOINT_LABELS,
   LABEL_IDS,
+  LABELLER_EXPORT_LABEL_IDS,
   isValidKeypointLabel,
   emptyKeypointsMap,
   normalizeKeypoints,
   keypointsMapToArray,
   countMarkedKeypoints,
+  countLabellerExportKeypoints,
 };

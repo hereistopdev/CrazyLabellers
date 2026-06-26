@@ -13,6 +13,7 @@ import {
   IMAGE_KEYPOINT_LABEL_IDS,
   emptyKeypointsMap,
   countMarkedKeypoints,
+  countLabellerExportKeypoints,
   keypointsMapToList,
   getKeypointLabelMeta,
   labelIdFromHotkey,
@@ -28,6 +29,13 @@ import {
 import {
   predictLabelInRange,
 } from '../utils/imageKeypointAutoMark';
+import {
+  isArrowKey,
+  arrowNudgeStep,
+  arrowNudgeDelta,
+  nudgeNormalizedPoint,
+} from '../utils/imageKeypointNudge';
+import { IMAGE_KEYPOINT_HOTKEYS } from '../config/imageKeypointHotkeys';
 
 function pickInitialImageId(images, user, requestedId) {
   const requested = requestedId ? String(requestedId) : '';
@@ -126,6 +134,14 @@ export default function ImageGroupLabeling() {
 
   const hasRejectedFrames = useMemo(
     () => [...labelableIds].some((id) => keypointsById[id]?.status === 'rejected'),
+    [labelableIds, keypointsById]
+  );
+
+  const hasExportableWork = useMemo(
+    () =>
+      [...labelableIds].some(
+        (id) => countLabellerExportKeypoints(keypointsById[id]?.keypoints) > 0
+      ),
     [labelableIds, keypointsById]
   );
 
@@ -487,6 +503,25 @@ export default function ImageGroupLabeling() {
         return;
       }
 
+      if (isArrowKey(event.key)) {
+        if (readOnly) return;
+        const point = keypointsByIdRef.current[selectedKey]?.keypoints?.[activeLabel];
+        if (!point) return;
+        const dims = dimensionsRef.current[selectedKey];
+        const width = dims?.width;
+        const height = dims?.height;
+        if (!width || !height) return;
+        const step = arrowNudgeStep(event);
+        const delta = arrowNudgeDelta(event.key, step);
+        if (!delta) return;
+        event.preventDefault();
+        updateKeypoints((prev) => ({
+          ...prev,
+          [activeLabel]: nudgeNormalizedPoint(prev[activeLabel], delta, width, height),
+        }));
+        return;
+      }
+
       if (event.target.closest('button')) return;
       if (event.key.toLowerCase() === 'a') {
         event.preventDefault();
@@ -563,7 +598,7 @@ export default function ImageGroupLabeling() {
               {claiming ? 'Claiming…' : 'Claim project'}
             </button>
           )}
-          {labelableIds.size > 0 && hasMarkedWork && (
+          {labelableIds.size > 0 && hasExportableWork && (
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -593,6 +628,18 @@ export default function ImageGroupLabeling() {
               {submitting ? 'Submitting…' : hasRejectedFrames ? 'Resubmit final' : 'Submit final'}
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="image-group-hotkeys-bar">
+        <span className="image-group-hotkeys-title">Hotkeys</span>
+        <div className="image-group-hotkeys-list">
+          {IMAGE_KEYPOINT_HOTKEYS.map((item) => (
+            <span key={item.keys} className="image-group-hotkey-item">
+              <kbd>{item.keys}</kbd>
+              <span>{item.action}</span>
+            </span>
+          ))}
         </div>
       </div>
 

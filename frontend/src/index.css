@@ -7113,6 +7113,53 @@ a.video-label-link.btn:hover {
   margin-top: 0.1rem;
 }
 
+.image-group-hotkeys-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+
+.image-group-hotkeys-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.image-group-hotkeys-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.85rem;
+  min-width: 0;
+}
+
+.image-group-hotkey-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.image-group-hotkey-item kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.08rem 0.35rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .image-auto-mark-toggle {
   display: inline-flex;
   align-items: center;
@@ -7387,6 +7434,29 @@ a.video-label-link.btn:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.72rem;
   white-space: nowrap;
+}
+
+.image-keypoint-magnifier-dock {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  pointer-events: none;
+}
+
+.image-cursor-magnifier-lens--docked {
+  position: static;
+  z-index: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.image-cursor-magnifier-coords--docked {
+  position: static;
+  z-index: auto;
 }
 
 .image-group-workspace--immersive .image-keypoint-mark-panel {
