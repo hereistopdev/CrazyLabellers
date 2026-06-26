@@ -1,9 +1,28 @@
 import { getUserId } from './userId';
 import {
+  IMAGE_KEYPOINT_LABEL_IDS,
+  emptyKeypointsMap,
   normalizeKeypointsMap,
   keypointsMapToList,
   countMarkedKeypoints,
 } from '../config/imageKeypoints';
+
+export function cloneKeypointsCache(cache) {
+  const next = {};
+  for (const [assignmentId, entry] of Object.entries(cache || {})) {
+    const keypoints = emptyKeypointsMap();
+    for (const label of IMAGE_KEYPOINT_LABEL_IDS) {
+      const point = entry?.keypoints?.[label];
+      if (point) keypoints[label] = { x: point.x, y: point.y };
+    }
+    next[assignmentId] = {
+      keypoints,
+      status: entry?.status || 'draft',
+      reviewerNotes: entry?.reviewerNotes || '',
+    };
+  }
+  return next;
+}
 
 function storageKey(groupId, userId) {
   return `image-kp-draft:${userId}:${groupId || 'ungrouped'}`;

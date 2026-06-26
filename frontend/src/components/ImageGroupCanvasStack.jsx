@@ -11,6 +11,7 @@ export default function ImageGroupCanvasStack({
   magnifierZoom = 3,
   onPlacePoint,
   onDragPoint,
+  onDragBegin,
   onSelectLabel,
   onImageDimensions,
 }) {
@@ -49,6 +50,7 @@ export default function ImageGroupCanvasStack({
             magnifierZoom={magnifierZoom}
             onPlacePoint={onPlacePoint}
             onDragPoint={onDragPoint}
+            onDragBegin={onDragBegin}
             onSelectLabel={onSelectLabel}
             onImageDimensions={handleImageDimensions}
           />

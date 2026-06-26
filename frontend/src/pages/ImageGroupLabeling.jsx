@@ -25,6 +25,7 @@ import {
   clearImageKeypointDraft,
   mergeDraftIntoCache,
   cacheToDraftPayload,
+  cloneKeypointsCache,
 } from '../utils/imageKeypointDraftStorage';
 import {
   predictLabelInRange,
@@ -36,6 +37,9 @@ import {
   nudgeNormalizedPoint,
 } from '../utils/imageKeypointNudge';
 import { IMAGE_KEYPOINT_HOTKEYS } from '../config/imageKeypointHotkeys';
+import { isEditableTarget } from '../config/labelingHotkeys';
+
+const MAX_UNDO_STEPS = 50;
 
 function pickInitialImageId(images, user, requestedId) {
   const requested = requestedId ? String(requestedId) : '';
@@ -75,6 +79,7 @@ export default function ImageGroupLabeling() {
   const dimensionsRef = useRef({});
   const syncedImageParamRef = useRef('');
   const workspaceLoadedRef = useRef(false);
+  const undoStackRef = useRef([]);
 
   const [workspace, setWorkspace] = useState(null);
   const [keypointsById, setKeypointsById] = useState({});
@@ -159,6 +164,7 @@ export default function ImageGroupLabeling() {
       const draft = loadImageKeypointDraft(groupId, user);
       const cache = mergeDraftIntoCache(data.images, draft);
       keypointsByIdRef.current = cache;
+      undoStackRef.current = [];
       setKeypointsById(cache);
       setWorkspace(data);
       setSelectedId(pickInitialImageId(data.images, user, initialImageRef.current));
@@ -223,8 +229,35 @@ export default function ImageGroupLabeling() {
     [groupId, user]
   );
 
+  const applyKeypointsCache = useCallback(
+    (cache) => {
+      keypointsByIdRef.current = cache;
+      setKeypointsById(cache);
+      persistLocalDraft(cache);
+    },
+    [persistLocalDraft]
+  );
+
+  const pushUndoSnapshot = useCallback(() => {
+    if (readOnly || projectLocked) return;
+    undoStackRef.current.push(cloneKeypointsCache(keypointsByIdRef.current));
+    if (undoStackRef.current.length > MAX_UNDO_STEPS) {
+      undoStackRef.current.shift();
+    }
+  }, [readOnly, projectLocked]);
+
+  const undoLastChange = useCallback(() => {
+    if (readOnly || projectLocked) return false;
+    const snapshot = undoStackRef.current.pop();
+    if (!snapshot) return false;
+    applyKeypointsCache(snapshot);
+    setMessage('Undid last change');
+    return true;
+  }, [readOnly, projectLocked, applyKeypointsCache]);
+
   const updateKeypointsCache = useCallback(
-    (assignmentId, map, status) => {
+    (assignmentId, map, status, { recordUndo = true } = {}) => {
+      if (recordUndo) pushUndoSnapshot();
       const id = String(assignmentId);
       setKeypointsById((prev) => {
         const next = {
@@ -240,15 +273,15 @@ export default function ImageGroupLabeling() {
         return next;
       });
     },
-    [persistLocalDraft]
+    [persistLocalDraft, pushUndoSnapshot]
   );
 
   const updateKeypoints = useCallback(
-    (updater) => {
+    (updater, { recordUndo = true } = {}) => {
       if (!selectedKey || readOnly) return;
       const prev = keypointsByIdRef.current[selectedKey]?.keypoints || emptyKeypointsMap();
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      updateKeypointsCache(selectedKey, next);
+      updateKeypointsCache(selectedKey, next, undefined, { recordUndo });
     },
     [selectedKey, readOnly, updateKeypointsCache]
   );
@@ -272,6 +305,7 @@ export default function ImageGroupLabeling() {
         return;
       }
 
+      pushUndoSnapshot();
       setKeypointsById((prev) => {
         const next = { ...prev };
         for (const [assignmentId, labelPoints] of Object.entries(result.updates)) {
@@ -292,7 +326,7 @@ export default function ImageGroupLabeling() {
         `Auto-marked ${labelText} on ${result.frameCount} frame${result.frameCount === 1 ? '' : 's'}`
       );
     },
-    [images, labelableIds, persistLocalDraft, readOnly]
+    [images, labelableIds, persistLocalDraft, pushUndoSnapshot, readOnly]
   );
 
   const selectedFrame = useMemo(() => {
@@ -356,8 +390,8 @@ export default function ImageGroupLabeling() {
     [labelableIds, images]
   );
 
-  const handleSaveDraft = async () => {
-    if (!hasMarkedWork || projectLocked) return;
+  const handleSaveDraft = useCallback(async () => {
+    if (!hasMarkedWork || projectLocked || savingDraft) return;
 
     setSavingDraft(true);
     setError('');
@@ -387,7 +421,15 @@ export default function ImageGroupLabeling() {
     } finally {
       setSavingDraft(false);
     }
-  };
+  }, [
+    hasMarkedWork,
+    projectLocked,
+    savingDraft,
+    groupId,
+    buildSubmissionsPayload,
+    labelableIds,
+    persistLocalDraft,
+  ]);
 
   const handleSubmitFinal = async () => {
     if (!allFramesComplete) {
@@ -481,7 +523,21 @@ export default function ImageGroupLabeling() {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.target.closest('input, textarea, select')) return;
+      if (isEditableTarget(event.target)) return;
+
+      const ctrlKey = event.ctrlKey || event.metaKey;
+      if (ctrlKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (!projectLocked && hasMarkedWork) {
+          handleSaveDraft();
+        }
+        return;
+      }
+      if (ctrlKey && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undoLastChange();
+        return;
+      }
 
       const labelId = labelIdFromHotkey(event.key, event.code);
       if (labelId) {
@@ -531,7 +587,17 @@ export default function ImageGroupLabeling() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [moveSelection, readOnly, activeLabel, selectedKey, updateKeypoints]);
+  }, [
+    moveSelection,
+    readOnly,
+    activeLabel,
+    selectedKey,
+    updateKeypoints,
+    handleSaveDraft,
+    undoLastChange,
+    projectLocked,
+    hasMarkedWork,
+  ]);
 
   const handleImageDimensions = useCallback((assignmentId, dims) => {
     const id = String(assignmentId);
@@ -738,9 +804,13 @@ export default function ImageGroupLabeling() {
                     updateKeypoints((prev) => ({ ...prev, [label]: point }));
                     setActiveLabel(label);
                   }}
+                  onDragBegin={() => {
+                    if (readOnly) return;
+                    pushUndoSnapshot();
+                  }}
                   onDragPoint={(label, point) => {
                     if (readOnly) return;
-                    updateKeypoints((prev) => ({ ...prev, [label]: point }));
+                    updateKeypoints((prev) => ({ ...prev, [label]: point }), { recordUndo: false });
                   }}
                   onSelectLabel={setActiveLabel}
                   onImageDimensions={handleImageDimensions}

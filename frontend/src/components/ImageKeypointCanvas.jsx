@@ -43,6 +43,7 @@ export default function ImageKeypointCanvas({
   magnifierZoom = 3,
   onPlacePoint,
   onDragPoint,
+  onDragBegin,
   onSelectLabel,
   onImageDimensions,
 }) {
@@ -265,6 +266,7 @@ export default function ImageKeypointCanvas({
     event.stopPropagation();
     event.preventDefault();
     onSelectLabel?.(label);
+    onDragBegin?.(label);
     setDragLabel(label);
   };
 
