@@ -31,7 +31,27 @@ function getImageBaseUrl() {
 
 function buildImageUrl(imageId, extension = '.png') {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  return `${getImageBaseUrl()}/api/images/${encodeURIComponent(`${imageId}${ext}`)}`;
+  return `/api/images/${encodeURIComponent(`${imageId}${ext}`)}`;
+}
+
+function normalizeImageUrl(imageUrl) {
+  const trimmed = String(imageUrl || '').trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('/api/images/')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed, 'http://local');
+    if (parsed.pathname.startsWith('/api/images/')) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    // not a URL
+  }
+
+  return trimmed;
 }
 
 function resolveImageId(filename, explicitId) {
@@ -91,6 +111,8 @@ module.exports = {
   isImageFilename,
   ensureImageDataDir,
   buildImageUrl,
+  normalizeImageUrl,
+  getImageBaseUrl,
   resolveImageId,
   findLocalImagePath,
   storeImageFile,

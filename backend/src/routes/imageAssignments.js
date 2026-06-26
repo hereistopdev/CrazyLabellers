@@ -13,8 +13,15 @@ const {
   buildKeypointExportPayload,
   getExportFilename,
 } = require('../utils/imageKeypointExport');
+const { normalizeImageUrl } = require('../services/imageStorage');
+const { ensureImageSubmissionSeeded } = require('../services/imageReferenceDraftSeed');
 
 const router = express.Router();
+
+router.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 function canAccessImageLabeling(user) {
   if (!user) return false;
@@ -61,17 +68,36 @@ function summarizeImageRow(assignment, submission) {
     _id: assignment._id,
     imageId: assignment.imageId,
     title: assignment.title,
-    imageUrl: assignment.imageUrl,
+    imageUrl: normalizeImageUrl(assignment.imageUrl),
+    width: assignment.width,
+    height: assignment.height,
     status: assignment.status,
     sortOrder: assignment.sortOrder,
     assignedTo: assignment.assignedTo,
+    allowLabellerReference: Boolean(assignment.allowLabellerReference),
+    hasReference: Boolean(assignment.hasReference),
     markedCount: countMarkedKeypoints(map),
     requiredCount: REQUIRED_KEYPOINT_COUNT,
     submissionStatus: submission?.status || 'draft',
+    reviewerNotes: submission?.reviewerNotes || '',
     isComplete: countMarkedKeypoints(map) >= REQUIRED_KEYPOINT_COUNT,
     keypoints: map,
     keypointsList: keypointsMapToArray(map),
   };
+}
+
+async function seedSubmissionIfNeeded(assignment, userId, existingSubmission) {
+  return ensureImageSubmissionSeeded(assignment, userId, existingSubmission);
+}
+
+function isSubmissionEditable(submission) {
+  const status = submission?.status || 'draft';
+  return status === 'draft' || status === 'rejected';
+}
+
+function isSubmissionLocked(submission) {
+  const status = submission?.status || 'draft';
+  return status === 'submitted' || status === 'approved';
 }
 
 function isAssignedToUserId(assignedTo, userId) {
@@ -119,6 +145,7 @@ router.get('/groups', auth, async (req, res) => {
           myCount: 0,
           completeCount: 0,
           submittedCount: 0,
+          rejectedCount: 0,
           canClaim: false,
           canOpen: false,
         });
@@ -148,6 +175,10 @@ router.get('/groups', auth, async (req, res) => {
 
       if (isMine && (submission?.status === 'submitted' || assignment.status === 'submitted')) {
         bucket.submittedCount += 1;
+      }
+
+      if (isMine && submission?.status === 'rejected') {
+        bucket.rejectedCount = (bucket.rejectedCount || 0) + 1;
       }
 
       if (isAdmin(req.user)) {
@@ -213,6 +244,17 @@ router.get('/groups/:groupId', auth, async (req, res) => {
       submissions.map((row) => [String(row.assignmentId), row])
     );
 
+    for (const assignment of assignments) {
+      if (!isAssignedToUserId(assignment.assignedTo, req.user._id)) {
+        continue;
+      }
+      const existing = submissionByAssignment.get(String(assignment._id));
+      const seeded = await seedSubmissionIfNeeded(assignment, req.user._id, existing);
+      if (seeded && seeded !== existing) {
+        submissionByAssignment.set(String(assignment._id), seeded);
+      }
+    }
+
     const images = assignments.map((assignment) => {
       const submission = submissionByAssignment.get(String(assignment._id));
       return summarizeImageRow(assignment, submission);
@@ -234,6 +276,7 @@ router.get('/groups/:groupId', auth, async (req, res) => {
         mine: mine.length,
         complete: mine.filter((row) => row.isComplete).length,
         submitted: mine.filter((row) => row.submissionStatus === 'submitted').length,
+        rejected: mine.filter((row) => row.submissionStatus === 'rejected').length,
       },
       access: {
         canClaim: canClaim && !isAdmin(req.user),
@@ -284,11 +327,11 @@ router.post('/groups/:groupId/claim', auth, async (req, res) => {
       assignment.status = 'assigned';
       await assignment.save();
 
-      await ImageKeypointSubmission.findOneAndUpdate(
-        { assignmentId: assignment._id, userId: req.user._id },
-        { $setOnInsert: { keypoints: [], status: 'draft' } },
-        { upsert: true, new: true }
-      );
+      const existing = await ImageKeypointSubmission.findOne({
+        assignmentId: assignment._id,
+        userId: req.user._id,
+      });
+      await ensureImageSubmissionSeeded(assignment, req.user._id, existing);
 
       claimed.push(assignment);
     }
@@ -302,12 +345,31 @@ router.post('/groups/:groupId/claim', auth, async (req, res) => {
   }
 });
 
+router.get('/groups/:groupId/export', auth, async (req, res) => {
+  try {
+    if (!canAccessImageLabeling(req.user)) {
+      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
+    }
+
+    const { buildImageGroupExport } = require('../services/imageGroupExport');
+    const { sendGroupExportZip } = require('../services/groupExport');
+    const result = await buildImageGroupExport({
+      groupId: req.params.groupId,
+      userId: req.user._id,
+    });
+    return sendGroupExportZip(res, result);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
 router.post('/groups/:groupId/submit', auth, async (req, res) => {
   try {
     if (!canAccessImageLabeling(req.user)) {
       return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
     }
 
+    const mode = req.body.mode === 'draft' ? 'draft' : 'final';
     const groupFilter =
       req.params.groupId === 'ungrouped' ? { groupId: null } : { groupId: req.params.groupId };
 
@@ -324,7 +386,7 @@ router.post('/groups/:groupId/submit', auth, async (req, res) => {
       return res.status(400).json({ message: 'One or more images do not belong to this project' });
     }
 
-    let submittedCount = 0;
+    let savedCount = 0;
     for (const row of submissions) {
       const assignment = assignmentMap.get(String(row.assignmentId));
       if (!assignment) continue;
@@ -337,30 +399,69 @@ router.post('/groups/:groupId/submit', auth, async (req, res) => {
         return res.status(403).json({ message: 'Claim this project before submitting' });
       }
 
+      const existing = await ImageKeypointSubmission.findOne({
+        assignmentId: assignment._id,
+        userId: req.user._id,
+      });
+
+      if (existing && isSubmissionLocked(existing) && mode === 'draft') {
+        return res.status(403).json({
+          message: `Frame "${assignment.imageId}" is submitted — wait for review or resubmit after rejection`,
+        });
+      }
+
+      if (mode === 'final' && existing?.status === 'approved') {
+        return res.status(403).json({ message: `Frame "${assignment.imageId}" is already approved` });
+      }
+
+      if (mode === 'final' && existing?.status === 'submitted') {
+        return res.status(403).json({
+          message: `Frame "${assignment.imageId}" is already submitted and awaiting review`,
+        });
+      }
+
       const map = normalizeKeypoints(row.keypoints || row.keypointsList || []);
-      if (countMarkedKeypoints(map) < REQUIRED_KEYPOINT_COUNT) {
+      if (mode === 'final' && countMarkedKeypoints(map) < REQUIRED_KEYPOINT_COUNT) {
         return res.status(400).json({
           message: `Frame "${assignment.imageId}" is missing points — mark pitch + kp0–kp8 on every frame`,
         });
       }
 
+      if (mode === 'draft' && countMarkedKeypoints(map) === 0) {
+        continue;
+      }
+
       const keypoints = keypointsMapToArray(map);
+      const update =
+        mode === 'final'
+          ? {
+              $set: { keypoints, status: 'submitted', reviewerNotes: '' },
+              $unset: { reviewPoints: '', reviewedAt: '', reviewedBy: '' },
+            }
+          : { $set: { keypoints, status: 'draft' } };
+
       await ImageKeypointSubmission.findOneAndUpdate(
         { assignmentId: assignment._id, userId: req.user._id },
-        { keypoints, status: 'submitted' },
+        update,
         { upsert: true, new: true }
       );
 
-      assignment.status = 'submitted';
+      assignment.status = mode === 'draft' ? 'in_progress' : 'submitted';
       if (row.width) assignment.width = row.width;
       if (row.height) assignment.height = row.height;
       await assignment.save();
-      submittedCount += 1;
+      savedCount += 1;
     }
 
+    if (savedCount === 0 && mode === 'draft') {
+      return res.status(400).json({ message: 'Nothing to save — mark at least one point first' });
+    }
+
+    const label = mode === 'draft' ? 'Draft saved' : 'Submitted';
     return res.json({
-      message: `Submitted ${submittedCount} frame${submittedCount === 1 ? '' : 's'}`,
-      submitted: submittedCount,
+      message: `${label} ${savedCount} frame${savedCount === 1 ? '' : 's'}`,
+      saved: savedCount,
+      mode,
     });
   } catch (error) {
     return res.status(400).json({ message: error.message });
@@ -476,6 +577,17 @@ router.put('/:id/keypoints', auth, async (req, res) => {
       return res.status(403).json({ message: 'Claim this image before labeling' });
     }
 
+    const existing = await ImageKeypointSubmission.findOne({
+      assignmentId: assignment._id,
+      userId: req.user._id,
+    });
+
+    if (existing && isSubmissionLocked(existing)) {
+      return res.status(403).json({
+        message: 'This frame is submitted and locked until review completes or admin rejects it',
+      });
+    }
+
     const map = normalizeKeypoints(req.body.keypoints || req.body.keypointsList || []);
     const keypoints = keypointsMapToArray(map);
 
@@ -525,7 +637,19 @@ router.post('/:id/submit', auth, async (req, res) => {
       });
     }
 
+    if (submission.status === 'submitted') {
+      return res.status(403).json({ message: 'Already submitted — awaiting review' });
+    }
+
+    if (submission.status === 'approved') {
+      return res.status(403).json({ message: 'Already approved' });
+    }
+
     submission.status = 'submitted';
+    submission.reviewerNotes = '';
+    submission.reviewPoints = undefined;
+    submission.reviewedAt = undefined;
+    submission.reviewedBy = undefined;
     await submission.save();
 
     assignment.status = 'submitted';

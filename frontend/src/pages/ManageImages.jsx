@@ -37,6 +37,9 @@ export default function ManageImages() {
   const [newGroupName, setNewGroupName] = useState('');
   const [taskPrice, setTaskPrice] = useState('0.5');
   const [description, setDescription] = useState('Cricket keypoint labeling');
+  const [shareReference, setShareReference] = useState(true);
+  const [reviewing, setReviewing] = useState(null);
+  const [sharingRef, setSharingRef] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -87,6 +90,20 @@ export default function ManageImages() {
     [groups]
   );
 
+  const splitUploadFiles = (files) => {
+    const images = [];
+    const references = [];
+    for (const file of files) {
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith('.json')) {
+        references.push(file);
+      } else if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(lower)) {
+        images.push(file);
+      }
+    }
+    return { images, references };
+  };
+
   const handleUpload = async (event) => {
     event.preventDefault();
     setError('');
@@ -99,7 +116,13 @@ export default function ManageImages() {
     }
 
     if (!selectedFiles.length) {
-      setError('Select one or more image files');
+      setError('Select one or more image files (and optional matching JSON references)');
+      return;
+    }
+
+    const { images, references } = splitUploadFiles(selectedFiles);
+    if (!images.length) {
+      setError('No image files found. Include .png/.jpg files; add matching .json files to import references.');
       return;
     }
 
@@ -110,9 +133,11 @@ export default function ManageImages() {
     }
 
     const formData = new FormData();
-    selectedFiles.forEach((file) => formData.append('images', file));
+    images.forEach((file) => formData.append('images', file));
+    references.forEach((file) => formData.append('references', file));
     formData.append('description', description);
     formData.append('taskPrice', String(price));
+    formData.append('allowLabellerReference', shareReference ? 'true' : 'false');
     appendGroupFields(formData, groupChoice, newGroupName);
 
     setUploading(true);
@@ -120,6 +145,7 @@ export default function ManageImages() {
       const result = await api.uploadImages(formData);
       setMessage(
         `Uploaded ${result.created} image${result.created === 1 ? '' : 's'}` +
+          (references.length ? ` with ${references.length} reference JSON file(s)` : '') +
           (result.skipped ? ` (${result.skipped} skipped)` : '')
       );
       setSelectedFiles([]);
@@ -128,6 +154,47 @@ export default function ManageImages() {
       setError(err.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleToggleReferenceShare = async (row, enabled) => {
+    setSharingRef(`${row._id}:${enabled}`);
+    setError('');
+    try {
+      await api.setImageReferenceShare(row._id, enabled);
+      setImages((prev) =>
+        prev.map((item) =>
+          item._id === row._id ? { ...item, allowLabellerReference: enabled } : item
+        )
+      );
+      setMessage(enabled ? 'Reference shared with labellers' : 'Reference hidden from labellers');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSharingRef(null);
+    }
+  };
+
+  const handleReferenceUpload = async (row, file) => {
+    if (!file) return;
+    setSharingRef(`${row._id}:upload`);
+    setError('');
+    try {
+      await api.uploadImageReference(row._id, (() => {
+        const formData = new FormData();
+        formData.append('reference', file);
+        return formData;
+      })());
+      setImages((prev) =>
+        prev.map((item) =>
+          item._id === row._id ? { ...item, hasReference: true } : item
+        )
+      );
+      setMessage('Reference JSON saved');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSharingRef(null);
     }
   };
 
@@ -140,6 +207,26 @@ export default function ManageImages() {
       load();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleReview = async (id, status, title) => {
+    let reviewerNotes = '';
+    if (status === 'rejected') {
+      reviewerNotes =
+        window.prompt(`Rejection notes for "${title}" (shown to labeller):`, '') ?? '';
+    }
+
+    setReviewing(`${id}:${status}`);
+    setError('');
+    try {
+      await api.reviewImageAssignment(id, { status, reviewerNotes });
+      setMessage(status === 'approved' ? 'Submission approved' : 'Submission rejected — labeller can resubmit');
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReviewing(null);
     }
   };
 
@@ -162,17 +249,27 @@ export default function ManageImages() {
 
       <form className="card" style={{ marginBottom: '1.25rem' }} onSubmit={handleUpload}>
         <h2>Upload images</h2>
+        <p className="text-muted" style={{ marginBottom: '0.85rem', fontSize: '0.88rem' }}>
+          Select images and matching reference JSON files together (same base name as image ID, e.g.{' '}
+          <code>6a3e79880f1aaf13c05e9f03.png</code> + <code>6a3e79880f1aaf13c05e9f03.json</code>).
+          Or choose a folder with images and a <code>labeling/</code> subfolder of JSON files.
+        </p>
         <div className="form-grid">
-          <label className="form-field">
-            <span>Image files</span>
+          <label className="form-field form-field--wide">
+            <span>Image + JSON files</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept="image/png,image/jpeg,image/webp,image/gif,.json"
               multiple
+              webkitdirectory=""
+              directory=""
               onChange={(e) => setSelectedFiles([...(e.target.files || [])])}
             />
             {selectedFiles.length > 0 && (
-              <small className="text-muted">{selectedFiles.length} file(s) selected</small>
+              <small className="text-muted">
+                {splitUploadFiles(selectedFiles).images.length} image(s),{' '}
+                {splitUploadFiles(selectedFiles).references.length} JSON file(s)
+              </small>
             )}
           </label>
 
@@ -203,6 +300,18 @@ export default function ManageImages() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </label>
+
+          <label className="form-field form-field--wide">
+            <span>
+              <input
+                type="checkbox"
+                checked={shareReference}
+                onChange={(e) => setShareReference(e.target.checked)}
+                style={{ marginRight: '0.45rem' }}
+              />
+              Share reference JSON with labellers as starting draft
+            </span>
           </label>
         </div>
 
@@ -268,6 +377,7 @@ export default function ManageImages() {
                   <th>Status</th>
                   <th>Price</th>
                   <th>Assigned</th>
+                  <th>Reference</th>
                   <th>Created</th>
                   <th />
                 </tr>
@@ -291,15 +401,65 @@ export default function ManageImages() {
                     </td>
                     <td>{formatMoney(row.taskPrice ?? 0)}</td>
                     <td>{row.assignedTo?.name || '—'}</td>
+                    <td>
+                      <div className="actions-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.35rem' }}>
+                        {row.hasReference ? (
+                          <label style={{ fontSize: '0.82rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(row.allowLabellerReference)}
+                              disabled={sharingRef === `${row._id}:true` || sharingRef === `${row._id}:false`}
+                              onChange={(e) => handleToggleReferenceShare(row, e.target.checked)}
+                            />{' '}
+                            Share with labellers
+                          </label>
+                        ) : (
+                          <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                            Upload JSON
+                            <input
+                              type="file"
+                              accept=".json,application/json"
+                              hidden
+                              onChange={(e) => {
+                                handleReferenceUpload(row, e.target.files?.[0]);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </td>
                     <td>{formatTimestamp(row.createdAt)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleDelete(row._id, row.title)}
-                      >
-                        Delete
-                      </button>
+                      <div className="actions-row">
+                        {row.status === 'submitted' && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              disabled={reviewing === `${row._id}:approved`}
+                              onClick={() => handleReview(row._id, 'approved', row.title)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={reviewing === `${row._id}:rejected`}
+                              onClick={() => handleReview(row._id, 'rejected', row.title)}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDelete(row._id, row.title)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

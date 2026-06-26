@@ -13,6 +13,12 @@ export function resolveImageUrl(imageUrl) {
     // not a full URL
   }
 
+  // Legacy records may store http://localhost:5000/api/images/... — use same-origin path.
+  const legacyMatch = trimmed.match(/\/api\/images\/[^?#]+/);
+  if (legacyMatch) {
+    return legacyMatch[0];
+  }
+
   return trimmed;
 }
 

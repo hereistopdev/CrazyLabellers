@@ -38,7 +38,7 @@ function sliceLabelableRange(images, fromFrame, toFrame, labelableIds) {
   const end = Math.max(fromFrame, toFrame) - 1;
   return images
     .slice(start, end + 1)
-    .filter((img) => labelableIds.has(img._id));
+    .filter((img) => labelableIds.has(String(img._id)));
 }
 
 function labelsMarkedOnAllReferences(referenceIds, keypointsById) {
@@ -70,7 +70,7 @@ export function predictLabelInRange({
     return { error: `Reference range needs at least ${MIN_AUTO_MARK_REFERENCES} labelable frames` };
   }
 
-  const referenceIds = referenceImages.map((img) => img._id);
+  const referenceIds = referenceImages.map((img) => String(img._id));
   const targetImages = sliceLabelableRange(images, targetFrom, targetTo, labelableIds);
   if (targetImages.length === 0) {
     return { error: 'Target range has no labelable frames' };
@@ -101,8 +101,8 @@ export function predictLabelInRange({
         x: clamp01(current.x + avgDelta.dx),
         y: clamp01(current.y + avgDelta.dy),
       };
-      if (!updates[img._id]) updates[img._id] = {};
-      updates[img._id][labelId] = { ...current };
+      if (!updates[img._id]) updates[String(img._id)] = {};
+      updates[String(img._id)][labelId] = { ...current };
     }
   }
 

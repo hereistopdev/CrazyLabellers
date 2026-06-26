@@ -6,9 +6,11 @@ function getToken() {
   return localStorage.getItem('token');
 }
 
-async function request(path, options = {}) {
+async function fetchJson(path, options = {}, attempt = 0) {
   const headers = {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
     ...options.headers,
   };
 
@@ -17,11 +19,17 @@ async function request(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
+  const bustPath =
+    attempt > 0
+      ? `${path}${path.includes('?') ? '&' : '?'}_=${Date.now()}`
+      : path;
+
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${API_BASE}${bustPath}`, {
       ...options,
       headers,
+      cache: 'no-store',
     });
   } catch {
     const hint = import.meta.env.VITE_API_URL
@@ -29,6 +37,16 @@ async function request(path, options = {}) {
       : 'Start the backend with: cd backend && npm run dev';
     throw new Error(`Cannot reach the API server. ${hint}`);
   }
+
+  if (response.status === 304 && attempt === 0) {
+    return fetchJson(path, options, attempt + 1);
+  }
+
+  return response;
+}
+
+async function request(path, options = {}) {
+  const response = await fetchJson(path, options);
 
   const data = await response.json().catch(() => ({}));
 
@@ -71,7 +89,7 @@ async function downloadRequest(path, fallbackFilename) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { headers });
+  const response = await fetch(`${API_BASE}${path}`, { headers, cache: 'no-store' });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.message || `Download failed (${response.status})`);
@@ -346,6 +364,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  saveImageGroupDraft: (groupId, body) =>
+    request(`/image-assignments/groups/${groupId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ ...body, mode: 'draft' }),
+    }),
+  exportImageGroup: (groupId) =>
+    downloadRequest(`/image-assignments/groups/${groupId}/export`, 'group_keypoints.zip'),
   getImageAssignment: (id) => request(`/image-assignments/${id}`),
   getImageGroupNav: (groupId) => request(`/image-assignments/groups/${groupId}/nav`),
   claimImageAssignment: (id) => request(`/image-assignments/${id}/claim`, { method: 'POST' }),
@@ -359,4 +384,16 @@ export const api = {
   getAdminImages: () => request('/admin/images'),
   uploadImages: (formData) => uploadRequest('/admin/images/upload', formData),
   deleteAdminImage: (id) => request(`/admin/images/${id}`, { method: 'DELETE' }),
+  reviewImageAssignment: (id, body) =>
+    request(`/admin/images/assignments/${id}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  uploadImageReference: (id, formData) =>
+    uploadRequest(`/admin/images/assignments/${id}/reference`, formData),
+  setImageReferenceShare: (id, allowLabellerReference) =>
+    request(`/admin/images/assignments/${id}/reference-share`, {
+      method: 'PATCH',
+      body: JSON.stringify({ allowLabellerReference }),
+    }),
 };

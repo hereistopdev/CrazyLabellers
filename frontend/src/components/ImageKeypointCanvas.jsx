@@ -43,33 +43,65 @@ export default function ImageKeypointCanvas({
   magnifierZoom = 3,
   onPlacePoint,
   onDragPoint,
+  onSelectLabel,
   onImageDimensions,
 }) {
   const containerRef = useRef(null);
   const imgRef = useRef(null);
   const lensRef = useRef(null);
+  const onImageDimensionsRef = useRef(onImageDimensions);
+  const lastNaturalSizeRef = useRef({ width: 0, height: 0 });
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [dragLabel, setDragLabel] = useState(null);
   const [lensVisible, setLensVisible] = useState(false);
   const [lensPos, setLensPos] = useState({ left: 0, top: 0 });
+  const [lensCoords, setLensCoords] = useState(null);
+
+  useEffect(() => {
+    onImageDimensionsRef.current = onImageDimensions;
+  }, [onImageDimensions]);
+
+  useEffect(() => {
+    lastNaturalSizeRef.current = { width: 0, height: 0 };
+    setImageSize({ width: 0, height: 0, offsetX: 0, offsetY: 0 });
+  }, [imageUrl]);
 
   const updateImageSize = useCallback(() => {
     const img = imgRef.current;
     if (!img) return;
     const layout = getContainedImageLayout(img);
     if (layout) {
-      setImageSize({
-        width: layout.renderW,
-        height: layout.renderH,
-        offsetX: layout.offsetX,
-        offsetY: layout.offsetY,
+      setImageSize((prev) => {
+        if (
+          prev.width === layout.renderW &&
+          prev.height === layout.renderH &&
+          prev.offsetX === layout.offsetX &&
+          prev.offsetY === layout.offsetY
+        ) {
+          return prev;
+        }
+        return {
+          width: layout.renderW,
+          height: layout.renderH,
+          offsetX: layout.offsetX,
+          offsetY: layout.offsetY,
+        };
       });
-      onImageDimensions?.({
-        width: layout.naturalWidth,
-        height: layout.naturalHeight,
-      });
+      if (
+        lastNaturalSizeRef.current.width !== layout.naturalWidth ||
+        lastNaturalSizeRef.current.height !== layout.naturalHeight
+      ) {
+        lastNaturalSizeRef.current = {
+          width: layout.naturalWidth,
+          height: layout.naturalHeight,
+        };
+        onImageDimensionsRef.current?.({
+          width: layout.naturalWidth,
+          height: layout.naturalHeight,
+        });
+      }
     }
-  }, [onImageDimensions]);
+  }, []);
 
   useEffect(() => {
     window.addEventListener('resize', updateImageSize);
@@ -118,12 +150,14 @@ export default function ImageKeypointCanvas({
       const lens = lensRef.current;
       if (!showMagnifier || !isActive || !img || !lens || !img.naturalWidth) {
         setLensVisible(false);
+        setLensCoords(null);
         return;
       }
 
       const layout = getContainedImageLayout(img);
       if (!layout) {
         setLensVisible(false);
+        setLensCoords(null);
         return;
       }
 
@@ -139,6 +173,7 @@ export default function ImageKeypointCanvas({
         contentY > layout.renderH
       ) {
         setLensVisible(false);
+        setLensCoords(null);
         return;
       }
 
@@ -147,7 +182,13 @@ export default function ImageKeypointCanvas({
       if (left + MAGNIFIER_SIZE > window.innerWidth) left = clientX - MAGNIFIER_SIZE - OFFSET;
       if (top + MAGNIFIER_SIZE > window.innerHeight) top = clientY - MAGNIFIER_SIZE - OFFSET;
 
+      const normX = contentX / layout.renderW;
+      const normY = contentY / layout.renderH;
+      const pixelX = Math.round(normX * layout.naturalWidth);
+      const pixelY = Math.round(normY * layout.naturalHeight);
+
       setLensPos({ left, top });
+      setLensCoords({ x: pixelX, y: pixelY, normX, normY });
       setLensVisible(true);
 
       const ctx = lens.getContext('2d');
@@ -187,6 +228,20 @@ export default function ImageKeypointCanvas({
       ctx.moveTo(0, MAGNIFIER_SIZE / 2);
       ctx.lineTo(MAGNIFIER_SIZE, MAGNIFIER_SIZE / 2);
       ctx.stroke();
+
+      // Exact point under cursor at lens center.
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(MAGNIFIER_SIZE / 2, MAGNIFIER_SIZE / 2, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(MAGNIFIER_SIZE / 2, MAGNIFIER_SIZE / 2, 5, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+      ctx.stroke();
+
       ctx.restore();
     },
     [showMagnifier, isActive, magnifierZoom]
@@ -214,6 +269,7 @@ export default function ImageKeypointCanvas({
     if (!isActive) return;
     event.stopPropagation();
     event.preventDefault();
+    onSelectLabel?.(label);
     setDragLabel(label);
   };
 
@@ -237,7 +293,10 @@ export default function ImageKeypointCanvas({
   }, [dragLabel, onDragPoint, toNormalized, drawLens]);
 
   useEffect(() => {
-    if (!showMagnifier || !isActive) setLensVisible(false);
+    if (!showMagnifier || !isActive) {
+      setLensVisible(false);
+      setLensCoords(null);
+    }
   }, [showMagnifier, isActive]);
 
   return (
@@ -246,7 +305,10 @@ export default function ImageKeypointCanvas({
         className="image-keypoint-canvas-stage"
         onPointerDown={handleStagePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerLeave={() => setLensVisible(false)}
+        onPointerLeave={() => {
+          setLensVisible(false);
+          setLensCoords(null);
+        }}
         role="presentation"
       >
         <img
@@ -271,24 +333,32 @@ export default function ImageKeypointCanvas({
                 style={{
                   left: `${left}px`,
                   top: `${top}px`,
-                  borderColor: meta.color,
-                  backgroundColor: `${meta.color}33`,
+                  '--marker-color': meta.color,
                 }}
                 onPointerDown={(event) => handlePointerDown(meta.id, event)}
+                aria-label={meta.name}
                 title={meta.name}
-              >
-                {meta.short}
-              </button>
+              />
             );
           })}
       </div>
       {showMagnifier && isActive && (
-        <canvas
-          ref={lensRef}
-          className={`image-cursor-magnifier-lens${lensVisible ? ' visible' : ''}`}
-          style={{ left: `${lensPos.left}px`, top: `${lensPos.top}px` }}
-          aria-hidden
-        />
+        <>
+          <canvas
+            ref={lensRef}
+            className={`image-cursor-magnifier-lens${lensVisible ? ' visible' : ''}`}
+            style={{ left: `${lensPos.left}px`, top: `${lensPos.top}px` }}
+            aria-hidden
+          />
+          {lensVisible && lensCoords && (
+            <div
+              className="image-cursor-magnifier-coords"
+              style={{ left: `${lensPos.left}px`, top: `${lensPos.top + MAGNIFIER_SIZE + 4}px` }}
+            >
+              x: {lensCoords.x}, y: {lensCoords.y}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -28,6 +28,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const isDev = process.env.NODE_ENV !== 'production';
 
+// Prevent 304 responses with empty bodies on repeat JSON API calls (breaks fetch + no-store).
+app.set('etag', false);
+
 app.use(
   cors({
     origin(origin, callback) {

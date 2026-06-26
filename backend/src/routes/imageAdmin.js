@@ -10,15 +10,25 @@ const {
   deleteImageFile,
   resolveImageId,
   getImageExtension,
+  normalizeImageUrl,
 } = require('../services/imageStorage');
+const {
+  saveReferenceForImage,
+  deleteReferenceForImage,
+  hasReferenceForImage,
+} = require('../services/imageReferenceStorage');
 const { validateTaskPrice } = require('../config/payments');
+const path = require('path');
 
 const router = express.Router();
 
 const uploadImages = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024, files: 100 },
-}).array('images', 100);
+  limits: { fileSize: 25 * 1024 * 1024, files: 200 },
+}).fields([
+  { name: 'images', maxCount: 100 },
+  { name: 'references', maxCount: 100 },
+]);
 
 router.get('/', auth, requireVideoManagerAccess, async (_req, res) => {
   try {
@@ -26,7 +36,12 @@ router.get('/', auth, requireVideoManagerAccess, async (_req, res) => {
       .populate('groupId', 'name')
       .populate('assignedTo', 'name email')
       .sort({ createdAt: -1 });
-    return res.json(assignments);
+    return res.json(
+      assignments.map((assignment) => ({
+        ...assignment.toObject(),
+        imageUrl: normalizeImageUrl(assignment.imageUrl),
+      }))
+    );
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -39,9 +54,17 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
     }
 
     try {
-      const files = req.files || [];
-      if (!files.length) {
+      const imageFiles = req.files?.images || [];
+      const referenceFiles = req.files?.references || [];
+      if (!imageFiles.length) {
         return res.status(400).json({ message: 'Select at least one image file' });
+      }
+
+      const refsByStem = new Map();
+      for (const file of referenceFiles) {
+        const baseName = path.basename(file.originalname);
+        const stem = path.basename(baseName, path.extname(baseName));
+        refsByStem.set(stem, file);
       }
 
       const groupId = await resolveUploadGroupId({
@@ -53,10 +76,11 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
       const taskPrice =
         req.body.taskPrice != null ? validateTaskPrice(req.body.taskPrice, { kind: 'production' }) : 0.5;
 
+      const shareReference = req.body.allowLabellerReference === 'true' || req.body.allowLabellerReference === true;
       const created = [];
       const skipped = [];
 
-      for (const file of files) {
+      for (const file of imageFiles) {
         const imageId = resolveImageId(file.originalname, req.body.imageIdPrefix);
         if (!imageId) {
           skipped.push({ name: file.originalname, reason: 'Invalid image ID from filename' });
@@ -72,16 +96,42 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
         const extension = getImageExtension(file.originalname);
         const stored = storeImageFile(imageId, file.buffer, extension);
 
+        let hasReference = false;
+        let width = null;
+        let height = null;
+        const refFile = refsByStem.get(imageId) || refsByStem.get(path.basename(file.originalname, extension));
+        if (refFile) {
+          try {
+            const savedRef = await saveReferenceForImage(imageId, refFile.buffer.toString('utf8'), {
+              sourceFilename: refFile.originalname,
+            });
+            hasReference = true;
+            width = savedRef.width;
+            height = savedRef.height;
+          } catch (refErr) {
+            skipped.push({
+              name: file.originalname,
+              reason: `Image saved but reference JSON failed: ${refErr.message}`,
+            });
+          }
+        }
+
         const assignment = await ImageAssignment.create({
           imageId,
           title: imageId,
           description: req.body.description || 'Cricket keypoint labeling',
           imageUrl: stored.imageUrl,
           imageExtension: stored.extension,
+          width,
+          height,
           groupId,
           taskPrice,
           status: 'available',
           uploadedBy: req.user._id,
+          hasReference,
+          allowLabellerReference: shareReference && hasReference,
+          referenceUpdatedAt: hasReference ? new Date() : undefined,
+          referenceUpdatedBy: hasReference ? req.user._id : undefined,
         });
 
         created.push(assignment);
@@ -108,6 +158,7 @@ router.delete('/:id', auth, requireVideoManagerAccess, async (req, res) => {
 
     await ImageKeypointSubmission.deleteMany({ assignmentId: assignment._id });
     deleteImageFile(assignment.imageId);
+    deleteReferenceForImage(assignment.imageId);
     await ImageAssignment.findByIdAndDelete(assignment._id);
 
     return res.json({ message: 'Image assignment deleted' });
@@ -133,6 +184,127 @@ router.get('/groups/summary', auth, requireVideoManagerAccess, async (_req, res)
     );
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.patch('/assignments/:id/reference-share', auth, requireVideoManagerAccess, async (req, res) => {
+  try {
+    const assignment = await ImageAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Image assignment not found' });
+    }
+
+    const enabled = Boolean(req.body.allowLabellerReference);
+    if (enabled && !assignment.hasReference && !hasReferenceForImage(assignment.imageId)) {
+      return res.status(400).json({ message: 'Upload a reference JSON for this image first' });
+    }
+
+    assignment.allowLabellerReference = enabled;
+    if (enabled && !assignment.hasReference) {
+      assignment.hasReference = true;
+    }
+    await assignment.save();
+
+    return res.json({
+      message: enabled ? 'Reference shared with labellers' : 'Reference hidden from labellers',
+      allowLabellerReference: assignment.allowLabellerReference,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+router.post(
+  '/assignments/:id/reference',
+  auth,
+  requireVideoManagerAccess,
+  multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+  }).single('reference'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No reference JSON file uploaded' });
+      }
+
+      const assignment = await ImageAssignment.findById(req.params.id);
+      if (!assignment) {
+        return res.status(404).json({ message: 'Image assignment not found' });
+      }
+
+      const savedRef = await saveReferenceForImage(
+        assignment.imageId,
+        req.file.buffer.toString('utf8'),
+        { sourceFilename: req.file.originalname }
+      );
+
+      assignment.hasReference = true;
+      assignment.width = savedRef.width || assignment.width;
+      assignment.height = savedRef.height || assignment.height;
+      assignment.referenceUpdatedAt = new Date();
+      assignment.referenceUpdatedBy = req.user._id;
+      await assignment.save();
+
+      return res.json({
+        message: 'Reference JSON saved',
+        hasReference: true,
+        keypointCount: savedRef.keypoints.length,
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  }
+);
+
+router.patch('/assignments/:id/review', auth, requireVideoManagerAccess, async (req, res) => {
+  try {
+    const { status, reviewerNotes } = req.body;
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Status must be approved or rejected' });
+    }
+
+    const assignment = await ImageAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Image assignment not found' });
+    }
+
+    const submission = await ImageKeypointSubmission.findOne({
+      assignmentId: assignment._id,
+      userId: assignment.assignedTo,
+    }).sort({ updatedAt: -1 });
+
+    if (!submission) {
+      return res.status(404).json({ message: 'No submission found for this image' });
+    }
+
+    if (submission.status !== 'submitted' && submission.status !== 'approved') {
+      return res.status(400).json({ message: 'Can only review submitted work' });
+    }
+
+    submission.status = status;
+    submission.reviewerNotes = reviewerNotes || '';
+    submission.reviewedAt = new Date();
+    submission.reviewedBy = req.user._id;
+    if (status === 'approved') {
+      submission.reviewPoints = Math.min(100, Math.max(0, parseInt(req.body.reviewPoints, 10) || 0));
+    } else {
+      submission.reviewPoints = 0;
+    }
+    await submission.save();
+
+    assignment.status = status;
+    assignment.reviewedAt = new Date();
+    assignment.reviewedBy = req.user._id;
+    await assignment.save();
+
+    return res.json({
+      message: status === 'approved' ? 'Image submission approved' : 'Image submission rejected',
+      assignmentId: assignment._id,
+      status,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
   }
 });
 

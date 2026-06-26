@@ -39,16 +39,22 @@ export function clearImageKeypointDraft(groupId, user) {
   localStorage.removeItem(storageKey(groupId, userId));
 }
 
-export function mergeDraftIntoCache(serverImages, draft, user) {
+export function mergeDraftIntoCache(serverImages, draft) {
   const cache = {};
   for (const image of serverImages || []) {
-    const draftRow = draft?.images?.[image._id];
+    const id = String(image._id);
+    const draftRow = draft?.images?.[id] || draft?.images?.[image._id];
     const fromServer = normalizeKeypointsMap(image.keypoints || image.keypointsList);
-    cache[image._id] = {
-      keypoints: draftRow?.keypoints
-        ? normalizeKeypointsMap(draftRow.keypoints)
-        : fromServer,
-      status: draftRow?.status || image.submissionStatus || 'draft',
+    const serverStatus = image.submissionStatus || 'draft';
+    const locked = serverStatus === 'submitted' || serverStatus === 'approved';
+
+    cache[id] = {
+      keypoints:
+        !locked && draftRow?.keypoints
+          ? normalizeKeypointsMap(draftRow.keypoints)
+          : fromServer,
+      status: locked ? serverStatus : draftRow?.status || serverStatus,
+      reviewerNotes: image.reviewerNotes || '',
     };
   }
   return cache;

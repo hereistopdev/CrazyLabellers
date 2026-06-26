@@ -14,8 +14,9 @@ export default function ImageGroupGallery({
       </div>
       <div className="image-group-gallery-grid">
         {images.map((image, index) => {
-          const canLabel = !labelableIds || labelableIds.has(image._id);
-          const isSelected = image._id === selectedId;
+          const imageKey = String(image._id);
+          const canLabel = !labelableIds || labelableIds.has(imageKey);
+          const isSelected = imageKey === String(selectedId);
           const complete = image.isComplete || image.markedCount >= image.requiredCount;
           const submitted =
             image.submissionStatus === 'submitted' ||

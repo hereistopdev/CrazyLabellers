@@ -202,13 +202,20 @@ export default function App() {
         <Route
           path="image-assignments"
           element={
-            <ProtectedRoute labellerOnly>
+            <ProtectedRoute labelerAccess>
               <ImageAssignments />
             </ProtectedRoute>
           }
         />
         <Route path="label/:id" element={<Labeling />} />
-        <Route path="image-groups/:groupId" element={<ImageGroupLabeling />} />
+        <Route
+          path="image-groups/:groupId"
+          element={
+            <ProtectedRoute labelerAccess>
+              <ImageGroupLabeling />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="review"
           element={

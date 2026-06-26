@@ -21,6 +21,10 @@ const imageAssignmentSchema = new mongoose.Schema(
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reviewedAt: { type: Date },
+    allowLabellerReference: { type: Boolean, default: false },
+    hasReference: { type: Boolean, default: false },
+    referenceUpdatedAt: { type: Date },
+    referenceUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

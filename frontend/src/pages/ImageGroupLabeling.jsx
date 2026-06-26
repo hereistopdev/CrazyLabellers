@@ -14,6 +14,9 @@ import {
   emptyKeypointsMap,
   countMarkedKeypoints,
   keypointsMapToList,
+  getKeypointLabelMeta,
+  labelIdFromHotkey,
+  formatKeypointCoords,
 } from '../config/imageKeypoints';
 import {
   loadImageKeypointDraft,
@@ -23,27 +26,26 @@ import {
   cacheToDraftPayload,
 } from '../utils/imageKeypointDraftStorage';
 import {
-  buildKeypointExportPayload,
-  getKeypointExportFilename,
-  downloadJsonFile,
-} from '../utils/imageKeypointExport';
-import {
   predictLabelInRange,
 } from '../utils/imageKeypointAutoMark';
 
 function pickInitialImageId(images, user, requestedId) {
-  if (requestedId && images.some((row) => row._id === requestedId)) {
-    return requestedId;
+  const requested = requestedId ? String(requestedId) : '';
+  if (requested) {
+    const byAssignmentId = images.find((row) => String(row._id) === requested);
+    if (byAssignmentId) return String(byAssignmentId._id);
+    const byImageId = images.find((row) => String(row.imageId) === requested);
+    if (byImageId) return String(byImageId._id);
   }
   const firstMine = images.find(
     (row) => row.status !== 'available' && isAssignedToUser(row.assignedTo, user)
   );
-  return firstMine?._id || images[0]?._id || '';
+  return String(firstMine?._id || images[0]?._id || '');
 }
 
 function syncGalleryProgress(images, keypointsById) {
   return images.map((row) => {
-    const entry = keypointsById[row._id];
+    const entry = keypointsById[String(row._id)] || keypointsById[row._id];
     const markedCount = countMarkedKeypoints(entry?.keypoints);
     const isComplete = markedCount >= IMAGE_KEYPOINT_LABEL_IDS.length;
     return {
@@ -59,10 +61,12 @@ export default function ImageGroupLabeling() {
   const { groupId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const keypointsByIdRef = useRef({});
   const initialImageRef = useRef(searchParams.get('image'));
   const dimensionsRef = useRef({});
+  const syncedImageParamRef = useRef('');
+  const workspaceLoadedRef = useRef(false);
 
   const [workspace, setWorkspace] = useState(null);
   const [keypointsById, setKeypointsById] = useState({});
@@ -72,9 +76,12 @@ export default function ImageGroupLabeling() {
   const [loading, setLoading] = useState(true);
   const [draftSaved, setDraftSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [imageDimensionsById, setImageDimensionsById] = useState({});
 
   const images = useMemo(
     () => syncGalleryProgress(workspace?.images || [], keypointsById),
@@ -82,28 +89,33 @@ export default function ImageGroupLabeling() {
   );
 
   const selectedImage = useMemo(
-    () => images.find((row) => row._id === selectedId) || null,
+    () => images.find((row) => String(row._id) === String(selectedId)) || null,
     [images, selectedId]
   );
 
   const labelableIds = useMemo(() => {
-    if (isAdmin(user)) return new Set(images.map((row) => row._id));
+    if (isAdmin(user)) return new Set(images.map((row) => String(row._id)));
     return new Set(
       images
         .filter((row) => row.status !== 'available' && isAssignedToUser(row.assignedTo, user))
-        .map((row) => row._id)
+        .map((row) => String(row._id))
     );
   }, [images, user]);
 
-  const currentEntry = keypointsById[selectedId] || { keypoints: emptyKeypointsMap(), status: 'draft' };
-  const keypoints = currentEntry.keypoints;
+  const selectedKey = selectedId ? String(selectedId) : '';
+
+  const currentEntry = keypointsById[selectedKey] || {
+    keypoints: emptyKeypointsMap(),
+    status: 'draft',
+  };
+  const keypoints = currentEntry.keypoints || emptyKeypointsMap();
   const submissionStatus = currentEntry.status;
 
-  const canLabelSelected = selectedId && labelableIds.has(selectedId);
+  const canLabelSelected = selectedKey && labelableIds.has(selectedKey);
   const readOnly =
     !canLabelSelected || submissionStatus === 'submitted' || submissionStatus === 'approved';
 
-  const projectSubmitted = useMemo(
+  const projectLocked = useMemo(
     () =>
       labelableIds.size > 0 &&
       [...labelableIds].every(
@@ -112,11 +124,24 @@ export default function ImageGroupLabeling() {
     [labelableIds, keypointsById]
   );
 
+  const hasRejectedFrames = useMemo(
+    () => [...labelableIds].some((id) => keypointsById[id]?.status === 'rejected'),
+    [labelableIds, keypointsById]
+  );
+
+  const hasMarkedWork = useMemo(
+    () =>
+      [...labelableIds].some(
+        (id) => countMarkedKeypoints(keypointsById[id]?.keypoints) > 0
+      ),
+    [labelableIds, keypointsById]
+  );
+
   const applyWorkspace = useCallback(
     (data) => {
       if (!data) return;
       const draft = loadImageKeypointDraft(groupId, user);
-      const cache = mergeDraftIntoCache(data.images, draft, user);
+      const cache = mergeDraftIntoCache(data.images, draft);
       keypointsByIdRef.current = cache;
       setKeypointsById(cache);
       setWorkspace(data);
@@ -126,30 +151,51 @@ export default function ImageGroupLabeling() {
   );
 
   const loadWorkspace = useCallback(async () => {
-    setLoading(true);
+    const isRefresh = workspaceLoadedRef.current;
+    if (!isRefresh) {
+      setLoading(true);
+    }
     setError('');
     try {
       const data = await api.getImageGroupWorkspace(groupId);
       applyWorkspace(data);
+      workspaceLoadedRef.current = true;
       return data;
     } catch (err) {
       setError(err.message);
       return null;
     } finally {
-      setLoading(false);
+      if (!isRefresh) {
+        setLoading(false);
+      }
     }
   }, [groupId, applyWorkspace]);
 
   useEffect(() => {
+    workspaceLoadedRef.current = false;
+    syncedImageParamRef.current = '';
+  }, [groupId]);
+
+  useEffect(() => {
+    if (authLoading) return;
     if (!canUseLabeler(user)) {
       navigate('/');
       return;
     }
     loadWorkspace();
-  }, [user, groupId, navigate, loadWorkspace]);
+  }, [authLoading, groupId, navigate, loadWorkspace, user?._id, user?.role]);
+
+  useEffect(() => {
+    if (!images.length) return;
+    if (!images.some((row) => String(row._id) === String(selectedId))) {
+      setSelectedId(String(images[0]._id));
+    }
+  }, [images, selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
+    if (syncedImageParamRef.current === selectedId) return;
+    syncedImageParamRef.current = selectedId;
     setSearchParams({ image: selectedId }, { replace: true });
   }, [selectedId, setSearchParams]);
 
@@ -163,12 +209,14 @@ export default function ImageGroupLabeling() {
 
   const updateKeypointsCache = useCallback(
     (assignmentId, map, status) => {
+      const id = String(assignmentId);
       setKeypointsById((prev) => {
         const next = {
           ...prev,
-          [assignmentId]: {
+          [id]: {
             keypoints: map,
-            status: status ?? prev[assignmentId]?.status ?? 'draft',
+            status: status ?? prev[id]?.status ?? 'draft',
+            reviewerNotes: prev[id]?.reviewerNotes ?? '',
           },
         };
         keypointsByIdRef.current = next;
@@ -181,12 +229,12 @@ export default function ImageGroupLabeling() {
 
   const updateKeypoints = useCallback(
     (updater) => {
-      if (!selectedId || readOnly) return;
-      const prev = keypointsByIdRef.current[selectedId]?.keypoints || emptyKeypointsMap();
+      if (!selectedKey || readOnly) return;
+      const prev = keypointsByIdRef.current[selectedKey]?.keypoints || emptyKeypointsMap();
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      updateKeypointsCache(selectedId, next);
+      updateKeypointsCache(selectedKey, next);
     },
-    [selectedId, readOnly, updateKeypointsCache]
+    [selectedKey, readOnly, updateKeypointsCache]
   );
 
   const handleRangeAutoMark = useCallback(
@@ -232,15 +280,16 @@ export default function ImageGroupLabeling() {
   );
 
   const selectedFrame = useMemo(() => {
-    const index = images.findIndex((row) => row._id === selectedId);
+    const index = images.findIndex((row) => String(row._id) === selectedKey);
     return index >= 0 ? index + 1 : 1;
-  }, [images, selectedId]);
+  }, [images, selectedKey]);
 
   const handleSelectImage = useCallback((assignmentId) => {
-    if (assignmentId === selectedId) return;
-    setSelectedId(assignmentId);
+    const nextId = String(assignmentId);
+    if (nextId === selectedKey) return;
+    setSelectedId(nextId);
     setMessage('');
-  }, [selectedId]);
+  }, [selectedKey]);
 
   const handleClaimGroup = async () => {
     setClaiming(true);
@@ -271,7 +320,7 @@ export default function ImageGroupLabeling() {
         };
       });
       setMessage('Project claimed — start marking (drafts save locally)');
-      setSelectedId((prev) => prev || images[0]?._id || '');
+      setSelectedId((prev) => prev || String(images[0]?._id || ''));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -286,18 +335,10 @@ export default function ImageGroupLabeling() {
     );
   }, [labelableIds, keypointsById]);
 
-  const handleSubmitProject = async () => {
-    if (!allFramesComplete) {
-      setError('Mark all points on every frame before submitting');
-      return;
-    }
-
-    setSubmitting(true);
-    setError('');
-    setMessage('');
-    try {
-      const submissions = [...labelableIds].map((assignmentId) => {
-        const image = images.find((row) => row._id === assignmentId);
+  const buildSubmissionsPayload = useCallback(
+    () =>
+      [...labelableIds].map((assignmentId) => {
+        const image = images.find((row) => String(row._id) === String(assignmentId));
         const dims = dimensionsRef.current[assignmentId] || {};
         const entry = keypointsByIdRef.current[assignmentId];
         return {
@@ -306,27 +347,65 @@ export default function ImageGroupLabeling() {
           width: dims.width || image?.width || null,
           height: dims.height || image?.height || null,
         };
+      }),
+    [labelableIds, images]
+  );
+
+  const handleSaveDraft = async () => {
+    if (!hasMarkedWork || projectLocked) return;
+
+    setSavingDraft(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await api.saveImageGroupDraft(groupId, {
+        submissions: buildSubmissionsPayload(),
       });
 
-      await api.submitImageGroup(groupId, { submissions });
+      setKeypointsById((prev) => {
+        const next = { ...prev };
+        for (const assignmentId of labelableIds) {
+          if (countMarkedKeypoints(next[assignmentId]?.keypoints) > 0) {
+            next[assignmentId] = {
+              ...next[assignmentId],
+              status: 'draft',
+            };
+          }
+        }
+        keypointsByIdRef.current = next;
+        persistLocalDraft(next);
+        return next;
+      });
+      setMessage(result.message || 'Draft saved');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleSubmitFinal = async () => {
+    if (!allFramesComplete) {
+      setError('Mark all points on every frame before final submit');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await api.submitImageGroup(groupId, {
+        mode: 'final',
+        submissions: buildSubmissionsPayload(),
+      });
 
       const nextCache = { ...keypointsByIdRef.current };
-      let downloadIndex = 0;
       for (const assignmentId of labelableIds) {
         nextCache[assignmentId] = {
           ...nextCache[assignmentId],
           status: 'submitted',
+          reviewerNotes: '',
         };
-        const image = images.find((row) => row._id === assignmentId);
-        const payload = buildKeypointExportPayload(
-          image,
-          nextCache[assignmentId].keypoints,
-          dimensionsRef.current[assignmentId] || {}
-        );
-        window.setTimeout(() => {
-          downloadJsonFile(payload, getKeypointExportFilename(image.imageId));
-        }, downloadIndex * 250);
-        downloadIndex += 1;
       }
 
       keypointsByIdRef.current = nextCache;
@@ -337,7 +416,7 @@ export default function ImageGroupLabeling() {
         return {
           ...prev,
           images: prev.images.map((row) =>
-            labelableIds.has(row._id)
+            labelableIds.has(String(row._id))
               ? {
                   ...row,
                   status: 'submitted',
@@ -354,7 +433,10 @@ export default function ImageGroupLabeling() {
           },
         };
       });
-      setMessage(`Submitted ${labelableIds.size} frames and downloaded JSON files`);
+      setMessage(
+        result.message ||
+          `Final submission complete — use Download JSON for the full project export`
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -362,47 +444,73 @@ export default function ImageGroupLabeling() {
     }
   };
 
+  const handleDownloadGroup = async () => {
+    setDownloading(true);
+    setError('');
+    try {
+      await api.exportImageGroup(groupId);
+      setMessage('Downloaded project JSON zip');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const moveSelection = useCallback(
     (delta) => {
-      const index = images.findIndex((row) => row._id === selectedId);
+      const index = images.findIndex((row) => String(row._id) === selectedKey);
       if (index < 0) return;
       const next = images[index + delta];
       if (next) handleSelectImage(next._id);
     },
-    [images, selectedId, handleSelectImage]
+    [images, selectedKey, handleSelectImage]
   );
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.target.closest('input, textarea, select, button')) return;
-      const key = event.key.toLowerCase();
-      if (key === 'p') {
-        setActiveLabel('pitch');
+      if (event.target.closest('input, textarea, select')) return;
+
+      const labelId = labelIdFromHotkey(event.key);
+      if (labelId) {
+        event.preventDefault();
+        setActiveLabel(labelId);
         return;
       }
-      if (/^[0-8]$/.test(key)) {
-        setActiveLabel(`kp${key}`);
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (readOnly) return;
+        const point = keypointsByIdRef.current[selectedKey]?.keypoints?.[activeLabel];
+        if (!point) return;
+        event.preventDefault();
+        updateKeypoints((prev) => ({ ...prev, [activeLabel]: null }));
         return;
       }
-      if (key === 'a') {
+
+      if (event.target.closest('button')) return;
+      if (event.key.toLowerCase() === 'a') {
         event.preventDefault();
         moveSelection(-1);
         return;
       }
-      if (key === 'd') {
+      if (event.key.toLowerCase() === 'd') {
         event.preventDefault();
         moveSelection(1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [moveSelection]);
+  }, [moveSelection, readOnly, activeLabel, selectedKey, updateKeypoints]);
 
   const handleImageDimensions = useCallback((assignmentId, dims) => {
-    dimensionsRef.current[assignmentId] = dims;
+    const id = String(assignmentId);
+    const prev = dimensionsRef.current[id];
+    if (prev?.width === dims.width && prev?.height === dims.height) return;
+    dimensionsRef.current[id] = dims;
+    setImageDimensionsById((prevState) => ({ ...prevState, [id]: dims }));
   }, []);
 
-  if (loading) return <div className="loading">Loading project…</div>;
+  if (authLoading || loading) return <div className="loading">Loading project…</div>;
 
   if (!workspace) {
     return (
@@ -420,6 +528,14 @@ export default function ImageGroupLabeling() {
     (id) => countMarkedKeypoints(keypointsById[id]?.keypoints) >= IMAGE_KEYPOINT_LABEL_IDS.length
   ).length;
 
+  const activeLabelMeta = getKeypointLabelMeta(activeLabel);
+  const activeLabelPlaced = Boolean(keypoints[activeLabel]);
+  const activeLabelCoords = formatKeypointCoords(
+    keypoints[activeLabel],
+    imageDimensionsById[selectedKey]?.width || selectedImage?.width,
+    imageDimensionsById[selectedKey]?.height || selectedImage?.height
+  );
+
   return (
     <div className="image-group-page image-group-page--immersive">
       <div className="image-group-toolbar">
@@ -431,7 +547,8 @@ export default function ImageGroupLabeling() {
             <strong>{workspace.group?.name || 'Image project'}</strong>
             <span className="text-muted image-group-toolbar-meta">
               {completeCount}/{labelableIds.size || stats.total || 0} frames ready
-              {draftSaved && !projectSubmitted ? ' · draft saved locally' : ''}
+              {draftSaved && !projectLocked ? ' · draft saved locally' : ''}
+              {hasRejectedFrames ? ' · rejected — fix and resubmit' : ''}
             </span>
           </div>
         </div>
@@ -446,14 +563,34 @@ export default function ImageGroupLabeling() {
               {claiming ? 'Claiming…' : 'Claim project'}
             </button>
           )}
-          {!projectSubmitted && labelableIds.size > 0 && (
+          {labelableIds.size > 0 && hasMarkedWork && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={downloading}
+              onClick={handleDownloadGroup}
+            >
+              {downloading ? 'Downloading…' : 'Download JSON'}
+            </button>
+          )}
+          {labelableIds.size > 0 && !projectLocked && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={savingDraft || !hasMarkedWork}
+              onClick={handleSaveDraft}
+            >
+              {savingDraft ? 'Saving…' : 'Save draft'}
+            </button>
+          )}
+          {labelableIds.size > 0 && !projectLocked && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
               disabled={submitting || !allFramesComplete}
-              onClick={handleSubmitProject}
+              onClick={handleSubmitFinal}
             >
-              {submitting ? 'Submitting…' : 'Submit project'}
+              {submitting ? 'Submitting…' : hasRejectedFrames ? 'Resubmit final' : 'Submit final'}
             </button>
           )}
         </div>
@@ -464,14 +601,27 @@ export default function ImageGroupLabeling() {
 
       {workspace.access?.canClaim && !workspace.access?.canLabel && (
         <div className="alert alert-info">
-          Claim this project to mark keypoints. Drafts are stored in your browser until you submit.
+          Claim this project to mark keypoints. Save drafts anytime, then submit final results when every
+          frame is complete.
+        </div>
+      )}
+
+      {submissionStatus === 'rejected' && currentEntry.reviewerNotes && (
+        <div className="alert alert-error">
+          This frame was rejected: {currentEntry.reviewerNotes}
+        </div>
+      )}
+
+      {projectLocked && (
+        <div className="alert alert-info">
+          Final submission sent — awaiting admin review. Download JSON anytime from the toolbar.
         </div>
       )}
 
       <div className="image-group-workspace image-group-workspace--immersive">
         <ImageGroupGallery
           images={images}
-          selectedId={selectedId}
+          selectedId={selectedKey}
           onSelect={handleSelectImage}
           labelableIds={labelableIds}
         />
@@ -481,29 +631,49 @@ export default function ImageGroupLabeling() {
             {images.length > 0 ? (
               <>
                 <div className="image-group-canvas-header">
-                  <strong>{selectedImage?.title || selectedImage?.imageId || 'Select a frame'}</strong>
-                  {canLabelSelected && !readOnly && (
-                    <div className="image-magnifier-zoom-bar">
-                      <span className="image-magnifier-zoom-label">Magnifier</span>
-                      {MAGNIFIER_ZOOM_LEVELS.map((level) => (
-                        <button
-                          key={level}
-                          type="button"
-                          className={`btn btn-sm${magnifierZoom === level ? ' btn-primary' : ' btn-secondary'}`}
-                          onClick={() => setMagnifierZoom(level)}
-                        >
-                          {level}×
-                        </button>
-                      ))}
+                  <div className="image-group-canvas-header-row">
+                    <strong>{selectedImage?.title || selectedImage?.imageId || 'Select a frame'}</strong>
+                    {canLabelSelected && !readOnly && (
+                      <div className="image-magnifier-zoom-bar">
+                        <span className="image-magnifier-zoom-label">Magnifier</span>
+                        {MAGNIFIER_ZOOM_LEVELS.map((level) => (
+                          <button
+                            key={level}
+                            type="button"
+                            className={`btn btn-sm${magnifierZoom === level ? ' btn-primary' : ' btn-secondary'}`}
+                            onClick={() => setMagnifierZoom(level)}
+                          >
+                            {level}×
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!canLabelSelected && selectedImage && (
+                      <span className="text-muted">View only — claim project to mark</span>
+                    )}
+                  </div>
+                  {activeLabelMeta && canLabelSelected && (
+                    <div
+                      className={`image-keypoint-active-banner${activeLabelPlaced ? ' placed' : ''}`}
+                      style={{ '--banner-color': activeLabelMeta.color }}
+                    >
+                      <span className="image-keypoint-active-banner-swatch" aria-hidden />
+                      <div className="image-keypoint-active-banner-text">
+                        <strong>{activeLabelMeta.name}</strong>
+                        <span>{activeLabelMeta.hint}</span>
+                        {activeLabelPlaced && activeLabelCoords && (
+                          <span className="image-keypoint-active-banner-coords">{activeLabelCoords}</span>
+                        )}
+                      </div>
+                      <span className="image-keypoint-active-banner-status">
+                        {activeLabelPlaced ? 'Marked — Delete to clear' : 'Click image to place'}
+                      </span>
                     </div>
-                  )}
-                  {!canLabelSelected && selectedImage && (
-                    <span className="text-muted">View only — claim project to mark</span>
                   )}
                 </div>
                 <ImageGroupCanvasStack
                   images={images}
-                  selectedId={selectedId}
+                  selectedId={selectedKey}
                   keypointsById={keypointsById}
                   activeLabel={activeLabel}
                   showMagnifier={canLabelSelected && !readOnly}
@@ -517,6 +687,7 @@ export default function ImageGroupLabeling() {
                     if (readOnly) return;
                     updateKeypoints((prev) => ({ ...prev, [label]: point }));
                   }}
+                  onSelectLabel={setActiveLabel}
                   onImageDimensions={handleImageDimensions}
                 />
               </>
@@ -533,7 +704,7 @@ export default function ImageGroupLabeling() {
           onClearLabel={(label) => updateKeypoints((prev) => ({ ...prev, [label]: null }))}
           readOnly={readOnly}
           draftSaved={draftSaved}
-          projectSubmitted={projectSubmitted}
+          projectLocked={projectLocked}
           completeCount={completeCount}
           totalLabelable={labelableIds.size}
           imageTitle={selectedImage?.title || selectedImage?.imageId || ''}

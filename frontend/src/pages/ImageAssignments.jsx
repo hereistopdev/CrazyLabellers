@@ -10,6 +10,7 @@ export default function ImageAssignments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [claiming, setClaiming] = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -37,6 +38,19 @@ export default function ImageAssignments() {
     }
   };
 
+  const handleDownloadGroup = async (group) => {
+    const routeId = group.groupId || 'ungrouped';
+    setDownloading(routeId);
+    setError('');
+    try {
+      await api.exportImageGroup(routeId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   if (loading) return <div className="loading">Loading image projects...</div>;
 
   return (
@@ -58,6 +72,7 @@ export default function ImageAssignments() {
           {groups.map((group) => {
             const routeId = group.groupId || 'ungrouped';
             const claimingThis = claiming === routeId;
+            const downloadingThis = downloading === routeId;
 
             return (
               <div key={routeId} className="card image-project-card">
@@ -76,6 +91,7 @@ export default function ImageAssignments() {
                     </>
                   )}
                   {group.submittedCount > 0 && <> · {group.submittedCount} submitted</>}
+                  {group.rejectedCount > 0 && <> · {group.rejectedCount} rejected</>}
                 </p>
                 {group.availableCount > 0 && group.canClaim && (
                   <p style={{ fontSize: '0.8rem', color: '#93c5fd', marginBottom: '0.5rem' }}>
@@ -97,6 +113,16 @@ export default function ImageAssignments() {
                           onClick={() => handleClaimAndOpen(group)}
                         >
                           {claimingThis ? 'Claiming…' : 'Claim & open'}
+                        </button>
+                      )}
+                      {group.myCount > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={downloadingThis}
+                          onClick={() => handleDownloadGroup(group)}
+                        >
+                          {downloadingThis ? 'Downloading…' : 'Download JSON'}
                         </button>
                       )}
                     </>

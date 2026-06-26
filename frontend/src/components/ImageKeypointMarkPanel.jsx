@@ -6,13 +6,13 @@ import {
 import ImageKeypointAutoMarkPanel from './ImageKeypointAutoMarkPanel';
 
 export default function ImageKeypointMarkPanel({
-  keypoints,
+  keypoints = {},
   activeLabel,
   onSelectLabel,
   onClearLabel,
   readOnly = false,
   draftSaved = false,
-  projectSubmitted = false,
+  projectLocked = false,
   completeCount = 0,
   totalLabelable = 0,
   imageTitle = '',
@@ -37,14 +37,14 @@ export default function ImageKeypointMarkPanel({
             Project: {completeCount}/{totalLabelable} frames complete
           </div>
         )}
-        {draftSaved && !projectSubmitted && (
+        {draftSaved && !projectLocked && (
           <div className="text-muted" style={{ fontSize: '0.82rem', marginTop: '0.25rem' }}>
             Draft saved locally
           </div>
         )}
       </div>
 
-      {!projectSubmitted && (
+      {!projectLocked && (
         <ImageKeypointAutoMarkPanel
           frameCount={frameCount}
           selectedFrame={selectedFrame}
@@ -87,10 +87,12 @@ export default function ImageKeypointMarkPanel({
         })}
       </div>
 
-      {projectSubmitted ? (
-        <p className="text-muted image-keypoint-hotkeys">Project submitted</p>
+      {projectLocked ? (
+        <p className="text-muted image-keypoint-hotkeys">Final submission sent — awaiting review</p>
       ) : (
-        <p className="text-muted image-keypoint-hotkeys">A / D prev/next · P pitch · 0–8 keypoints</p>
+        <p className="text-muted image-keypoint-hotkeys">
+          A / D prev/next · P pitch · 0–8 keypoints · Delete clear
+        </p>
       )}
     </aside>
   );

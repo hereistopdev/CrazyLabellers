@@ -13,6 +13,33 @@ export const IMAGE_KEYPOINT_LABELS = [
 
 export const IMAGE_KEYPOINT_LABEL_IDS = IMAGE_KEYPOINT_LABELS.map((item) => item.id);
 
+export function getKeypointLabelMeta(id) {
+  return IMAGE_KEYPOINT_LABELS.find((item) => item.id === id) || null;
+}
+
+export function normalizedPointToPixels(point, width, height) {
+  if (!point || !width || !height) return null;
+  return {
+    x: Math.round(point.x * width),
+    y: Math.round(point.y * height),
+  };
+}
+
+export function formatKeypointCoords(point, width, height) {
+  if (!point) return null;
+  const pixels = normalizedPointToPixels(point, width, height);
+  const norm = `(${point.x.toFixed(3)}, ${point.y.toFixed(3)})`;
+  if (!pixels) return norm;
+  return `x: ${pixels.x}, y: ${pixels.y} · ${norm}`;
+}
+
+export function labelIdFromHotkey(key) {
+  const normalized = String(key || '').toLowerCase();
+  if (normalized === 'p') return 'pitch';
+  if (/^[0-8]$/.test(normalized)) return `kp${normalized}`;
+  return null;
+}
+
 export function emptyKeypointsMap() {
   return Object.fromEntries(IMAGE_KEYPOINT_LABEL_IDS.map((id) => [id, null]));
 }
