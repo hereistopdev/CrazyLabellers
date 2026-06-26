@@ -7071,7 +7071,8 @@ a.video-label-link.btn:hover {
 
 .image-group-page--immersive {
   max-width: none;
-  margin: -1rem -1.25rem 0;
+  width: calc(100% + 4rem);
+  margin: -2rem -2rem 0;
   min-height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
@@ -7101,12 +7102,108 @@ a.video-label-link.btn:hover {
   margin-top: 0.1rem;
 }
 
+.image-auto-mark-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-right: 0.5rem;
+}
+
+.image-auto-mark-panel {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.image-auto-mark-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.image-auto-mark-range {
+  margin-bottom: 0.55rem;
+}
+
+.image-auto-mark-range-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.image-auto-mark-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.image-auto-mark-range-inputs input {
+  width: 4.1rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.image-auto-mark-range-sep {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.image-auto-mark-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.55rem;
+}
+
+.image-auto-mark-field label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.image-auto-mark-field select {
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.image-auto-mark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+
+.image-auto-mark-hint {
+  font-size: 0.78rem;
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
 .image-group-workspace--immersive {
   flex: 1;
   min-height: 0;
-  grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: minmax(120px, 150px) minmax(0, 1fr) minmax(210px, 250px);
   gap: 0;
   align-items: stretch;
+}
+
+.image-group-workspace--immersive .image-group-main {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .image-group-workspace--immersive .image-group-gallery {
@@ -7117,59 +7214,105 @@ a.video-label-link.btn:hover {
 }
 
 .image-group-canvas--immersive {
-  padding: 0.5rem;
+  padding: 0.35rem 0.5rem 0.5rem;
   border-radius: 0;
   border: none;
   background: #0a0a0a;
   height: 100%;
   min-height: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
 }
 
 .image-group-canvas--immersive .image-group-canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   margin-bottom: 0.35rem;
   padding: 0 0.25rem;
   color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.image-magnifier-zoom-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.image-magnifier-zoom-label {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 0.15rem;
+}
+
+.image-group-canvas-layer.active {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-group-canvas-layer.active .image-keypoint-canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
 .image-keypoint-canvas-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
+  width: 100%;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .image-keypoint-canvas-stage {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
   cursor: crosshair;
+  line-height: 0;
 }
 
-.image-keypoint-canvas-stage img {
+.image-group-canvas--immersive .image-keypoint-canvas-stage img {
   display: block;
+  width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: calc(100vh - 150px);
-  width: auto;
-  height: auto;
+  max-height: 100%;
   object-fit: contain;
+  object-position: center center;
+  user-select: none;
 }
 
 .image-cursor-magnifier-lens {
-  position: absolute;
-  width: 132px;
-  height: 132px;
+  position: fixed;
+  width: 150px;
+  height: 150px;
   pointer-events: none;
-  z-index: 20;
+  z-index: 9999;
   border-radius: 50%;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.08s ease;
+}
+
+.image-cursor-magnifier-lens.visible {
+  opacity: 1;
+  visibility: visible;
 }
 
 .image-group-workspace--immersive .image-keypoint-mark-panel {
@@ -7299,6 +7442,25 @@ a.video-label-link.btn:hover {
 
 .image-group-canvas-layer .image-keypoint-canvas-wrap {
   width: 100%;
+}
+
+.image-group-canvas--immersive .image-group-canvas-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-group-canvas--immersive .image-group-canvas-layer.active {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-group-canvas--immersive .image-group-canvas-layer.active .image-keypoint-canvas-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 .image-group-canvas {

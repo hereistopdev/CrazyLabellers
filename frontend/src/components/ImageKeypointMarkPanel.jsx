@@ -3,6 +3,7 @@ import {
   IMAGE_KEYPOINT_LABEL_IDS,
   countMarkedKeypoints,
 } from '../config/imageKeypoints';
+import ImageKeypointAutoMarkPanel from './ImageKeypointAutoMarkPanel';
 
 export default function ImageKeypointMarkPanel({
   keypoints,
@@ -12,10 +13,12 @@ export default function ImageKeypointMarkPanel({
   readOnly = false,
   draftSaved = false,
   projectSubmitted = false,
-  allFramesComplete = false,
   completeCount = 0,
   totalLabelable = 0,
   imageTitle = '',
+  frameCount = 0,
+  selectedFrame = 1,
+  onRangeAutoMark,
 }) {
   const markedCount = countMarkedKeypoints(keypoints);
   const requiredCount = IMAGE_KEYPOINT_LABEL_IDS.length;
@@ -40,6 +43,16 @@ export default function ImageKeypointMarkPanel({
           </div>
         )}
       </div>
+
+      {!projectSubmitted && (
+        <ImageKeypointAutoMarkPanel
+          frameCount={frameCount}
+          selectedFrame={selectedFrame}
+          activeLabel={activeLabel}
+          readOnly={readOnly}
+          onAutoMark={onRangeAutoMark}
+        />
+      )}
 
       <div className="image-keypoint-label-list">
         {IMAGE_KEYPOINT_LABELS.map((meta) => {
@@ -77,10 +90,7 @@ export default function ImageKeypointMarkPanel({
       {projectSubmitted ? (
         <p className="text-muted image-keypoint-hotkeys">Project submitted</p>
       ) : (
-        <p className="text-muted image-keypoint-hotkeys">
-          A / D prev/next · P pitch · 0–8 keypoints · Submit project when all frames are done
-          {!allFramesComplete && totalLabelable > 0 ? ' (in toolbar)' : ''}
-        </p>
+        <p className="text-muted image-keypoint-hotkeys">A / D prev/next · P pitch · 0–8 keypoints</p>
       )}
     </aside>
   );

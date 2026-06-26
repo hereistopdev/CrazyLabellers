@@ -1,9 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IMAGE_KEYPOINT_LABELS } from '../config/imageKeypoints';
 
-const MAGNIFIER_SIZE = 132;
-const ZOOM = 3;
+const MAGNIFIER_SIZE = 150;
+const MAGNIFIER_ZOOM_LEVELS = [2, 3, 4];
 const OFFSET = 20;
+
+export { MAGNIFIER_ZOOM_LEVELS };
+
+/** Map object-fit: contain layout (element box vs painted image pixels). */
+function getContainedImageLayout(img) {
+  const elementRect = img.getBoundingClientRect();
+  const naturalWidth = img.naturalWidth;
+  const naturalHeight = img.naturalHeight;
+  if (!naturalWidth || !naturalHeight || !elementRect.width || !elementRect.height) {
+    return null;
+  }
+
+  const scale = Math.min(elementRect.width / naturalWidth, elementRect.height / naturalHeight);
+  const renderW = naturalWidth * scale;
+  const renderH = naturalHeight * scale;
+  const offsetX = (elementRect.width - renderW) / 2;
+  const offsetY = (elementRect.height - renderH) / 2;
+
+  return {
+    elementRect,
+    naturalWidth,
+    naturalHeight,
+    renderW,
+    renderH,
+    offsetX,
+    offsetY,
+    scale,
+  };
+}
 
 export default function ImageKeypointCanvas({
   imageUrl,
@@ -11,6 +40,7 @@ export default function ImageKeypointCanvas({
   activeLabel,
   isActive = true,
   showMagnifier = false,
+  magnifierZoom = 3,
   onPlacePoint,
   onDragPoint,
   onImageDimensions,
@@ -22,16 +52,21 @@ export default function ImageKeypointCanvas({
   const [dragLabel, setDragLabel] = useState(null);
   const [lensVisible, setLensVisible] = useState(false);
   const [lensPos, setLensPos] = useState({ left: 0, top: 0 });
-  const rafRef = useRef(null);
 
   const updateImageSize = useCallback(() => {
     const img = imgRef.current;
     if (!img) return;
-    setImageSize({ width: img.clientWidth, height: img.clientHeight });
-    if (img.naturalWidth && img.naturalHeight) {
+    const layout = getContainedImageLayout(img);
+    if (layout) {
+      setImageSize({
+        width: layout.renderW,
+        height: layout.renderH,
+        offsetX: layout.offsetX,
+        offsetY: layout.offsetY,
+      });
       onImageDimensions?.({
-        width: img.naturalWidth,
-        height: img.naturalHeight,
+        width: layout.naturalWidth,
+        height: layout.naturalHeight,
       });
     }
   }, [onImageDimensions]);
@@ -41,55 +76,96 @@ export default function ImageKeypointCanvas({
     return () => window.removeEventListener('resize', updateImageSize);
   }, [updateImageSize]);
 
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return undefined;
+
+    const observer = new ResizeObserver(() => {
+      updateImageSize();
+    });
+    observer.observe(img);
+
+    return () => observer.disconnect();
+  }, [imageUrl, updateImageSize]);
+
+  useLayoutEffect(() => {
+    if (!isActive) return;
+    updateImageSize();
+    const frame = requestAnimationFrame(updateImageSize);
+    return () => cancelAnimationFrame(frame);
+  }, [isActive, imageUrl, updateImageSize]);
+
   const toNormalized = useCallback((clientX, clientY) => {
     const img = imgRef.current;
     if (!img) return null;
-    const rect = img.getBoundingClientRect();
-    const x = (clientX - rect.left) / rect.width;
-    const y = (clientY - rect.top) / rect.height;
-    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    const layout = getContainedImageLayout(img);
+    if (!layout) return null;
+
+    const relX = clientX - layout.elementRect.left - layout.offsetX;
+    const relY = clientY - layout.elementRect.top - layout.offsetY;
+    // Small tolerance for sub-pixel rounding at image edges.
+    if (relX < -1 || relY < -1 || relX > layout.renderW + 1 || relY > layout.renderH + 1) {
+      return null;
+    }
+    const x = Math.max(0, Math.min(1, relX / layout.renderW));
+    const y = Math.max(0, Math.min(1, relY / layout.renderH));
     return { x, y };
   }, []);
 
   const drawLens = useCallback(
     (clientX, clientY) => {
-      const wrap = containerRef.current;
       const img = imgRef.current;
       const lens = lensRef.current;
-      if (!showMagnifier || !isActive || !wrap || !img || !lens || !img.naturalWidth) return;
-
-      const rect = wrap.getBoundingClientRect();
-      const localX = clientX - rect.left;
-      const localY = clientY - rect.top;
-      const imgRect = img.getBoundingClientRect();
-      const relX = clientX - imgRect.left;
-      const relY = clientY - imgRect.top;
-
-      if (relX < 0 || relY < 0 || relX > imgRect.width || relY > imgRect.height) {
+      if (!showMagnifier || !isActive || !img || !lens || !img.naturalWidth) {
         setLensVisible(false);
         return;
       }
 
-      const nx = relX / imgRect.width;
-      const ny = relY / imgRect.height;
+      const layout = getContainedImageLayout(img);
+      if (!layout) {
+        setLensVisible(false);
+        return;
+      }
 
-      let left = localX + OFFSET;
-      let top = localY + OFFSET;
-      if (left + MAGNIFIER_SIZE > rect.width) left = localX - MAGNIFIER_SIZE - OFFSET;
-      if (top + MAGNIFIER_SIZE > rect.height) top = localY - MAGNIFIER_SIZE - OFFSET;
+      const relX = clientX - layout.elementRect.left;
+      const relY = clientY - layout.elementRect.top;
+      const contentX = relX - layout.offsetX;
+      const contentY = relY - layout.offsetY;
+
+      if (
+        contentX < 0 ||
+        contentY < 0 ||
+        contentX > layout.renderW ||
+        contentY > layout.renderH
+      ) {
+        setLensVisible(false);
+        return;
+      }
+
+      let left = clientX + OFFSET;
+      let top = clientY + OFFSET;
+      if (left + MAGNIFIER_SIZE > window.innerWidth) left = clientX - MAGNIFIER_SIZE - OFFSET;
+      if (top + MAGNIFIER_SIZE > window.innerHeight) top = clientY - MAGNIFIER_SIZE - OFFSET;
+
       setLensPos({ left, top });
       setLensVisible(true);
 
       const ctx = lens.getContext('2d');
       if (!ctx) return;
 
+      const zoom = MAGNIFIER_ZOOM_LEVELS.includes(magnifierZoom) ? magnifierZoom : 3;
+
       lens.width = MAGNIFIER_SIZE;
       lens.height = MAGNIFIER_SIZE;
 
-      const srcW = img.naturalWidth / ZOOM;
-      const srcH = img.naturalHeight / ZOOM;
-      const sx = Math.max(0, Math.min(img.naturalWidth - srcW, nx * img.naturalWidth - srcW / 2));
-      const sy = Math.max(0, Math.min(img.naturalHeight - srcH, ny * img.naturalHeight - srcH / 2));
+      // Crop in display pixels so 2×/3×/4× matches what the labeller sees on screen.
+      const cropDisplaySize = MAGNIFIER_SIZE / zoom;
+      const srcW = cropDisplaySize / layout.scale;
+      const srcH = cropDisplaySize / layout.scale;
+      const cx = (contentX / layout.renderW) * layout.naturalWidth;
+      const cy = (contentY / layout.renderH) * layout.naturalHeight;
+      const sx = Math.max(0, Math.min(layout.naturalWidth - srcW, cx - srcW / 2));
+      const sy = Math.max(0, Math.min(layout.naturalHeight - srcH, cy - srcH / 2));
 
       ctx.clearRect(0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
       ctx.save();
@@ -113,29 +189,25 @@ export default function ImageKeypointCanvas({
       ctx.stroke();
       ctx.restore();
     },
-    [showMagnifier, isActive]
+    [showMagnifier, isActive, magnifierZoom]
   );
 
-  const handleMouseMove = useCallback(
+  const handlePointerMove = useCallback(
     (event) => {
       if (!showMagnifier || !isActive) return;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => drawLens(event.clientX, event.clientY));
+      drawLens(event.clientX, event.clientY);
     },
     [showMagnifier, isActive, drawLens]
   );
 
-  useEffect(
-    () => () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    },
-    []
-  );
-
-  const handleImageClick = (event) => {
+  const handleStagePointerDown = (event) => {
     if (!isActive || !activeLabel || dragLabel) return;
+    if (event.target.closest('.image-keypoint-marker')) return;
     const point = toNormalized(event.clientX, event.clientY);
-    if (point) onPlacePoint?.(activeLabel, point);
+    if (point) {
+      event.preventDefault();
+      onPlacePoint?.(activeLabel, point);
+    }
   };
 
   const handlePointerDown = (label, event) => {
@@ -164,14 +236,19 @@ export default function ImageKeypointCanvas({
     };
   }, [dragLabel, onDragPoint, toNormalized, drawLens]);
 
+  useEffect(() => {
+    if (!showMagnifier || !isActive) setLensVisible(false);
+  }, [showMagnifier, isActive]);
+
   return (
-    <div
-      className="image-keypoint-canvas-wrap"
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setLensVisible(false)}
-    >
-      <div className="image-keypoint-canvas-stage" onClick={handleImageClick} role="presentation">
+    <div className="image-keypoint-canvas-wrap" ref={containerRef}>
+      <div
+        className="image-keypoint-canvas-stage"
+        onPointerDown={handleStagePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setLensVisible(false)}
+        role="presentation"
+      >
         <img
           ref={imgRef}
           src={imageUrl}
@@ -183,8 +260,8 @@ export default function ImageKeypointCanvas({
           IMAGE_KEYPOINT_LABELS.map((meta) => {
             const point = keypoints[meta.id];
             if (!point) return null;
-            const left = point.x * imageSize.width;
-            const top = point.y * imageSize.height;
+            const left = (imageSize.offsetX || 0) + point.x * imageSize.width;
+            const top = (imageSize.offsetY || 0) + point.y * imageSize.height;
             const isLabelActive = activeLabel === meta.id;
             return (
               <button
@@ -205,10 +282,10 @@ export default function ImageKeypointCanvas({
             );
           })}
       </div>
-      {showMagnifier && isActive && lensVisible && (
+      {showMagnifier && isActive && (
         <canvas
           ref={lensRef}
-          className="image-cursor-magnifier-lens"
+          className={`image-cursor-magnifier-lens${lensVisible ? ' visible' : ''}`}
           style={{ left: `${lensPos.left}px`, top: `${lensPos.top}px` }}
           aria-hidden
         />

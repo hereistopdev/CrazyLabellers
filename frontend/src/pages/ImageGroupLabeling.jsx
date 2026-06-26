@@ -6,6 +6,7 @@ import { canUseLabeler } from '../utils/labelerAccess';
 import { isAdmin } from '../utils/roles';
 import { getUserId, isAssignedToUser } from '../utils/userId';
 import ImageGroupCanvasStack from '../components/ImageGroupCanvasStack';
+import { MAGNIFIER_ZOOM_LEVELS } from '../components/ImageKeypointCanvas';
 import ImageKeypointMarkPanel from '../components/ImageKeypointMarkPanel';
 import ImageGroupGallery from '../components/ImageGroupGallery';
 import {
@@ -26,6 +27,9 @@ import {
   getKeypointExportFilename,
   downloadJsonFile,
 } from '../utils/imageKeypointExport';
+import {
+  predictLabelInRange,
+} from '../utils/imageKeypointAutoMark';
 
 function pickInitialImageId(images, user, requestedId) {
   if (requestedId && images.some((row) => row._id === requestedId)) {
@@ -64,6 +68,7 @@ export default function ImageGroupLabeling() {
   const [keypointsById, setKeypointsById] = useState({});
   const [selectedId, setSelectedId] = useState('');
   const [activeLabel, setActiveLabel] = useState('pitch');
+  const [magnifierZoom, setMagnifierZoom] = useState(3);
   const [loading, setLoading] = useState(true);
   const [draftSaved, setDraftSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -183,6 +188,53 @@ export default function ImageGroupLabeling() {
     },
     [selectedId, readOnly, updateKeypointsCache]
   );
+
+  const handleRangeAutoMark = useCallback(
+    ({ referenceFrom, referenceTo, targetFrom, targetTo, label }) => {
+      if (readOnly) return;
+      const result = predictLabelInRange({
+        images,
+        keypointsById: keypointsByIdRef.current,
+        label,
+        referenceFrom,
+        referenceTo,
+        targetFrom,
+        targetTo,
+        labelableIds,
+      });
+
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+
+      setKeypointsById((prev) => {
+        const next = { ...prev };
+        for (const [assignmentId, labelPoints] of Object.entries(result.updates)) {
+          const existing = next[assignmentId]?.keypoints || emptyKeypointsMap();
+          next[assignmentId] = {
+            ...next[assignmentId],
+            keypoints: { ...existing, ...labelPoints },
+            status: next[assignmentId]?.status ?? 'draft',
+          };
+        }
+        keypointsByIdRef.current = next;
+        persistLocalDraft(next);
+        return next;
+      });
+
+      const labelText = label === 'all' ? `${result.labelCount} points` : label;
+      setMessage(
+        `Auto-marked ${labelText} on ${result.frameCount} frame${result.frameCount === 1 ? '' : 's'}`
+      );
+    },
+    [images, labelableIds, persistLocalDraft, readOnly]
+  );
+
+  const selectedFrame = useMemo(() => {
+    const index = images.findIndex((row) => row._id === selectedId);
+    return index >= 0 ? index + 1 : 1;
+  }, [images, selectedId]);
 
   const handleSelectImage = useCallback((assignmentId) => {
     if (assignmentId === selectedId) return;
@@ -430,11 +482,23 @@ export default function ImageGroupLabeling() {
               <>
                 <div className="image-group-canvas-header">
                   <strong>{selectedImage?.title || selectedImage?.imageId || 'Select a frame'}</strong>
+                  {canLabelSelected && !readOnly && (
+                    <div className="image-magnifier-zoom-bar">
+                      <span className="image-magnifier-zoom-label">Magnifier</span>
+                      {MAGNIFIER_ZOOM_LEVELS.map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          className={`btn btn-sm${magnifierZoom === level ? ' btn-primary' : ' btn-secondary'}`}
+                          onClick={() => setMagnifierZoom(level)}
+                        >
+                          {level}×
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {!canLabelSelected && selectedImage && (
                     <span className="text-muted">View only — claim project to mark</span>
-                  )}
-                  {canLabelSelected && !readOnly && (
-                    <span className="text-muted">Circular magnifier follows cursor while marking</span>
                   )}
                 </div>
                 <ImageGroupCanvasStack
@@ -443,6 +507,7 @@ export default function ImageGroupLabeling() {
                   keypointsById={keypointsById}
                   activeLabel={activeLabel}
                   showMagnifier={canLabelSelected && !readOnly}
+                  magnifierZoom={magnifierZoom}
                   onPlacePoint={(label, point) => {
                     if (readOnly) return;
                     updateKeypoints((prev) => ({ ...prev, [label]: point }));
@@ -469,10 +534,12 @@ export default function ImageGroupLabeling() {
           readOnly={readOnly}
           draftSaved={draftSaved}
           projectSubmitted={projectSubmitted}
-          allFramesComplete={allFramesComplete}
           completeCount={completeCount}
           totalLabelable={labelableIds.size}
           imageTitle={selectedImage?.title || selectedImage?.imageId || ''}
+          frameCount={images.length}
+          selectedFrame={selectedFrame}
+          onRangeAutoMark={handleRangeAutoMark}
         />
       </div>
     </div>

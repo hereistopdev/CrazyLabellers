@@ -7,6 +7,7 @@ export default function ImageGroupCanvasStack({
   keypointsById = {},
   activeLabel,
   showMagnifier = false,
+  magnifierZoom = 3,
   onPlacePoint,
   onDragPoint,
   onImageDimensions,
@@ -28,6 +29,7 @@ export default function ImageGroupCanvasStack({
               activeLabel={activeLabel}
               isActive={isActive}
               showMagnifier={showMagnifier}
+              magnifierZoom={magnifierZoom}
               onPlacePoint={onPlacePoint}
               onDragPoint={onDragPoint}
               onImageDimensions={
