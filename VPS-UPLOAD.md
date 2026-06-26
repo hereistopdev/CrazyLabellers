@@ -16,6 +16,14 @@ No manual `scp` or local import needed.
 sudo mkdir -p /var/www/football-clips
 sudo mkdir -p /var/www/football-images
 sudo chmod 755 /var/www/football-clips /var/www/football-images
+# Use the same user as VPS_SSH_USER on Render (e.g. administrator or root):
+sudo chown -R administrator:administrator /var/www/football-clips /var/www/football-images
+```
+
+If uploads fail with `Permission denied`, check ownership matches your SFTP user:
+
+```bash
+ls -la /var/www/
 ```
 
 Configure nginx + SSL for `media.crazylabel.us`:
@@ -123,7 +131,7 @@ Or use `VPS_SSH_PASSWORD` instead (less secure).
 
 Remove `VIDEO_DATA_DIR` and `IMAGE_DATA_DIR` from Render if present.
 
-When VPS vars are set, **video and image admin uploads** are stored on the VPS over SFTP. Image URLs point at `VIDEO_BASE_URL/api/images/...` (same media host as videos).
+When VPS vars are set, **video and image admin uploads** are stored on the VPS over SFTP. The app loads images through your **Render API** (`/api/images/...`), which reads files from the VPS over SFTP. Optional: add the nginx `/api/images/` block below if you want direct URLs on `media.crazylabel.us` too.
 
 Redeploy Render.
 
@@ -170,7 +178,8 @@ To test VPS upload locally, add the same `VPS_*` vars to `backend/.env`.
 |---------|-----|
 | “VPS storage is not configured” | Add `VPS_SSH_HOST` + key/password on Render |
 | Connection timeout | Open port 22 on VPS firewall; check `VPS_SSH_HOST` |
-| Permission denied | Verify public key in VPS `~/.ssh/authorized_keys` |
+| SSH permission denied | Verify public key in VPS `~/.ssh/authorized_keys` |
+| mkdir / upload permission denied | `sudo mkdir -p /var/www/football-images && sudo chown administrator:administrator /var/www/football-images` |
 | Video uploads but won’t play | Check nginx on `media.crazylabel.us` and `VIDEO_BASE_URL` |
 | Only first 2–3 seconds play | nginx must send `Accept-Ranges: bytes`; test with `curl -I -H "Range: bytes=0-1023" ...` → expect **206** |
 | Upload works, import finds 0 | Clips must be valid 30-char hex `.mp4` names |

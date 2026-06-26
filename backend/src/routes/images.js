@@ -1,47 +1,92 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { findLocalImagePath } = require('../services/imageStorage');
+const {
+  findLocalImagePath,
+  isRemoteImageStorage,
+} = require('../services/imageStorage');
+const { readImageFileFromVps } = require('../services/vpsStorage');
 const { isSafeClipId } = require('../utils/clipId');
 
 const router = express.Router();
 
-router.get('/:imageId', (req, res) => {
+function mimeForExtension(ext) {
+  switch (ext) {
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.gif':
+      return 'image/gif';
+    default:
+      return 'image/jpeg';
+  }
+}
+
+async function resolveImagePayload(raw) {
+  const localPath = findLocalImagePath(raw);
+  if (localPath) {
+    return {
+      kind: 'file',
+      filePath: localPath,
+      ext: path.extname(localPath).toLowerCase(),
+    };
+  }
+
+  if (isRemoteImageStorage()) {
+    const remote = await readImageFileFromVps(raw);
+    if (remote) {
+      return {
+        kind: 'buffer',
+        buffer: remote.buffer,
+        ext: remote.ext,
+      };
+    }
+  }
+
+  return null;
+}
+
+function sendImagePayload(res, payload) {
+  res.setHeader('Content-Type', mimeForExtension(payload.ext));
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+
+  if (payload.kind === 'file') {
+    return fs.createReadStream(payload.filePath).pipe(res);
+  }
+
+  return res.send(payload.buffer);
+}
+
+router.get('/:imageId', async (req, res) => {
   try {
     const raw = decodeURIComponent(req.params.imageId || '');
-    const filePath = findLocalImagePath(raw);
+    const payload = await resolveImagePayload(raw);
 
-    if (!filePath) {
+    if (!payload) {
       return res.status(404).json({ message: 'Image not found' });
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    const mime =
-      ext === '.png'
-        ? 'image/png'
-        : ext === '.webp'
-          ? 'image/webp'
-          : ext === '.gif'
-            ? 'image/gif'
-            : 'image/jpeg';
-
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    return fs.createReadStream(filePath).pipe(res);
+    return sendImagePayload(res, payload);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 });
 
-router.head('/:imageId', (req, res) => {
-  const raw = decodeURIComponent(req.params.imageId || '');
-  const stem = raw.replace(/\.[^.]+$/, '');
-  if (!isSafeClipId(stem) && !findLocalImagePath(raw)) {
-    return res.status(404).end();
+router.head('/:imageId', async (req, res) => {
+  try {
+    const raw = decodeURIComponent(req.params.imageId || '');
+    const stem = raw.replace(/\.[^.]+$/, '');
+    if (!isSafeClipId(stem)) {
+      return res.status(404).end();
+    }
+
+    const payload = await resolveImagePayload(raw);
+    if (!payload) return res.status(404).end();
+    return res.status(200).end();
+  } catch {
+    return res.status(500).end();
   }
-  const filePath = findLocalImagePath(raw);
-  if (!filePath) return res.status(404).end();
-  return res.status(200).end();
 });
 
 module.exports = router;

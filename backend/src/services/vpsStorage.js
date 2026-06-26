@@ -46,22 +46,30 @@ async function withSftp(fn) {
   }
 }
 
-async function ensureVpsVideoDir(sftp) {
-  const dir = getVpsVideoDir();
+async function ensureVpsDir(sftp, dir, label) {
   const exists = await sftp.exists(dir);
   if (!exists) {
-    await sftp.mkdir(dir, true);
+    try {
+      await sftp.mkdir(dir, true);
+    } catch (error) {
+      const message = String(error?.message || error);
+      if (/permission denied|eacces/i.test(message)) {
+        throw new Error(
+          `Cannot create ${label} directory ${dir}. On the VPS run: sudo mkdir -p ${dir} && sudo chown $USER:$USER ${dir} (use your VPS_SSH_USER).`
+        );
+      }
+      throw error;
+    }
   }
   return dir;
 }
 
+async function ensureVpsVideoDir(sftp) {
+  return ensureVpsDir(sftp, getVpsVideoDir(), 'video');
+}
+
 async function ensureVpsImageDir(sftp) {
-  const dir = getVpsImageDir();
-  const exists = await sftp.exists(dir);
-  if (!exists) {
-    await sftp.mkdir(dir, true);
-  }
-  return dir;
+  return ensureVpsDir(sftp, getVpsImageDir(), 'image');
 }
 
 async function uploadFileToVpsDir(remoteDir, fileId, data, extension) {
@@ -117,6 +125,33 @@ async function deleteVideoFromVps(clipId) {
 
 async function deleteImageFromVps(imageId) {
   return deleteFileFromVpsDir(getVpsImageDir(), imageId, IMAGE_EXTENSIONS_FOR_DELETE);
+}
+
+async function readImageFileFromVps(imageIdOrFilename) {
+  if (!isVpsStorageEnabled()) return null;
+
+  const base = path.basename(String(imageIdOrFilename || ''));
+  const ext = path.extname(base).toLowerCase();
+  const imageId =
+    ext && IMAGE_EXTENSIONS_FOR_DELETE.includes(ext) ? path.basename(base, ext) : base.replace(/\.[^.]+$/, '');
+
+  return withSftp(async (sftp) => {
+    const dir = getVpsImageDir();
+    if (!(await sftp.exists(dir))) return null;
+
+    const extensions =
+      ext && IMAGE_EXTENSIONS_FOR_DELETE.includes(ext) ? [ext] : IMAGE_EXTENSIONS_FOR_DELETE;
+
+    for (const candidateExt of extensions) {
+      const remotePath = `${dir}/${imageId}${candidateExt}`;
+      if (!(await sftp.exists(remotePath))) continue;
+      const data = await sftp.get(remotePath);
+      const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+      return { buffer, ext: candidateExt };
+    }
+
+    return null;
+  });
 }
 
 async function listVpsClipIds() {
@@ -175,6 +210,7 @@ module.exports = {
   uploadImageToVps,
   deleteVideoFromVps,
   deleteImageFromVps,
+  readImageFileFromVps,
   listVpsClipIds,
   testVpsConnection,
 };

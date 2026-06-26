@@ -1,26 +1,36 @@
-export function resolveImageUrl(imageUrl) {
+function getApiOrigin() {
+  const base = import.meta.env.VITE_API_URL || '';
+  if (!base.startsWith('http')) return '';
+
+  try {
+    return new URL(base).origin;
+  } catch {
+    return '';
+  }
+}
+
+function extractImagePath(imageUrl) {
   const trimmed = String(imageUrl || '').trim();
   if (!trimmed) return '';
 
   if (trimmed.startsWith('/api/images/')) return trimmed;
 
-  try {
-    const parsed = new URL(trimmed, window.location.origin);
-    if (parsed.pathname.startsWith('/api/images/')) {
-      if (parsed.origin !== window.location.origin) {
-        return trimmed;
-      }
-      return `${parsed.pathname}${parsed.search}`;
-    }
-  } catch {
-    // not a full URL
+  const match = trimmed.match(/\/api\/images\/[^?#]+/);
+  return match ? match[0] : '';
+}
+
+export function resolveImageUrl(imageUrl) {
+  const trimmed = String(imageUrl || '').trim();
+  if (!trimmed) return '';
+
+  const imagePath = extractImagePath(trimmed);
+  const apiOrigin = getApiOrigin();
+
+  if (imagePath && apiOrigin) {
+    return `${apiOrigin}${imagePath}`;
   }
 
-  const legacyMatch = trimmed.match(/\/api\/images\/[^?#]+/);
-  if (legacyMatch && !/^https?:\/\//i.test(trimmed)) {
-    return legacyMatch[0];
-  }
-
+  if (imagePath) return imagePath;
   return trimmed;
 }
 
