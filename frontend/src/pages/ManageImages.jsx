@@ -9,6 +9,7 @@ import Pagination from '../components/Pagination';
 import UploadGroupSelect, {
   appendGroupFields,
   validateGroupChoice,
+  GROUP_NEW,
 } from '../components/UploadGroupSelect';
 import { resolveImageUrl } from '../utils/imageUrl';
 import { analyzeImageUploadFiles, buildImageUploadFormData } from '../utils/imageUploadFiles';
@@ -98,6 +99,12 @@ export default function ManageImages() {
     [selectedFiles]
   );
 
+  const usesFolderGroups = uploadAnalysis.layout === 'group-folders';
+  const folderGroupsToUpload = useMemo(
+    () => uploadAnalysis.folderGroups.filter((group) => group.imageCount > 0),
+    [uploadAnalysis.folderGroups]
+  );
+
   const filteredGroupCount = useMemo(() => {
     if (table.filters.group === 'all') return 0;
     return images.filter((row) => {
@@ -135,14 +142,8 @@ export default function ManageImages() {
     setError('');
     setMessage('');
 
-    const groupError = validateGroupChoice(groupChoice, newGroupName);
-    if (groupError) {
-      setError(groupError);
-      return;
-    }
-
     if (!selectedFiles.length) {
-      setError('Select one or more image files (and optional matching JSON references)');
+      setError('Select image files or a folder to upload');
       return;
     }
 
@@ -157,22 +158,57 @@ export default function ManageImages() {
       return;
     }
 
-    const { formData } = buildImageUploadFormData(selectedFiles, {
+    if (!usesFolderGroups) {
+      const groupError = validateGroupChoice(groupChoice, newGroupName);
+      if (groupError) {
+        setError(groupError);
+        return;
+      }
+    }
+
+    const uploadFields = {
       description,
       taskPrice: String(price),
       allowLabellerReference: shareReference ? 'true' : 'false',
-    });
-    appendGroupFields(formData, { choice: groupChoice, newName: newGroupName });
+    };
 
     setUploading(true);
     try {
-      const result = await api.uploadImages(formData);
-      const matched = result.matchedReferences ?? uploadAnalysis.matchedCount;
-      setMessage(
-        `Uploaded ${result.created} image${result.created === 1 ? '' : 's'}` +
-          (matched ? ` with ${matched} paired reference JSON file(s)` : '') +
-          (result.skipped ? ` (${result.skipped} skipped)` : '')
-      );
+      if (usesFolderGroups) {
+        let totalCreated = 0;
+        let totalSkipped = 0;
+        let totalMatched = 0;
+        const createdGroups = [];
+
+        for (const group of folderGroupsToUpload) {
+          const { formData } = buildImageUploadFormData(group.pairs, uploadFields);
+          appendGroupFields(formData, { choice: GROUP_NEW, newName: group.groupName });
+
+          const result = await api.uploadImages(formData);
+          totalCreated += result.created || 0;
+          totalSkipped += result.skipped || 0;
+          totalMatched += result.matchedReferences ?? group.matchedCount ?? 0;
+          createdGroups.push(group.groupName);
+        }
+
+        setMessage(
+          `Uploaded ${totalCreated} image${totalCreated === 1 ? '' : 's'} across ${createdGroups.length} group${createdGroups.length === 1 ? '' : 's'} (${createdGroups.join(', ')})` +
+            (totalMatched ? ` with ${totalMatched} reference JSON file(s)` : '') +
+            (totalSkipped ? ` — ${totalSkipped} skipped` : '')
+        );
+      } else {
+        const { formData } = buildImageUploadFormData(selectedFiles, uploadFields);
+        appendGroupFields(formData, { choice: groupChoice, newName: newGroupName });
+
+        const result = await api.uploadImages(formData);
+        const matched = result.matchedReferences ?? uploadAnalysis.matchedCount;
+        setMessage(
+          `Uploaded ${result.created} image${result.created === 1 ? '' : 's'}` +
+            (matched ? ` with ${matched} paired reference JSON file(s)` : '') +
+            (result.skipped ? ` (${result.skipped} skipped)` : '')
+        );
+      }
+
       setSelectedFiles([]);
       load();
     } catch (err) {
@@ -332,9 +368,19 @@ export default function ManageImages() {
         <h2>Upload images</h2>
         <p className="text-muted" style={{ marginBottom: '0.85rem', fontSize: '0.88rem' }}>
           Pair each image with a JSON file that shares the same base name (e.g.{' '}
-          <code>frame_000107.jpg</code> + <code>frame_000107.json</code>). Choose files or an entire
-          folder — matching is automatic.
+          <code>frame_000107.jpg</code> + <code>frame_000107.json</code>). Choose files for one group,
+          or choose a folder layout below.
         </p>
+        <ul className="text-muted" style={{ marginBottom: '0.85rem', fontSize: '0.88rem', paddingLeft: '1.2rem' }}>
+          <li>
+            <strong>Single group folder</strong> — select a folder; its name becomes the task group and
+            images + JSON inside become tasks.
+          </li>
+          <li>
+            <strong>Multiple groups</strong> — select a parent folder containing subfolders; each
+            subfolder name becomes a group with its own images and JSON files.
+          </li>
+        </ul>
         <div className="form-grid">
           <label className="form-field">
             <span>Choose files</span>
@@ -366,18 +412,42 @@ export default function ManageImages() {
                 {uploadAnalysis.unmatchedJsonCount > 0
                   ? ` (${uploadAnalysis.unmatchedJsonCount} JSON without matching image)`
                   : ''}
+                {usesFolderGroups
+                  ? ` · ${uploadAnalysis.groupCount} group folder${uploadAnalysis.groupCount === 1 ? '' : 's'} detected`
+                  : ''}
               </small>
+              {usesFolderGroups && folderGroupsToUpload.length > 0 && (
+                <ul className="text-muted" style={{ marginTop: '0.45rem', fontSize: '0.82rem' }}>
+                  {folderGroupsToUpload.map((group) => (
+                    <li key={group.groupName}>
+                      <strong>{group.groupName}</strong> — {group.imageCount} image
+                      {group.imageCount === 1 ? '' : 's'}, {group.matchedCount} paired JSON
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
-          <UploadGroupSelect
-            groups={groupOptions}
-            value={groupChoice}
-            onChange={setGroupChoice}
-            newName={newGroupName}
-            onNewNameChange={setNewGroupName}
-            label="Task group"
-          />
+          {!usesFolderGroups && (
+            <UploadGroupSelect
+              groups={groupOptions}
+              value={groupChoice}
+              onChange={setGroupChoice}
+              newName={newGroupName}
+              onNewNameChange={setNewGroupName}
+              label="Task group"
+            />
+          )}
+
+          {usesFolderGroups && (
+            <div className="form-field form-field--wide">
+              <small className="text-muted">
+                Task groups will be created automatically from folder names. Price, description, and
+                reference sharing apply to every group in this upload.
+              </small>
+            </div>
+          )}
 
           <label className="form-field">
             <span>Task price (USD)</span>
@@ -413,8 +483,12 @@ export default function ManageImages() {
           </label>
         </div>
 
-        <button type="submit" className="btn btn-primary" disabled={uploading}>
-          {uploading ? 'Uploading…' : 'Upload'}
+        <button type="submit" className="btn btn-primary" disabled={uploading || !uploadAnalysis.imageCount}>
+          {uploading
+            ? 'Uploading…'
+            : usesFolderGroups
+              ? `Upload ${folderGroupsToUpload.length} group${folderGroupsToUpload.length === 1 ? '' : 's'}`
+              : 'Upload'}
         </button>
       </form>
 
