@@ -47,7 +47,11 @@ function getImageBaseUrl() {
 
 function buildImageUrl(imageId, extension = '.png') {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  return `/api/images/${encodeURIComponent(`${imageId}${ext}`)}`;
+  const imagePath = `/api/images/${encodeURIComponent(`${imageId}${ext}`)}`;
+  if (isRemoteImageStorage()) {
+    return `${getImageBaseUrl()}${imagePath}`;
+  }
+  return imagePath;
 }
 
 function normalizeImageUrl(imageUrl) {
@@ -55,9 +59,15 @@ function normalizeImageUrl(imageUrl) {
   if (!trimmed) return '';
 
   const pathMatch = trimmed.match(/\/api\/images\/[^?#]+/);
-  if (pathMatch) return pathMatch[0];
+  if (!pathMatch) return trimmed;
 
-  return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  if (isRemoteImageStorage()) {
+    return `${getImageBaseUrl()}${pathMatch[0]}`;
+  }
+
+  return pathMatch[0];
 }
 
 function resolveImageId(filename, explicitId) {

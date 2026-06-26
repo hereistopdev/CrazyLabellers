@@ -72,6 +72,7 @@ The database auto-seeds on first startup (terminology, tests, sample videos, adm
 | Key | Value |
 |-----|-------|
 | `VITE_API_URL` | `https://your-api.onrender.com/api` |
+| `VITE_MEDIA_URL` | `https://media.crazylabel.us` (same as Render `VIDEO_BASE_URL`) |
 
 Important: include the `/api` suffix.
 

@@ -1,3 +1,11 @@
+function getMediaBaseUrl() {
+  const media = import.meta.env.VITE_MEDIA_URL || '';
+  if (media.startsWith('http')) {
+    return media.replace(/\/$/, '');
+  }
+  return '';
+}
+
 function getApiOrigin() {
   const base = import.meta.env.VITE_API_URL || '';
   if (!base.startsWith('http')) return '';
@@ -23,15 +31,25 @@ export function resolveImageUrl(imageUrl) {
   const trimmed = String(imageUrl || '').trim();
   if (!trimmed) return '';
 
-  const imagePath = extractImagePath(trimmed);
-  const apiOrigin = getApiOrigin();
+  // Full URL — load directly from media server (same as videos)
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
 
-  if (imagePath && apiOrigin) {
+  const imagePath = extractImagePath(trimmed);
+  if (!imagePath) return trimmed;
+
+  const mediaBase = getMediaBaseUrl();
+  if (mediaBase) {
+    return `${mediaBase}${imagePath}`;
+  }
+
+  const apiOrigin = getApiOrigin();
+  if (apiOrigin) {
     return `${apiOrigin}${imagePath}`;
   }
 
-  if (imagePath) return imagePath;
-  return trimmed;
+  return imagePath;
 }
 
 export function isCrossOriginImageUrl(imageUrl) {
