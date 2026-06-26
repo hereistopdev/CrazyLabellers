@@ -336,4 +336,27 @@ export const api = {
   updateFrequentQA: (id, body) =>
     request(`/help/faq/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteFrequentQA: (id) => request(`/help/faq/${id}`, { method: 'DELETE' }),
+  getImageAssignments: () => request('/image-assignments'),
+  getImageGroups: () => request('/image-assignments/groups'),
+  getImageGroupWorkspace: (groupId) => request(`/image-assignments/groups/${groupId}`),
+  claimImageGroup: (groupId) =>
+    request(`/image-assignments/groups/${groupId}/claim`, { method: 'POST' }),
+  submitImageGroup: (groupId, body) =>
+    request(`/image-assignments/groups/${groupId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  getImageAssignment: (id) => request(`/image-assignments/${id}`),
+  getImageGroupNav: (groupId) => request(`/image-assignments/groups/${groupId}/nav`),
+  claimImageAssignment: (id) => request(`/image-assignments/${id}/claim`, { method: 'POST' }),
+  getImageKeypoints: (id) => request(`/image-assignments/${id}/keypoints`),
+  saveImageKeypoints: (id, body) =>
+    request(`/image-assignments/${id}/keypoints`, { method: 'PUT', body: JSON.stringify(body) }),
+  submitImageKeypoints: (id) =>
+    request(`/image-assignments/${id}/submit`, { method: 'POST' }),
+  exportImageKeypoints: (id) =>
+    downloadRequest(`/image-assignments/${id}/export`, 'keypoints.json'),
+  getAdminImages: () => request('/admin/images'),
+  uploadImages: (formData) => uploadRequest('/admin/images/upload', formData),
+  deleteAdminImage: (id) => request(`/admin/images/${id}`, { method: 'DELETE' }),
 };

@@ -19,6 +19,9 @@ const labellerRoutes = require('./routes/labellers');
 const tutorialRoutes = require('./routes/tutorials');
 const taskAdminRoutes = require('./routes/taskAdmin');
 const helpRoutes = require('./routes/help');
+const imageRoutes = require('./routes/images');
+const imageAssignmentRoutes = require('./routes/imageAssignments');
+const imageAdminRoutes = require('./routes/imageAdmin');
 const { EVENT_TYPES } = require('./config/events');
 
 const app = express();
@@ -74,6 +77,9 @@ app.use('/api/labellers', labellerRoutes);
 app.use('/api/tutorials', tutorialRoutes);
 app.use('/api/admin/tasks', taskAdminRoutes);
 app.use('/api/help', helpRoutes);
+app.use('/api/images', imageRoutes);
+app.use('/api/image-assignments', imageAssignmentRoutes);
+app.use('/api/admin/images', imageAdminRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

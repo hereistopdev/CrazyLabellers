@@ -9,7 +9,9 @@ import Dashboard from './pages/Dashboard';
 import Terminology from './pages/Terminology';
 import KnowledgeTest from './pages/KnowledgeTest';
 import Assignments from './pages/Assignments';
+import ImageAssignments from './pages/ImageAssignments';
 import Labeling from './pages/Labeling';
+import ImageGroupLabeling from './pages/ImageGroupLabeling';
 import Admin from './pages/Admin';
 import ManageValidators from './pages/ManageValidators';
 import ManageLabellers from './pages/ManageLabellers';
@@ -21,6 +23,7 @@ import LabelingTest from './pages/LabelingTest';
 import PretestScoreReview from './pages/PretestScoreReview';
 import Tutorials from './pages/Tutorials';
 import ManageTasks from './pages/ManageTasks';
+import ManageImages from './pages/ManageImages';
 import ManageKnowledgeTest from './pages/ManageKnowledgeTest';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewSubmission from './pages/ReviewSubmission';
@@ -196,7 +199,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="image-assignments"
+          element={
+            <ProtectedRoute labellerOnly>
+              <ImageAssignments />
+            </ProtectedRoute>
+          }
+        />
         <Route path="label/:id" element={<Labeling />} />
+        <Route path="image-groups/:groupId" element={<ImageGroupLabeling />} />
         <Route
           path="review"
           element={
@@ -242,6 +254,14 @@ export default function App() {
           element={
             <ProtectedRoute videoManagerAccess>
               <ManageVideos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/images"
+          element={
+            <ProtectedRoute videoManagerAccess>
+              <ManageImages />
             </ProtectedRoute>
           }
         />

@@ -72,6 +72,9 @@ export default function Layout() {
               <NavLink to="/admin/videos" className={navClass} onClick={() => setMenuOpen(false)}>
                 Videos
               </NavLink>
+              <NavLink to="/admin/images" className={navClass} onClick={() => setMenuOpen(false)}>
+                Images
+              </NavLink>
               <NavLink
                 to="/admin/video-managers"
                 className={navClass}
@@ -110,6 +113,9 @@ export default function Layout() {
                   <NavLink to="/admin/videos" className={navClass} onClick={() => setMenuOpen(false)}>
                     Videos
                   </NavLink>
+                  <NavLink to="/admin/images" className={navClass} onClick={() => setMenuOpen(false)}>
+                    Images
+                  </NavLink>
                   <NavLink to="/admin/tasks" className={navClass} onClick={() => setMenuOpen(false)}>
                     Tasks & groups
                   </NavLink>
@@ -146,6 +152,9 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/assignments" className={navClass} onClick={() => setMenuOpen(false)}>
                 Labeling
+              </NavLink>
+              <NavLink to="/image-assignments" className={navClass} onClick={() => setMenuOpen(false)}>
+                Image projects
               </NavLink>
               <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
                 Frequent Q&amp;A
