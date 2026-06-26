@@ -2,9 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const ImageAssignment = require('../models/ImageAssignment');
 const { isSafeClipId } = require('../utils/clipId');
-const { getExportFilename } = require('../utils/imageKeypointExport');
 const { parseImageKeypointReference } = require('../utils/parseImageKeypointReference');
 const { ensureImageDataDir } = require('./imageStorage');
+
+function getReferenceExportFilename(imageId) {
+  return `${imageId}.json`;
+}
 
 function getImageReferenceDir() {
   const dir =
@@ -15,7 +18,7 @@ function getImageReferenceDir() {
 }
 
 function referenceFilePath(imageId) {
-  return path.join(getImageReferenceDir(), getExportFilename(imageId));
+  return path.join(getImageReferenceDir(), getReferenceExportFilename(imageId));
 }
 
 function parseReferenceJsonObject(raw) {

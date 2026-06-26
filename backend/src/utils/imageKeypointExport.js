@@ -11,7 +11,6 @@ const {
   mergeLabelMeKeypointExport,
   createMinimalLabelMeExport,
 } = require('./labelMeKeypointJson');
-const { loadReferenceRawJsonForAssignment } = require('../services/imageReferenceStorage');
 
 function buildKeypointExportPayload(assignment, keypoints, dimensions = {}) {
   const map = normalizeKeypoints(keypoints);
@@ -41,6 +40,7 @@ function buildKeypointExportPayload(assignment, keypoints, dimensions = {}) {
 
 function buildMergedKeypointExportPayload(assignment, keypoints, referenceRaw = null) {
   const map = normalizeKeypoints(keypoints);
+  const { loadReferenceRawJsonForAssignment } = require('../services/imageReferenceStorage');
   const resolvedReference =
     referenceRaw || loadReferenceRawJsonForAssignment(assignment);
 
