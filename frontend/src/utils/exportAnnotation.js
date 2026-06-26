@@ -1,5 +1,5 @@
 import { FPS } from '../config/frameOffsets';
-import { snapTimeToFrame } from './frameTime';
+import { internalTimeToOriginPositionMs } from './frameTime';
 
 function toExportLabel(eventType, variant) {
   const snake = eventType.trim().replace(/\s+/g, '_');
@@ -20,11 +20,11 @@ export function exportAnnotation(events, { gameTime = '1 - 00:00', variant = 'po
 
   return {
     annotations: sorted.map((event) => {
-      const timeSec = snapTimeToFrame(getEventTimeSeconds(event, variant), fps);
+      const timeSec = getEventTimeSeconds(event, variant);
       return {
         gameTime,
         label: toExportLabel(event.eventType, variant),
-        position: String(Math.round(timeSec * 1000)),
+        position: String(internalTimeToOriginPositionMs(timeSec, fps)),
         team: 'not applicable',
         visibility: 'visible',
       };
