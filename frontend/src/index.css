@@ -7406,8 +7406,8 @@ a.video-label-link.btn:hover {
 
 .image-cursor-magnifier-lens {
   position: fixed;
-  width: 150px;
-  height: 150px;
+  width: 450px;
+  height: 450px;
   pointer-events: none;
   z-index: 9999;
   border-radius: 50%;

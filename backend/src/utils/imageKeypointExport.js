@@ -6,6 +6,11 @@ const {
   countMarkedKeypoints,
   countLabellerExportKeypoints,
 } = require('../config/imageKeypoints');
+const {
+  isLabelMeKeypointJson,
+  mergeLabelMeKeypointExport,
+  createMinimalLabelMeExport,
+} = require('./labelMeKeypointJson');
 
 function buildKeypointExportPayload(assignment, keypoints, dimensions = {}) {
   const map = normalizeKeypoints(keypoints);
@@ -35,8 +40,22 @@ function buildKeypointExportPayload(assignment, keypoints, dimensions = {}) {
 
 function buildMergedKeypointExportPayload(assignment, keypoints, referenceRaw = null) {
   const map = normalizeKeypoints(keypoints);
+
+  if (referenceRaw && isLabelMeKeypointJson(referenceRaw)) {
+    return mergeLabelMeKeypointExport(
+      referenceRaw,
+      assignment,
+      map,
+      LABELLER_EXPORT_LABEL_IDS
+    );
+  }
+
+  if (!referenceRaw) {
+    return createMinimalLabelMeExport(assignment, map, LABELLER_EXPORT_LABEL_IDS);
+  }
+
   const base =
-    referenceRaw && typeof referenceRaw === 'object' && !Array.isArray(referenceRaw)
+    typeof referenceRaw === 'object' && !Array.isArray(referenceRaw)
       ? JSON.parse(JSON.stringify(referenceRaw))
       : {
           image: assignment.imageId,

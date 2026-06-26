@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { IMAGE_KEYPOINT_LABELS } from '../config/imageKeypoints';
 import { isCrossOriginImageUrl, resolveImageUrl } from '../utils/imageUrl';
 
-const MAGNIFIER_SIZE = 150;
+const MAGNIFIER_SIZE = 450;
 const MAGNIFIER_ZOOM_LEVELS = [2, 3, 4];
 
 export { MAGNIFIER_ZOOM_LEVELS };

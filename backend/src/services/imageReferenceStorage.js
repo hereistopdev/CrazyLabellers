@@ -40,16 +40,19 @@ async function saveReferenceForImage(imageId, rawJson, { sourceFilename = '' } =
 
   const rawString = typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson, null, 2);
   const data = parseReferenceJsonObject(rawString);
-  const storedId = data.image && isSafeClipId(String(data.image).trim()) ? String(data.image).trim() : imageId;
-  const keypoints = extractReferenceKeypoints(data);
+  const parsed = parseImageKeypointReference(data);
+  const storedId =
+    parsed.imageId && isSafeClipId(String(parsed.imageId).trim())
+      ? String(parsed.imageId).trim()
+      : imageId;
 
   fs.writeFileSync(referenceFilePath(storedId), rawString);
 
   return {
     imageId: storedId,
-    width: Number.isFinite(Number(data.width)) ? Number(data.width) : null,
-    height: Number.isFinite(Number(data.height)) ? Number(data.height) : null,
-    keypoints,
+    width: parsed.width,
+    height: parsed.height,
+    keypoints: parsed.keypoints,
     sourceFilename,
   };
 }
@@ -77,11 +80,12 @@ async function loadReferenceForImage(imageId) {
   }
 
   const keypoints = extractReferenceKeypoints(raw);
+  const parsed = parseImageKeypointReference(raw);
   return {
     hasReference: true,
     keypoints,
-    width: Number.isFinite(Number(raw.width)) ? Number(raw.width) : null,
-    height: Number.isFinite(Number(raw.height)) ? Number(raw.height) : null,
+    width: parsed.width,
+    height: parsed.height,
     raw,
   };
 }
