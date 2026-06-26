@@ -23,6 +23,8 @@ const imageAssignmentSchema = new mongoose.Schema(
     reviewedAt: { type: Date },
     allowLabellerReference: { type: Boolean, default: false },
     hasReference: { type: Boolean, default: false },
+    /** Full uploaded reference JSON (LabelMe / XAnyLabeling) for export merge */
+    referenceJsonRaw: { type: String, default: '' },
     referenceUpdatedAt: { type: Date },
     referenceUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },

@@ -11,6 +11,7 @@ const {
   mergeLabelMeKeypointExport,
   createMinimalLabelMeExport,
 } = require('./labelMeKeypointJson');
+const { loadReferenceRawJsonForAssignment } = require('../services/imageReferenceStorage');
 
 function buildKeypointExportPayload(assignment, keypoints, dimensions = {}) {
   const map = normalizeKeypoints(keypoints);
@@ -40,23 +41,25 @@ function buildKeypointExportPayload(assignment, keypoints, dimensions = {}) {
 
 function buildMergedKeypointExportPayload(assignment, keypoints, referenceRaw = null) {
   const map = normalizeKeypoints(keypoints);
+  const resolvedReference =
+    referenceRaw || loadReferenceRawJsonForAssignment(assignment);
 
-  if (referenceRaw && isLabelMeKeypointJson(referenceRaw)) {
+  if (resolvedReference && isLabelMeKeypointJson(resolvedReference)) {
     return mergeLabelMeKeypointExport(
-      referenceRaw,
+      resolvedReference,
       assignment,
       map,
       LABELLER_EXPORT_LABEL_IDS
     );
   }
 
-  if (!referenceRaw) {
+  if (!resolvedReference) {
     return createMinimalLabelMeExport(assignment, map, LABELLER_EXPORT_LABEL_IDS);
   }
 
   const base =
-    typeof referenceRaw === 'object' && !Array.isArray(referenceRaw)
-      ? JSON.parse(JSON.stringify(referenceRaw))
+    typeof resolvedReference === 'object' && !Array.isArray(resolvedReference)
+      ? JSON.parse(JSON.stringify(resolvedReference))
       : {
           image: assignment.imageId,
           width: assignment.width ?? null,

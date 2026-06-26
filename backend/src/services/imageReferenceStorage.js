@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const ImageAssignment = require('../models/ImageAssignment');
 const { isSafeClipId } = require('../utils/clipId');
 const { getExportFilename } = require('../utils/imageKeypointExport');
 const { parseImageKeypointReference } = require('../utils/parseImageKeypointReference');
@@ -23,6 +24,41 @@ function parseReferenceJsonObject(raw) {
     throw new Error('Reference JSON must be an object');
   }
   return data;
+}
+
+function parseStoredReferenceJson(raw) {
+  if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    let data = parseReferenceJsonObject(raw.trim());
+    if (typeof data === 'string') {
+      data = parseReferenceJsonObject(data);
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function loadReferenceRawJsonFromFile(imageId) {
+  if (!isSafeClipId(imageId)) return null;
+  const filePath = referenceFilePath(imageId);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    return parseStoredReferenceJson(raw);
+  } catch {
+    return null;
+  }
+}
+
+function loadReferenceRawJsonForAssignment(assignment) {
+  const fromDb = parseStoredReferenceJson(assignment?.referenceJsonRaw);
+  if (fromDb) return fromDb;
+  return loadReferenceRawJsonFromFile(assignment?.imageId);
+}
+
+function loadReferenceRawJsonForImage(imageId) {
+  return loadReferenceRawJsonFromFile(imageId);
 }
 
 function extractReferenceKeypoints(data) {
@@ -53,28 +89,15 @@ async function saveReferenceForImage(imageId, rawJson, { sourceFilename = '' } =
     width: parsed.width,
     height: parsed.height,
     keypoints: parsed.keypoints,
+    rawJson: rawString,
     sourceFilename,
   };
 }
 
-function loadReferenceRawJsonForImage(imageId) {
-  if (!isSafeClipId(imageId)) return null;
-  const filePath = referenceFilePath(imageId);
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    let data = parseReferenceJsonObject(raw);
-    if (typeof data === 'string') {
-      data = parseReferenceJsonObject(data);
-    }
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 async function loadReferenceForImage(imageId) {
-  const raw = loadReferenceRawJsonForImage(imageId);
+  const assignment = await ImageAssignment.findOne({ imageId }).select('referenceJsonRaw imageId');
+  const raw = loadReferenceRawJsonForAssignment(assignment || { imageId });
+
   if (!raw) {
     return { hasReference: false, keypoints: [], width: null, height: null, raw: null };
   }
@@ -108,6 +131,7 @@ module.exports = {
   saveReferenceForImage,
   loadReferenceForImage,
   loadReferenceRawJsonForImage,
+  loadReferenceRawJsonForAssignment,
   deleteReferenceForImage,
   hasReferenceForImage,
 };

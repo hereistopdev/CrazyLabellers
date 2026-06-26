@@ -101,16 +101,19 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
         let hasReference = false;
         let width = null;
         let height = null;
+        let referenceJsonRaw = '';
         const refFile = refsByStem.get(imageId) || refsByStem.get(path.basename(file.originalname, extension));
         if (refFile) {
           try {
-            const savedRef = await saveReferenceForImage(imageId, refFile.buffer.toString('utf8'), {
+            referenceJsonRaw = refFile.buffer.toString('utf8');
+            const savedRef = await saveReferenceForImage(imageId, referenceJsonRaw, {
               sourceFilename: refFile.originalname,
             });
             hasReference = true;
             width = savedRef.width;
             height = savedRef.height;
           } catch (refErr) {
+            referenceJsonRaw = '';
             skipped.push({
               name: file.originalname,
               reason: `Image saved but reference JSON failed: ${refErr.message}`,
@@ -131,6 +134,7 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
           status: 'available',
           uploadedBy: req.user._id,
           hasReference,
+          referenceJsonRaw,
           allowLabellerReference: shareReference && hasReference,
           referenceUpdatedAt: hasReference ? new Date() : undefined,
           referenceUpdatedBy: hasReference ? req.user._id : undefined,
@@ -273,13 +277,15 @@ router.post(
         return res.status(404).json({ message: 'Image assignment not found' });
       }
 
+      const referenceJsonRaw = req.file.buffer.toString('utf8');
       const savedRef = await saveReferenceForImage(
         assignment.imageId,
-        req.file.buffer.toString('utf8'),
+        referenceJsonRaw,
         { sourceFilename: req.file.originalname }
       );
 
       assignment.hasReference = true;
+      assignment.referenceJsonRaw = referenceJsonRaw;
       assignment.width = savedRef.width || assignment.width;
       assignment.height = savedRef.height || assignment.height;
       assignment.referenceUpdatedAt = new Date();

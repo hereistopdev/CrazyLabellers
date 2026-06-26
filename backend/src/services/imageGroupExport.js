@@ -8,7 +8,6 @@ const {
   countMarkedKeypoints,
   countLabellerExportKeypoints,
 } = require('../utils/imageKeypointExport');
-const { loadReferenceRawJsonForImage } = require('./imageReferenceStorage');
 const { sendGroupExportZip, resolveGroupFolderName } = require('./groupExport');
 
 async function loadImageGroupAssignments(groupId) {
@@ -81,8 +80,7 @@ async function buildImageGroupExport({ groupId, userId, draft = false, submissio
       : countLabellerExportKeypoints(map) > 0;
     if (!exportable) continue;
 
-    const referenceRaw = loadReferenceRawJsonForImage(assignment.imageId);
-    const payload = buildMergedKeypointExportPayload(assignment, map, referenceRaw);
+    const payload = buildMergedKeypointExportPayload(assignment, map);
     const filename = getExportFilename(assignment.imageId);
     files.push({
       path: `${folderName}/${filename}`,

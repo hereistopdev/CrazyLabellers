@@ -723,9 +723,7 @@ router.get('/:id/export', auth, async (req, res) => {
       return res.status(404).json({ message: 'No kp0–kp8 keypoints to export' });
     }
 
-    const { loadReferenceRawJsonForImage } = require('../services/imageReferenceStorage');
-    const referenceRaw = loadReferenceRawJsonForImage(assignment.imageId);
-    const payload = buildMergedKeypointExportPayload(assignment, map, referenceRaw);
+    const payload = buildMergedKeypointExportPayload(assignment, map);
     const filename = getExportFilename(assignment.imageId);
 
     res.setHeader('Content-Type', 'application/json');
