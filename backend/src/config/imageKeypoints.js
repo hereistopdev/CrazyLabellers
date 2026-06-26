@@ -25,6 +25,22 @@ function emptyKeypointsMap() {
 
 function normalizeKeypoints(input = []) {
   const map = emptyKeypointsMap();
+
+  if (input && !Array.isArray(input) && typeof input === 'object') {
+    for (const label of LABEL_IDS) {
+      const point = input[label];
+      if (!point) continue;
+      const x = Number(point.x);
+      const y = Number(point.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      map[label] = {
+        x: Math.min(1, Math.max(0, x)),
+        y: Math.min(1, Math.max(0, y)),
+      };
+    }
+    return map;
+  }
+
   for (const item of input || []) {
     const label = String(item?.label || '').trim();
     if (!isValidKeypointLabel(label)) continue;

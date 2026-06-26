@@ -42,8 +42,47 @@ async function ensureImageSubmissionSeeded(assignment, userId, existingSubmissio
   );
 }
 
+async function reseedEligibleSubmissionsFromReference(assignment) {
+  if (!assignment?.allowLabellerReference) {
+    return 0;
+  }
+
+  const keypoints = await loadDraftKeypointsFromReference(assignment);
+  if (keypoints.length === 0) {
+    return 0;
+  }
+
+  let reseeded = 0;
+  const submissions = await ImageKeypointSubmission.find({ assignmentId: assignment._id });
+
+  for (const existing of submissions) {
+    if (!shouldSeedDraftFromReference(existing)) continue;
+
+    await ImageKeypointSubmission.findOneAndUpdate(
+      { _id: existing._id },
+      {
+        keypoints,
+        status: existing.status === 'rejected' ? 'draft' : existing.status || 'draft',
+      }
+    );
+    reseeded += 1;
+  }
+
+  if (assignment.assignedTo) {
+    const assignedId = assignment.assignedTo._id || assignment.assignedTo;
+    const hasSubmission = submissions.some((row) => String(row.userId) === String(assignedId));
+    if (!hasSubmission) {
+      await ensureImageSubmissionSeeded(assignment, assignedId, null);
+      reseeded += 1;
+    }
+  }
+
+  return reseeded;
+}
+
 module.exports = {
   loadDraftKeypointsFromReference,
   ensureImageSubmissionSeeded,
+  reseedEligibleSubmissionsFromReference,
   shouldSeedDraftFromReference,
 };

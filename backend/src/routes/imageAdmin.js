@@ -17,6 +17,7 @@ const {
   deleteReferenceForImage,
   hasReferenceForImage,
 } = require('../services/imageReferenceStorage');
+const { reseedEligibleSubmissionsFromReference } = require('../services/imageReferenceDraftSeed');
 const { deleteImageAssignmentRecord, deleteImageAssignmentsByFilter } = require('../services/imageAssignmentDelete');
 const { validateTaskPrice } = require('../config/payments');
 const path = require('path');
@@ -234,9 +235,19 @@ router.patch('/assignments/:id/reference-share', auth, requireVideoManagerAccess
     }
     await assignment.save();
 
+    let reseeded = 0;
+    if (enabled) {
+      reseeded = await reseedEligibleSubmissionsFromReference(assignment);
+    }
+
     return res.json({
-      message: enabled ? 'Reference shared with labellers' : 'Reference hidden from labellers',
+      message: enabled
+        ? reseeded > 0
+          ? `Reference shared with labellers (${reseeded} draft${reseeded === 1 ? '' : 's'} seeded)`
+          : 'Reference shared with labellers'
+        : 'Reference hidden from labellers',
       allowLabellerReference: assignment.allowLabellerReference,
+      reseeded,
     });
   } catch (error) {
     return res.status(400).json({ message: error.message });
@@ -275,10 +286,18 @@ router.post(
       assignment.referenceUpdatedBy = req.user._id;
       await assignment.save();
 
+      const reseeded = assignment.allowLabellerReference
+        ? await reseedEligibleSubmissionsFromReference(assignment)
+        : 0;
+
       return res.json({
-        message: 'Reference JSON saved',
+        message:
+          reseeded > 0
+            ? `Reference JSON saved and ${reseeded} labeller draft${reseeded === 1 ? '' : 's'} seeded`
+            : 'Reference JSON saved',
         hasReference: true,
         keypointCount: savedRef.keypoints.length,
+        reseeded,
       });
     } catch (error) {
       return res.status(400).json({ message: error.message });

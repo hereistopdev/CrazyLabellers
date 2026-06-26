@@ -60,7 +60,12 @@ async function buildImageGroupExport({ groupId, userId, draft = false, submissio
     let map;
 
     if (override) {
-      map = normalizeKeypoints(override.keypoints || override.keypointsList || []);
+      const rawKeypoints = Array.isArray(override.keypointsList)
+        ? override.keypointsList
+        : Array.isArray(override.keypoints)
+          ? override.keypoints
+          : override.keypoints || override.keypointsList || [];
+      map = normalizeKeypoints(rawKeypoints);
       if (override.width) assignment.width = override.width;
       if (override.height) assignment.height = override.height;
     } else {

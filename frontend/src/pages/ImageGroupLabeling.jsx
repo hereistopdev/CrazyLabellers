@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { canUseLabeler } from '../utils/labelerAccess';
 import { isAdmin } from '../utils/roles';
-import { getUserId, isAssignedToUser } from '../utils/userId';
+import { isAssignedToUser } from '../utils/userId';
 import ImageGroupCanvasStack from '../components/ImageGroupCanvasStack';
 import { MAGNIFIER_ZOOM_LEVELS } from '../components/ImageKeypointCanvas';
 import ImageKeypointMarkPanel from '../components/ImageKeypointMarkPanel';
@@ -307,36 +307,25 @@ export default function ImageGroupLabeling() {
     setMessage('');
   }, [selectedKey]);
 
+  const usesReferenceDraft = useMemo(
+    () => images.some((row) => row.allowLabellerReference && row.hasReference),
+    [images]
+  );
+
   const handleClaimGroup = async () => {
     setClaiming(true);
     setError('');
     try {
       await api.claimImageGroup(groupId);
-      const userId = getUserId(user);
-      setWorkspace((prev) => {
-        if (!prev) return prev;
-        const nextImages = prev.images.map((img) =>
-          img.status === 'available'
-            ? {
-                ...img,
-                status: 'assigned',
-                assignedTo: { _id: userId, name: user?.name },
-              }
-            : img
-        );
-        const available = nextImages.filter((row) => row.status === 'available').length;
-        const mine = nextImages.filter(
-          (row) => row.status !== 'available' && isAssignedToUser(row.assignedTo, user)
-        );
-        return {
-          ...prev,
-          images: nextImages,
-          access: { canClaim: available > 0, canLabel: true },
-          stats: { ...prev.stats, available, mine: mine.length },
-        };
-      });
-      setMessage('Project claimed — start marking (drafts save locally)');
-      setSelectedId((prev) => prev || String(images[0]?._id || ''));
+      const data = await loadWorkspace();
+      const hasSharedReference = (data?.images || []).some(
+        (row) => row.allowLabellerReference && row.hasReference && row.markedCount > 0
+      );
+      setMessage(
+        hasSharedReference
+          ? 'Project claimed — reference keypoints loaded as your starting draft'
+          : 'Project claimed — start marking (drafts save locally)'
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -659,8 +648,16 @@ export default function ImageGroupLabeling() {
 
       {workspace.access?.canClaim && !workspace.access?.canLabel && (
         <div className="alert alert-info">
-          Claim this project to mark keypoints. Save drafts anytime, download draft JSON anytime, then
-          submit final results when every frame is complete.
+          Claim this project to mark keypoints.
+          {usesReferenceDraft
+            ? ' Shared reference JSON will load as your starting draft on each frame.'
+            : ' Save drafts anytime, download draft JSON anytime, then submit final results when every frame is complete.'}
+        </div>
+      )}
+
+      {labelableIds.size > 0 && usesReferenceDraft && !projectLocked && (
+        <div className="alert alert-info">
+          Reference keypoints are pre-filled as your draft. Adjust as needed, then save or submit.
         </div>
       )}
 

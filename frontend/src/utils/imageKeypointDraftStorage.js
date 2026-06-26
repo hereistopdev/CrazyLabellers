@@ -1,5 +1,9 @@
 import { getUserId } from './userId';
-import { normalizeKeypointsMap, keypointsMapToList } from '../config/imageKeypoints';
+import {
+  normalizeKeypointsMap,
+  keypointsMapToList,
+  countMarkedKeypoints,
+} from '../config/imageKeypoints';
 
 function storageKey(groupId, userId) {
   return `image-kp-draft:${userId}:${groupId || 'ungrouped'}`;
@@ -45,14 +49,13 @@ export function mergeDraftIntoCache(serverImages, draft) {
     const id = String(image._id);
     const draftRow = draft?.images?.[id] || draft?.images?.[image._id];
     const fromServer = normalizeKeypointsMap(image.keypoints || image.keypointsList);
+    const localMap = draftRow?.keypoints ? normalizeKeypointsMap(draftRow.keypoints) : null;
     const serverStatus = image.submissionStatus || 'draft';
     const locked = serverStatus === 'submitted' || serverStatus === 'approved';
+    const localMarked = localMap ? countMarkedKeypoints(localMap) : 0;
 
     cache[id] = {
-      keypoints:
-        !locked && draftRow?.keypoints
-          ? normalizeKeypointsMap(draftRow.keypoints)
-          : fromServer,
+      keypoints: !locked && localMarked > 0 ? localMap : fromServer,
       status: locked ? serverStatus : draftRow?.status || serverStatus,
       reviewerNotes: image.reviewerNotes || '',
     };
