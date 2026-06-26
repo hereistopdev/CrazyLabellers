@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { connectDB, getDbStatus } = require('./db/connect');
 const { runSeed } = require('./seed/runSeed');
-const { isAllowedOrigin } = require('./config/cors');
+const { isAllowedOrigin, describeCorsConfig } = require('./config/cors');
 
 const authRoutes = require('./routes/auth');
 const terminologyRoutes = require('./routes/terminology');
@@ -119,6 +119,14 @@ async function start() {
     console.log(`Server running on port ${PORT}`);
     if (isDev) {
       console.log('Local API: http://localhost:' + PORT);
+    } else {
+      const cors = describeCorsConfig();
+      console.log(
+        `CORS allowed origins: ${cors.origins.length ? cors.origins.join(', ') : '(none configured — set CLIENT_URL)'}`
+      );
+      if (cors.domains.length) {
+        console.log(`CORS allowed domains: ${cors.domains.join(', ')}`);
+      }
     }
   });
 
