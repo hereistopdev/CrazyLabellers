@@ -5,9 +5,10 @@ export function isArrowKey(key) {
 }
 
 export function arrowNudgeStep(event) {
-  if (event.shiftKey) return 10;
-  if (event.ctrlKey || event.metaKey) return 5;
-  return 1;
+  if (event.shiftKey && (event.ctrlKey || event.metaKey)) return 10;
+  if (event.shiftKey) return 5;
+  if (event.ctrlKey || event.metaKey) return 1;
+  return 0.25;
 }
 
 export function arrowNudgeDelta(key, stepPixels) {
