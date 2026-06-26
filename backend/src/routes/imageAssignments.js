@@ -16,7 +16,7 @@ const {
 } = require('../utils/imageKeypointExport');
 const { normalizeImageUrl } = require('../services/imageStorage');
 const { ensureImageSubmissionSeeded } = require('../services/imageReferenceDraftSeed');
-const { loadReferenceRawJsonForAssignment, hasStoredReferenceForAssignment } = require('../services/imageReferenceStorage');
+const { loadReferenceRawJsonForAssignment, hasStoredReferenceForAssignment, getReferenceDimensions, syncAssignmentReferenceDimensions } = require('../services/imageReferenceStorage');
 
 const router = express.Router();
 
@@ -66,13 +66,14 @@ router.get('/', auth, async (req, res) => {
 
 function summarizeImageRow(assignment, submission) {
   const map = normalizeKeypoints(submission?.keypoints || []);
+  const refDims = getReferenceDimensions(loadReferenceRawJsonForAssignment(assignment), assignment);
   return {
     _id: assignment._id,
     imageId: assignment.imageId,
     title: assignment.title,
     imageUrl: normalizeImageUrl(assignment.imageUrl),
-    width: assignment.width,
-    height: assignment.height,
+    width: refDims.width || assignment.width || null,
+    height: refDims.height || assignment.height || null,
     status: assignment.status,
     sortOrder: assignment.sortOrder,
     assignedTo: assignment.assignedTo,
@@ -247,6 +248,9 @@ router.get('/groups/:groupId', auth, async (req, res) => {
     );
 
     for (const assignment of assignments) {
+      if (hasStoredReferenceForAssignment(assignment)) {
+        await syncAssignmentReferenceDimensions(assignment);
+      }
       if (!isAssignedToUserId(assignment.assignedTo, req.user._id)) {
         continue;
       }

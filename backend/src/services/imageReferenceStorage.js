@@ -3,7 +3,7 @@ const path = require('path');
 const ImageAssignment = require('../models/ImageAssignment');
 const { isSafeClipId, sanitizeClipId } = require('../utils/clipId');
 const { parseImageKeypointReference } = require('../utils/parseImageKeypointReference');
-const { getLabelMeImageStem } = require('../utils/labelMeKeypointJson');
+const { getLabelMeDimensions, getLabelMeImageStem } = require('../utils/labelMeKeypointJson');
 const { ensureImageDataDir } = require('./imageStorage');
 
 function getReferenceExportFilename(imageId) {
@@ -78,6 +78,20 @@ function findReferenceFileForImage(referenceLookup, imageId, imageOriginalName) 
   return null;
 }
 
+function getReferenceDimensions(raw, assignment = null) {
+  if (raw) {
+    const fromJson = getLabelMeDimensions(raw, {});
+    if (fromJson.width && fromJson.height) {
+      return fromJson;
+    }
+  }
+
+  return {
+    width: assignment?.width ?? null,
+    height: assignment?.height ?? null,
+  };
+}
+
 function parseReferenceJsonObject(raw) {
   const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -139,9 +153,9 @@ function loadReferenceRawJsonForImage(imageId) {
   return loadReferenceRawJsonFromFile(imageId);
 }
 
-function extractReferenceKeypoints(data) {
+function extractReferenceKeypoints(data, fallback = {}) {
   try {
-    return parseImageKeypointReference(data).keypoints;
+    return parseImageKeypointReference(data, fallback).keypoints;
   } catch {
     return [];
   }
@@ -154,35 +168,47 @@ async function saveReferenceForImage(imageId, rawJson, { sourceFilename = '' } =
 
   const rawString = typeof rawJson === 'string' ? rawJson.trim().replace(/^\uFEFF/, '') : JSON.stringify(rawJson, null, 2);
   const data = parseReferenceJsonObject(rawString);
-  const parsed = parseImageKeypointReference(data);
+  const refDims = getReferenceDimensions(data);
+  const parsed = parseImageKeypointReference(
+    data,
+    refDims.width && refDims.height ? {} : refDims
+  );
 
   fs.writeFileSync(referenceFilePath(imageId), rawString);
 
   return {
     imageId,
-    width: parsed.width,
-    height: parsed.height,
+    width: refDims.width || parsed.width,
+    height: refDims.height || parsed.height,
     keypoints: parsed.keypoints,
     rawJson: rawString,
     sourceFilename,
   };
 }
 
-async function loadReferenceForImage(imageId) {
-  const assignment = await ImageAssignment.findOne({ imageId }).select('referenceJsonRaw imageId');
+async function loadReferenceForImage(imageId, assignmentOrFallback = null) {
+  const assignment =
+    assignmentOrFallback?.imageId || assignmentOrFallback?._id
+      ? assignmentOrFallback
+      : await ImageAssignment.findOne({ imageId }).select('referenceJsonRaw imageId width height');
+
   const raw = loadReferenceRawJsonForAssignment(assignment || { imageId });
 
   if (!raw) {
     return { hasReference: false, keypoints: [], width: null, height: null, raw: null };
   }
 
-  const keypoints = extractReferenceKeypoints(raw);
-  const parsed = parseImageKeypointReference(raw);
+  const refDims = getReferenceDimensions(raw, assignment);
+  const parsed = parseImageKeypointReference(
+    raw,
+    refDims.width && refDims.height ? {} : refDims
+  );
+
   return {
-    hasReference: true,
-    keypoints,
-    width: parsed.width,
-    height: parsed.height,
+    hasReference: parsed.keypoints.length > 0,
+    keypoints: parsed.keypoints,
+    width: refDims.width || parsed.width,
+    height: refDims.height || parsed.height,
     raw,
   };
 }
@@ -201,6 +227,21 @@ function hasReferenceForImage(imageId) {
   return false;
 }
 
+async function syncAssignmentReferenceDimensions(assignment) {
+  const raw = loadReferenceRawJsonForAssignment(assignment);
+  const refDims = getReferenceDimensions(raw, assignment);
+  if (!refDims.width || !refDims.height) return assignment;
+
+  if (assignment.width === refDims.width && assignment.height === refDims.height) {
+    return assignment;
+  }
+
+  assignment.width = refDims.width;
+  assignment.height = refDims.height;
+  await assignment.save();
+  return assignment;
+}
+
 module.exports = {
   getImageReferenceDir,
   buildReferenceFileLookup,
@@ -210,6 +251,8 @@ module.exports = {
   loadReferenceRawJsonForImage,
   loadReferenceRawJsonForAssignment,
   getReferenceJsonRawString,
+  getReferenceDimensions,
+  syncAssignmentReferenceDimensions,
   hasStoredReferenceForAssignment,
   deleteReferenceForImage,
   hasReferenceForImage,

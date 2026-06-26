@@ -1,19 +1,37 @@
 const ImageKeypointSubmission = require('../models/ImageKeypointSubmission');
-const { loadReferenceForImage } = require('./imageReferenceStorage');
+const {
+  loadReferenceForImage,
+  hasStoredReferenceForAssignment,
+} = require('./imageReferenceStorage');
+
+function keypointsLookCorrupted(keypoints) {
+  const list = Array.isArray(keypoints) ? keypoints : [];
+  if (list.length < 3) return false;
+  let edgeCount = 0;
+  for (const kp of list) {
+    const x = Number(kp?.x);
+    const y = Number(kp?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x >= 0.999 || y >= 0.999) edgeCount += 1;
+  }
+  return edgeCount >= Math.ceil(list.length * 0.6);
+}
 
 function shouldSeedDraftFromReference(submission) {
   if (!submission) return true;
-  if (submission.keypoints?.length > 0) return false;
   if (submission.status === 'submitted' || submission.status === 'approved') return false;
-  return submission.status === 'draft' || submission.status === 'rejected';
+  if (submission.status === 'rejected') return true;
+  if (!submission.keypoints?.length) return true;
+  if (keypointsLookCorrupted(submission.keypoints)) return true;
+  return false;
 }
 
 async function loadDraftKeypointsFromReference(assignment) {
-  if (!assignment?.allowLabellerReference || !assignment?.hasReference) {
+  if (!assignment?.allowLabellerReference || !hasStoredReferenceForAssignment(assignment)) {
     return [];
   }
 
-  const reference = await loadReferenceForImage(assignment.imageId);
+  const reference = await loadReferenceForImage(assignment.imageId, assignment);
   return reference.hasReference ? reference.keypoints : [];
 }
 

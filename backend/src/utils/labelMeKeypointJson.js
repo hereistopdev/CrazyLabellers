@@ -24,32 +24,43 @@ function getLabelMeImageStem(data, fallbackImageId = '') {
   return String(fallbackImageId || '').trim();
 }
 
-function pixelPointFromShape(shape) {
+function pixelPointFromShape(shape, label = '') {
   const points = shape?.points;
   if (!Array.isArray(points) || points.length === 0) return null;
 
-  if (shape?.shape_type === 'point' && points.length === 1 && Array.isArray(points[0])) {
+  const shapeType = String(shape?.shape_type || '').toLowerCase();
+  const labelId = String(label || shape?.label || '').trim();
+
+  if (shapeType === 'point' || (points.length === 1 && Array.isArray(points[0]))) {
     const x = Number(points[0][0]);
     const y = Number(points[0][1]);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     return { x, y };
   }
 
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-  for (const point of points) {
-    if (!Array.isArray(point) || point.length < 2) continue;
-    const x = Number(point[0]);
-    const y = Number(point[1]);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    sumX += x;
-    sumY += y;
-    count += 1;
+  // kp0–kp8 must come from point shapes only (ignore rectangles / zones)
+  if (labelId.startsWith('kp')) {
+    return null;
   }
 
-  if (!count) return null;
-  return { x: sumX / count, y: sumY / count };
+  const first = points.find((point) => Array.isArray(point) && point.length >= 2);
+  if (!first) return null;
+
+  const x = Number(first[0]);
+  const y = Number(first[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
+function shapePriority(shape, label) {
+  const type = String(shape?.shape_type || '').toLowerCase();
+  if (String(label || '').startsWith('kp')) {
+    return type === 'point' ? 10 : -1;
+  }
+  if (type === 'point') return 10;
+  if (type === 'rectangle') return 5;
+  if (type === 'polygon') return 3;
+  return 1;
 }
 
 function defaultPointShapeTemplate(existingShapes = []) {
@@ -163,6 +174,7 @@ module.exports = {
   getLabelMeDimensions,
   getLabelMeImageStem,
   pixelPointFromShape,
+  shapePriority,
   mergeLabelMeKeypointExport,
   createMinimalLabelMeExport,
   normalizedToPixelPoint,

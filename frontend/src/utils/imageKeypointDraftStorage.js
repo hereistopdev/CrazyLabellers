@@ -24,8 +24,10 @@ export function cloneKeypointsCache(cache) {
   return next;
 }
 
+const DRAFT_STORAGE_VERSION = 3;
+
 function storageKey(groupId, userId) {
-  return `image-kp-draft:${userId}:${groupId || 'ungrouped'}`;
+  return `image-kp-draft:v${DRAFT_STORAGE_VERSION}:${userId}:${groupId || 'ungrouped'}`;
 }
 
 export function loadImageKeypointDraft(groupId, user) {
@@ -72,9 +74,14 @@ export function mergeDraftIntoCache(serverImages, draft) {
     const serverStatus = image.submissionStatus || 'draft';
     const locked = serverStatus === 'submitted' || serverStatus === 'approved';
     const localMarked = localMap ? countMarkedKeypoints(localMap) : 0;
+    const serverMarked = countMarkedKeypoints(fromServer);
+    const useLocal =
+      !locked &&
+      localMarked > 0 &&
+      (localMarked >= serverMarked || serverMarked === 0);
 
     cache[id] = {
-      keypoints: !locked && localMarked > 0 ? localMap : fromServer,
+      keypoints: useLocal ? localMap : fromServer,
       status: locked ? serverStatus : draftRow?.status || serverStatus,
       reviewerNotes: image.reviewerNotes || '',
     };

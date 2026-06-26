@@ -18,6 +18,8 @@ const {
   buildReferenceFileLookup,
   findReferenceFileForImage,
   hasStoredReferenceForAssignment,
+  getReferenceDimensions,
+  loadReferenceRawJsonForAssignment,
 } = require('../services/imageReferenceStorage');
 const { reseedEligibleSubmissionsFromReference } = require('../services/imageReferenceDraftSeed');
 const { deleteImageAssignmentRecord, deleteImageAssignmentsByFilter } = require('../services/imageAssignmentDelete');
@@ -43,9 +45,12 @@ router.get('/', auth, requireVideoManagerAccess, async (_req, res) => {
     return res.json(
       assignments.map((assignment) => {
         const storedReference = hasStoredReferenceForAssignment(assignment);
+        const refDims = getReferenceDimensions(loadReferenceRawJsonForAssignment(assignment), assignment);
         return {
           ...assignment.toObject(),
           imageUrl: normalizeImageUrl(assignment.imageUrl),
+          width: refDims.width || assignment.width || null,
+          height: refDims.height || assignment.height || null,
           hasReference: storedReference,
           allowLabellerReference: storedReference ? Boolean(assignment.allowLabellerReference) : false,
         };
@@ -285,9 +290,9 @@ router.post(
       );
 
       assignment.hasReference = true;
-      assignment.referenceJsonRaw = referenceJsonRaw;
-      assignment.width = savedRef.width || assignment.width;
-      assignment.height = savedRef.height || assignment.height;
+      assignment.referenceJsonRaw = savedRef.rawJson || referenceJsonRaw;
+      if (savedRef.width) assignment.width = savedRef.width;
+      if (savedRef.height) assignment.height = savedRef.height;
       assignment.referenceUpdatedAt = new Date();
       assignment.referenceUpdatedBy = req.user._id;
       await assignment.save();

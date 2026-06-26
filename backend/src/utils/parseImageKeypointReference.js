@@ -4,17 +4,56 @@ const {
   getLabelMeDimensions,
   getLabelMeImageStem,
   pixelPointFromShape,
+  shapePriority,
 } = require('./labelMeKeypointJson');
 
 function clamp01(value) {
   return Math.min(1, Math.max(0, value));
 }
 
-function parseFlatKeypointReference(data) {
+function resolveReferenceDimensions(data, fallback = {}) {
+  const fromJson = getLabelMeDimensions(data, fallback);
+  if (fromJson.width && fromJson.height) {
+    return fromJson;
+  }
+
+  if (fallback.width && fallback.height) {
+    return { width: fallback.width, height: fallback.height };
+  }
+
+  return { width: null, height: null };
+}
+
+function pixelToNormalized(pixel, width, height) {
+  if (!pixel) return null;
+
+  let { x, y } = pixel;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+  const looksNormalized = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+  if (looksNormalized && (!width || !height || (width <= 1 && height <= 1))) {
+    return { x: clamp01(x), y: clamp01(y) };
+  }
+
+  if (width && height) {
+    if (x > 1 || y > 1 || width > 1 || height > 1) {
+      x /= width;
+      y /= height;
+    }
+    return { x: clamp01(x), y: clamp01(y) };
+  }
+
+  if (looksNormalized) {
+    return { x: clamp01(x), y: clamp01(y) };
+  }
+
+  return null;
+}
+
+function parseFlatKeypointReference(data, fallback = {}) {
   const imageId = String(data?.image || '').trim();
-  const width = Number(data?.width);
-  const height = Number(data?.height);
-  const hasDimensions = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
+  const { width, height } = resolveReferenceDimensions(data, fallback);
+  const hasDimensions = Boolean(width && height);
   const keypoints = [];
 
   for (const label of LABEL_IDS) {
@@ -28,10 +67,6 @@ function parseFlatKeypointReference(data) {
       if (raw.length < 2) continue;
       x = Number(raw[0]);
       y = Number(raw[1]);
-      if (hasDimensions) {
-        x /= width;
-        y /= height;
-      }
     } else if (typeof raw === 'object') {
       x = Number(raw.x);
       y = Number(raw.y);
@@ -39,12 +74,13 @@ function parseFlatKeypointReference(data) {
       continue;
     }
 
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const normalized = pixelToNormalized({ x, y }, hasDimensions ? width : null, hasDimensions ? height : null);
+    if (!normalized) continue;
 
     keypoints.push({
       label,
-      x: clamp01(x),
-      y: clamp01(y),
+      x: normalized.x,
+      y: normalized.y,
     });
   }
 
@@ -56,31 +92,51 @@ function parseFlatKeypointReference(data) {
   };
 }
 
-function parseLabelMeKeypointReference(data) {
-  const { width, height } = getLabelMeDimensions(data);
-  const hasDimensions = Boolean(width && height);
-  const imageId = getLabelMeImageStem(data);
+function selectLabelMeShapes(data) {
   const labelSet = new Set(LABEL_IDS);
-  const keypoints = [];
+  const bestByLabel = new Map();
 
-  for (const shape of data.shapes || []) {
+  for (const shape of data?.shapes || []) {
     const label = String(shape?.label || '').trim();
     if (!labelSet.has(label)) continue;
 
-    const pixel = pixelPointFromShape(shape);
+    const priority = shapePriority(shape, label);
+    if (priority < 0) continue;
+
+    const existing = bestByLabel.get(label);
+    if (!existing || priority > existing.priority) {
+      bestByLabel.set(label, { shape, priority });
+    }
+  }
+
+  return bestByLabel;
+}
+
+function parseLabelMeKeypointReference(data, fallback = {}) {
+  const { width, height } = resolveReferenceDimensions(data, fallback);
+  const hasDimensions = Boolean(width && height);
+  const imageId = getLabelMeImageStem(data);
+  const bestByLabel = selectLabelMeShapes(data);
+  const keypoints = [];
+
+  for (const label of LABEL_IDS) {
+    const entry = bestByLabel.get(label);
+    if (!entry) continue;
+
+    const pixel = pixelPointFromShape(entry.shape, label);
     if (!pixel) continue;
 
-    let x = pixel.x;
-    let y = pixel.y;
-    if (hasDimensions) {
-      x /= width;
-      y /= height;
-    }
+    const normalized = pixelToNormalized(
+      pixel,
+      hasDimensions ? width : null,
+      hasDimensions ? height : null
+    );
+    if (!normalized) continue;
 
     keypoints.push({
       label,
-      x: clamp01(x),
-      y: clamp01(y),
+      x: normalized.x,
+      y: normalized.y,
     });
   }
 
@@ -92,14 +148,15 @@ function parseLabelMeKeypointReference(data) {
   };
 }
 
-function parseImageKeypointReference(data) {
+function parseImageKeypointReference(data, fallback = {}) {
   if (isLabelMeKeypointJson(data)) {
-    return parseLabelMeKeypointReference(data);
+    return parseLabelMeKeypointReference(data, fallback);
   }
-  return parseFlatKeypointReference(data);
+  return parseFlatKeypointReference(data, fallback);
 }
 
 module.exports = {
   parseImageKeypointReference,
   isLabelMeKeypointJson,
+  resolveReferenceDimensions,
 };

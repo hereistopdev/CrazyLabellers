@@ -653,16 +653,16 @@ export default function ImageGroupLabeling() {
         const point = keypointsByIdRef.current[selectedKey]?.keypoints?.[activeLabel];
         if (!point) return;
         const dims = dimensionsRef.current[selectedKey];
-        const width = dims?.width;
-        const height = dims?.height;
-        if (!width || !height) return;
+        const coordW = selectedImage?.width || dims?.width;
+        const coordH = selectedImage?.height || dims?.height;
+        if (!coordW || !coordH) return;
         const step = arrowNudgeStep(event);
         const delta = arrowNudgeDelta(event.key, step);
         if (!delta) return;
         event.preventDefault();
         updateKeypoints((prev) => ({
           ...prev,
-          [activeLabel]: nudgeNormalizedPoint(prev[activeLabel], delta, width, height),
+          [activeLabel]: nudgeNormalizedPoint(prev[activeLabel], delta, coordW, coordH),
         }));
         return;
       }
@@ -723,8 +723,8 @@ export default function ImageGroupLabeling() {
   const activeLabelPlaced = Boolean(keypoints[activeLabel]);
   const activeLabelCoords = formatKeypointCoords(
     keypoints[activeLabel],
-    imageDimensionsById[selectedKey]?.width || selectedImage?.width,
-    imageDimensionsById[selectedKey]?.height || selectedImage?.height
+    selectedImage?.width || imageDimensionsById[selectedKey]?.width,
+    selectedImage?.height || imageDimensionsById[selectedKey]?.height
   );
 
   return (
