@@ -15,7 +15,9 @@ const {
 const {
   saveReferenceForImage,
   deleteReferenceForImage,
-  hasReferenceForImage,
+  buildReferenceFileLookup,
+  findReferenceFileForImage,
+  hasStoredReferenceForAssignment,
 } = require('../services/imageReferenceStorage');
 const { reseedEligibleSubmissionsFromReference } = require('../services/imageReferenceDraftSeed');
 const { deleteImageAssignmentRecord, deleteImageAssignmentsByFilter } = require('../services/imageAssignmentDelete');
@@ -39,10 +41,15 @@ router.get('/', auth, requireVideoManagerAccess, async (_req, res) => {
       .populate('assignedTo', 'name email')
       .sort({ createdAt: -1 });
     return res.json(
-      assignments.map((assignment) => ({
-        ...assignment.toObject(),
-        imageUrl: normalizeImageUrl(assignment.imageUrl),
-      }))
+      assignments.map((assignment) => {
+        const storedReference = hasStoredReferenceForAssignment(assignment);
+        return {
+          ...assignment.toObject(),
+          imageUrl: normalizeImageUrl(assignment.imageUrl),
+          hasReference: storedReference,
+          allowLabellerReference: storedReference ? Boolean(assignment.allowLabellerReference) : false,
+        };
+      })
     );
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -62,12 +69,7 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
         return res.status(400).json({ message: 'Select at least one image file' });
       }
 
-      const refsByStem = new Map();
-      for (const file of referenceFiles) {
-        const baseName = path.basename(file.originalname);
-        const stem = path.basename(baseName, path.extname(baseName));
-        refsByStem.set(stem, file);
-      }
+      const referenceLookup = buildReferenceFileLookup(referenceFiles);
 
       const groupId = await resolveUploadGroupId({
         groupId: req.body.groupId,
@@ -102,13 +104,13 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
         let width = null;
         let height = null;
         let referenceJsonRaw = '';
-        const refFile = refsByStem.get(imageId) || refsByStem.get(path.basename(file.originalname, extension));
+        const refFile = findReferenceFileForImage(referenceLookup, imageId, file.originalname);
         if (refFile) {
           try {
-            referenceJsonRaw = refFile.buffer.toString('utf8');
-            const savedRef = await saveReferenceForImage(imageId, referenceJsonRaw, {
+            const savedRef = await saveReferenceForImage(imageId, refFile.buffer, {
               sourceFilename: refFile.originalname,
             });
+            referenceJsonRaw = savedRef.rawJson;
             hasReference = true;
             width = savedRef.width;
             height = savedRef.height;
@@ -229,14 +231,12 @@ router.patch('/assignments/:id/reference-share', auth, requireVideoManagerAccess
     }
 
     const enabled = Boolean(req.body.allowLabellerReference);
-    if (enabled && !assignment.hasReference && !hasReferenceForImage(assignment.imageId)) {
+    if (enabled && !hasStoredReferenceForAssignment(assignment)) {
       return res.status(400).json({ message: 'Upload a reference JSON for this image first' });
     }
 
     assignment.allowLabellerReference = enabled;
-    if (enabled && !assignment.hasReference) {
-      assignment.hasReference = true;
-    }
+    assignment.hasReference = hasStoredReferenceForAssignment(assignment);
     await assignment.save();
 
     let reseeded = 0;

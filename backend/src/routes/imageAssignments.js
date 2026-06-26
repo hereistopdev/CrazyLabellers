@@ -16,7 +16,7 @@ const {
 } = require('../utils/imageKeypointExport');
 const { normalizeImageUrl } = require('../services/imageStorage');
 const { ensureImageSubmissionSeeded } = require('../services/imageReferenceDraftSeed');
-const { loadReferenceRawJsonForAssignment } = require('../services/imageReferenceStorage');
+const { loadReferenceRawJsonForAssignment, hasStoredReferenceForAssignment } = require('../services/imageReferenceStorage');
 
 const router = express.Router();
 
@@ -77,7 +77,7 @@ function summarizeImageRow(assignment, submission) {
     sortOrder: assignment.sortOrder,
     assignedTo: assignment.assignedTo,
     allowLabellerReference: Boolean(assignment.allowLabellerReference),
-    hasReference: Boolean(assignment.hasReference),
+    hasReference: hasStoredReferenceForAssignment(assignment),
     markedCount: countMarkedKeypoints(map),
     requiredCount: REQUIRED_KEYPOINT_COUNT,
     submissionStatus: submission?.status || 'draft',
@@ -726,13 +726,33 @@ router.get('/:id/reference', auth, async (req, res) => {
       }
     }
 
-    if (!assignment.hasReference) {
-      return res.json({ hasReference: false, raw: null });
+    if (!hasStoredReferenceForAssignment(assignment)) {
+      if (assignment.hasReference) {
+        assignment.hasReference = false;
+        if (assignment.allowLabellerReference) {
+          assignment.allowLabellerReference = false;
+        }
+        await assignment.save();
+      }
+      return res.json({
+        hasReference: false,
+        raw: null,
+        message: 'No reference JSON stored for this image. Re-upload the reference JSON from Manage Images.',
+      });
     }
 
     const raw = loadReferenceRawJsonForAssignment(assignment);
     if (!raw) {
-      return res.json({ hasReference: false, raw: null });
+      return res.json({
+        hasReference: false,
+        raw: null,
+        message: 'Reference JSON could not be read. Re-upload the reference JSON from Manage Images.',
+      });
+    }
+
+    if (!assignment.hasReference) {
+      assignment.hasReference = true;
+      await assignment.save();
     }
 
     return res.json({

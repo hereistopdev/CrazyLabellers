@@ -42,6 +42,12 @@ export function labelIdFromHotkey(key, code) {
   return null;
 }
 
+export function keypointIdFromCopyHotkey(key, code) {
+  const labelId = labelIdFromHotkey(key, code);
+  if (!labelId?.startsWith('kp')) return null;
+  return labelId;
+}
+
 export function emptyKeypointsMap() {
   return Object.fromEntries(IMAGE_KEYPOINT_LABEL_IDS.map((id) => [id, null]));
 }

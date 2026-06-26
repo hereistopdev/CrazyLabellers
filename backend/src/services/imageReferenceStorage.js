@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const ImageAssignment = require('../models/ImageAssignment');
-const { isSafeClipId } = require('../utils/clipId');
+const { isSafeClipId, sanitizeClipId } = require('../utils/clipId');
 const { parseImageKeypointReference } = require('../utils/parseImageKeypointReference');
+const { getLabelMeImageStem } = require('../utils/labelMeKeypointJson');
 const { ensureImageDataDir } = require('./imageStorage');
 
 function getReferenceExportFilename(imageId) {
@@ -21,6 +22,62 @@ function referenceFilePath(imageId) {
   return path.join(getImageReferenceDir(), getReferenceExportFilename(imageId));
 }
 
+function normalizeReferenceStem(value) {
+  const stem = path.basename(String(value || ''), path.extname(String(value || '')));
+  const sanitized = sanitizeClipId(stem) || stem;
+  return sanitized.toLowerCase();
+}
+
+function referenceLookupKeys(...values) {
+  const keys = new Set();
+  for (const value of values) {
+    if (!value) continue;
+    keys.add(normalizeReferenceStem(value));
+    keys.add(String(value).trim().toLowerCase());
+  }
+  return [...keys].filter(Boolean);
+}
+
+function buildReferenceFileLookup(referenceFiles = []) {
+  const lookup = new Map();
+
+  for (const file of referenceFiles) {
+    const keys = referenceLookupKeys(file.originalname);
+
+    try {
+      const parsed = JSON.parse(file.buffer.toString('utf8'));
+      keys.push(...referenceLookupKeys(getLabelMeImageStem(parsed)));
+      if (parsed?.imagePath) keys.push(...referenceLookupKeys(parsed.imagePath));
+      if (parsed?.image) keys.push(...referenceLookupKeys(parsed.image));
+    } catch {
+      /* ignore invalid JSON here — upload handler will surface parse errors */
+    }
+
+    for (const key of keys) {
+      if (key) lookup.set(key, file);
+    }
+  }
+
+  return lookup;
+}
+
+function findReferenceFileForImage(referenceLookup, imageId, imageOriginalName) {
+  if (!referenceLookup?.size) return null;
+
+  const keys = referenceLookupKeys(
+    imageId,
+    imageOriginalName,
+    path.basename(String(imageOriginalName || ''), path.extname(String(imageOriginalName || '')))
+  );
+
+  for (const key of keys) {
+    const match = referenceLookup.get(key);
+    if (match) return match;
+  }
+
+  return null;
+}
+
 function parseReferenceJsonObject(raw) {
   const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -32,14 +89,23 @@ function parseReferenceJsonObject(raw) {
 function parseStoredReferenceJson(raw) {
   if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
   try {
-    let data = parseReferenceJsonObject(raw.trim());
+    let cleaned = raw.trim().replace(/^\uFEFF/, '');
+    let data = parseReferenceJsonObject(cleaned);
     if (typeof data === 'string') {
-      data = parseReferenceJsonObject(data);
+      data = parseReferenceJsonObject(data.trim().replace(/^\uFEFF/, ''));
     }
     return data;
   } catch {
     return null;
   }
+}
+
+function getReferenceJsonRawString(assignment) {
+  const raw = assignment?.referenceJsonRaw;
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.trim().replace(/^\uFEFF/, '');
+  }
+  return null;
 }
 
 function loadReferenceRawJsonFromFile(imageId) {
@@ -55,9 +121,18 @@ function loadReferenceRawJsonFromFile(imageId) {
 }
 
 function loadReferenceRawJsonForAssignment(assignment) {
-  const fromDb = parseStoredReferenceJson(assignment?.referenceJsonRaw);
-  if (fromDb) return fromDb;
+  const rawString = getReferenceJsonRawString(assignment);
+  if (rawString) {
+    const parsed = parseStoredReferenceJson(rawString);
+    if (parsed) return parsed;
+  }
+
   return loadReferenceRawJsonFromFile(assignment?.imageId);
+}
+
+function hasStoredReferenceForAssignment(assignment) {
+  if (parseStoredReferenceJson(getReferenceJsonRawString(assignment))) return true;
+  return hasReferenceForImage(assignment?.imageId);
 }
 
 function loadReferenceRawJsonForImage(imageId) {
@@ -77,18 +152,14 @@ async function saveReferenceForImage(imageId, rawJson, { sourceFilename = '' } =
     throw new Error('Invalid image ID');
   }
 
-  const rawString = typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson, null, 2);
+  const rawString = typeof rawJson === 'string' ? rawJson.trim().replace(/^\uFEFF/, '') : JSON.stringify(rawJson, null, 2);
   const data = parseReferenceJsonObject(rawString);
   const parsed = parseImageKeypointReference(data);
-  const storedId =
-    parsed.imageId && isSafeClipId(String(parsed.imageId).trim())
-      ? String(parsed.imageId).trim()
-      : imageId;
 
-  fs.writeFileSync(referenceFilePath(storedId), rawString);
+  fs.writeFileSync(referenceFilePath(imageId), rawString);
 
   return {
-    imageId: storedId,
+    imageId,
     width: parsed.width,
     height: parsed.height,
     keypoints: parsed.keypoints,
@@ -126,15 +197,20 @@ function deleteReferenceForImage(imageId) {
 
 function hasReferenceForImage(imageId) {
   if (!isSafeClipId(imageId)) return false;
-  return fs.existsSync(referenceFilePath(imageId));
+  if (fs.existsSync(referenceFilePath(imageId))) return true;
+  return false;
 }
 
 module.exports = {
   getImageReferenceDir,
+  buildReferenceFileLookup,
+  findReferenceFileForImage,
   saveReferenceForImage,
   loadReferenceForImage,
   loadReferenceRawJsonForImage,
   loadReferenceRawJsonForAssignment,
+  getReferenceJsonRawString,
+  hasStoredReferenceForAssignment,
   deleteReferenceForImage,
   hasReferenceForImage,
 };

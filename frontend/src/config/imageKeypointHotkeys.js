@@ -9,6 +9,7 @@ export const IMAGE_KEYPOINT_HOTKEYS = [
   { keys: 'Shift + arrows', action: 'Nudge 5px' },
   { keys: 'Ctrl + Shift + arrows', action: 'Nudge 10px' },
   { keys: 'Delete', action: 'Clear selected point' },
-  { keys: 'Ctrl+S', action: 'Save draft' },
-  { keys: 'Ctrl+Z', action: 'Undo last change' },
+  { keys: 'Ctrl + S', action: 'Save draft' },
+  { keys: 'Ctrl + Z', action: 'Undo last change' },
+  { keys: 'Ctrl + ` / 0–8', action: 'Copy same KP from previous frame' },
 ];

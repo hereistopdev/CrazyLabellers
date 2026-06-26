@@ -33,6 +33,7 @@ export default function ManageImages() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -182,23 +183,46 @@ export default function ManageImages() {
     };
 
     setUploading(true);
+    setUploadProgress(null);
     try {
       if (usesFolderGroups) {
         let totalCreated = 0;
         let totalSkipped = 0;
         let totalMatched = 0;
         const createdGroups = [];
+        const allSkippedItems = [];
+        const totalBatches = folderGroupsToUpload.length;
 
-        for (const group of folderGroupsToUpload) {
+        for (let batchIndex = 0; batchIndex < folderGroupsToUpload.length; batchIndex += 1) {
+          const group = folderGroupsToUpload[batchIndex];
+          setUploadProgress({
+            batch: batchIndex + 1,
+            totalBatches,
+            percent: 0,
+            label: group.groupName,
+          });
+
           const { formData } = buildImageUploadFormData(group.pairs, uploadFields);
           appendGroupFields(formData, { choice: GROUP_NEW, newName: group.groupName });
 
-          const result = await api.uploadImages(formData);
+          const result = await api.uploadImages(formData, ({ percent }) => {
+            setUploadProgress({
+              batch: batchIndex + 1,
+              totalBatches,
+              percent,
+              label: group.groupName,
+            });
+          });
           totalCreated += result.created || 0;
           totalSkipped += result.skipped || 0;
           totalMatched += result.matchedReferences ?? group.matchedCount ?? 0;
+          if (Array.isArray(result.skippedItems)) {
+            allSkippedItems.push(...result.skippedItems);
+          }
           createdGroups.push(group.groupName);
         }
+
+        showUploadSkippedWarning({ skippedItems: allSkippedItems });
 
         setMessage(
           `Uploaded ${totalCreated} image${totalCreated === 1 ? '' : 's'} across ${createdGroups.length} group${createdGroups.length === 1 ? '' : 's'} (${createdGroups.join(', ')})` +
@@ -206,10 +230,25 @@ export default function ManageImages() {
             (totalSkipped ? ` — ${totalSkipped} skipped` : '')
         );
       } else {
+        setUploadProgress({
+          batch: 1,
+          totalBatches: 1,
+          percent: 0,
+          label: 'Uploading images…',
+        });
+
         const { formData } = buildImageUploadFormData(selectedFiles, uploadFields);
         appendGroupFields(formData, { choice: groupChoice, newName: newGroupName });
 
-        const result = await api.uploadImages(formData);
+        const result = await api.uploadImages(formData, ({ percent }) => {
+          setUploadProgress((prev) => ({
+            batch: 1,
+            totalBatches: 1,
+            percent,
+            label: prev?.label || 'Uploading images…',
+          }));
+        });
+        showUploadSkippedWarning(result);
         const matched = result.matchedReferences ?? uploadAnalysis.matchedCount;
         setMessage(
           `Uploaded ${result.created} image${result.created === 1 ? '' : 's'}` +
@@ -224,8 +263,28 @@ export default function ManageImages() {
       setError(err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
+
+  const showUploadSkippedWarning = (result) => {
+    const skippedItems = result?.skippedItems || [];
+    const refFailures = skippedItems.filter((item) =>
+      String(item.reason || '').includes('reference JSON failed')
+    );
+    if (refFailures.length > 0) {
+      setError(
+        `${refFailures.length} image${refFailures.length === 1 ? '' : 's'} saved without reference JSON. Check that each .json filename matches its image (same name, any case).`
+      );
+    }
+  };
+
+  const overallUploadPercent = uploadProgress
+    ? Math.round(
+        (((uploadProgress.batch - 1) + uploadProgress.percent / 100) / uploadProgress.totalBatches) *
+          100
+      )
+    : 0;
 
   const handleToggleReferenceShare = async (row, enabled) => {
     setSharingRef(`${row._id}:${enabled}`);
@@ -283,7 +342,9 @@ export default function ManageImages() {
         ...prev,
         loading: false,
         json: data.hasReference ? data.raw : null,
-        error: data.hasReference ? '' : 'No reference JSON stored for this image.',
+        error: data.hasReference
+          ? ''
+          : data.message || 'No reference JSON stored for this image. Upload or re-upload the JSON file.',
       }));
     } catch (err) {
       setReferenceModal((prev) => ({
@@ -531,11 +592,45 @@ export default function ManageImages() {
 
         <button type="submit" className="btn btn-primary" disabled={uploading || !uploadAnalysis.imageCount}>
           {uploading
-            ? 'Uploading…'
+            ? uploadProgress
+              ? uploadProgress.totalBatches > 1
+                ? `Uploading group ${uploadProgress.batch}/${uploadProgress.totalBatches}…`
+                : `Uploading… ${uploadProgress.percent}%`
+              : 'Uploading…'
             : usesFolderGroups
               ? `Upload ${folderGroupsToUpload.length} group${folderGroupsToUpload.length === 1 ? '' : 's'}`
               : 'Upload'}
         </button>
+
+        {uploading && uploadProgress && (
+          <div style={{ marginTop: '0.85rem' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+              {uploadProgress.totalBatches > 1
+                ? `Group ${uploadProgress.batch}/${uploadProgress.totalBatches}: ${uploadProgress.label}`
+                : uploadProgress.label}
+              {' · '}
+              {uploadProgress.percent}% of current batch
+              {uploadProgress.totalBatches > 1 ? ` · ${overallUploadPercent}% overall` : ''}
+            </p>
+            <div
+              style={{
+                height: 8,
+                borderRadius: 4,
+                background: 'var(--border)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${overallUploadPercent}%`,
+                  height: '100%',
+                  background: 'var(--accent)',
+                  transition: 'width 0.2s ease',
+                }}
+              />
+            </div>
+          </div>
+        )}
       </form>
 
       <div className="card table-wrap">
@@ -684,6 +779,18 @@ export default function ManageImages() {
                             >
                               View JSON
                             </button>
+                            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                              Replace JSON
+                              <input
+                                type="file"
+                                accept=".json,application/json"
+                                hidden
+                                onChange={(e) => {
+                                  handleReferenceUpload(row, e.target.files?.[0]);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
                           </>
                         ) : (
                           <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>

@@ -112,7 +112,58 @@ async function downloadRequest(path, fallbackFilename, options = {}) {
   URL.revokeObjectURL(url);
 }
 
-async function uploadRequest(path, formData) {
+async function uploadRequest(path, formData, onProgress) {
+  if (typeof onProgress !== 'function') {
+    return uploadRequestSimple(path, formData);
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}${path}`);
+
+    const token = getToken();
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable) return;
+      onProgress({
+        loaded: event.loaded,
+        total: event.total,
+        percent: Math.min(100, Math.round((event.loaded / event.total) * 100)),
+      });
+    });
+
+    xhr.addEventListener('load', () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        data = {};
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+        return;
+      }
+
+      reject(new Error(data.message || `Request failed (${xhr.status})`));
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed — check your connection'));
+    });
+
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload cancelled'));
+    });
+
+    xhr.send(formData);
+  });
+}
+
+async function uploadRequestSimple(path, formData) {
   const headers = {};
   const token = getToken();
   if (token) {
@@ -392,7 +443,8 @@ export const api = {
   exportImageKeypoints: (id) =>
     downloadRequest(`/image-assignments/${id}/export`, 'keypoints.json'),
   getAdminImages: () => request('/admin/images'),
-  uploadImages: (formData) => uploadRequest('/admin/images/upload', formData),
+  uploadImages: (formData, onProgress) =>
+    uploadRequest('/admin/images/upload', formData, onProgress),
   deleteAdminImage: (id) => request(`/admin/images/${id}`, { method: 'DELETE' }),
   bulkDeleteAdminImages: (body) =>
     request('/admin/images/bulk-delete', { method: 'POST', body: JSON.stringify(body) }),

@@ -17,6 +17,7 @@ import {
   keypointsMapToList,
   getKeypointLabelMeta,
   labelIdFromHotkey,
+  keypointIdFromCopyHotkey,
   formatKeypointCoords,
 } from '../config/imageKeypoints';
 import {
@@ -574,6 +575,36 @@ export default function ImageGroupLabeling() {
     [images, selectedKey, handleSelectImage]
   );
 
+  const copyKeypointFromPreviousFrame = useCallback(
+    (labelId) => {
+      if (readOnly || !labelId?.startsWith('kp')) return false;
+
+      const currentIndex = images.findIndex((row) => String(row._id) === selectedKey);
+      if (currentIndex <= 0) {
+        setMessage('No previous frame to copy from');
+        return false;
+      }
+
+      const previousKey = String(images[currentIndex - 1]._id);
+      const sourcePoint = keypointsByIdRef.current[previousKey]?.keypoints?.[labelId];
+      if (!sourcePoint) {
+        const meta = getKeypointLabelMeta(labelId);
+        setMessage(`${meta?.name || labelId} is not marked on the previous frame`);
+        return false;
+      }
+
+      updateKeypoints((prev) => ({
+        ...prev,
+        [labelId]: { x: sourcePoint.x, y: sourcePoint.y },
+      }));
+      setActiveLabel(labelId);
+      const meta = getKeypointLabelMeta(labelId);
+      setMessage(`Copied ${meta?.name || labelId} from previous frame`);
+      return true;
+    },
+    [images, selectedKey, readOnly, updateKeypoints]
+  );
+
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (isEditableTarget(event.target)) return;
@@ -590,6 +621,15 @@ export default function ImageGroupLabeling() {
         event.preventDefault();
         undoLastChange();
         return;
+      }
+
+      if (ctrlKey && !event.shiftKey && !event.altKey) {
+        const copyLabelId = keypointIdFromCopyHotkey(event.key, event.code);
+        if (copyLabelId) {
+          event.preventDefault();
+          copyKeypointFromPreviousFrame(copyLabelId);
+          return;
+        }
       }
 
       const labelId = labelIdFromHotkey(event.key, event.code);
@@ -647,6 +687,7 @@ export default function ImageGroupLabeling() {
     selectedKey,
     updateKeypoints,
     handleSaveDraft,
+    copyKeypointFromPreviousFrame,
     undoLastChange,
     projectLocked,
     hasMarkedWork,

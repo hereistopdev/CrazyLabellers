@@ -12,7 +12,8 @@ function fileBaseName(file) {
 function fileStem(file) {
   const base = fileBaseName(file);
   const dot = base.lastIndexOf('.');
-  return dot > 0 ? base.slice(0, dot) : base;
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  return stem.toLowerCase();
 }
 
 function pathParts(file) {
