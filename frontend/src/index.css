@@ -3030,6 +3030,43 @@ tbody tr:hover {
   margin-bottom: 0.25rem;
 }
 
+.reference-json-modal {
+  max-width: min(960px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.reference-json-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.reference-json-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.reference-json-view {
+  flex: 1;
+  min-height: 240px;
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .points-slider {
   width: 100%;
   accent-color: var(--accent);

@@ -16,6 +16,7 @@ const {
 } = require('../utils/imageKeypointExport');
 const { normalizeImageUrl } = require('../services/imageStorage');
 const { ensureImageSubmissionSeeded } = require('../services/imageReferenceDraftSeed');
+const { loadReferenceRawJsonForAssignment } = require('../services/imageReferenceStorage');
 
 const router = express.Router();
 
@@ -702,6 +703,46 @@ router.post('/:id/submit', auth, async (req, res) => {
     return res.json({ message: 'Submitted', status: submission.status });
   } catch (error) {
     return res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/:id/reference', auth, async (req, res) => {
+  try {
+    if (!canAccessImageLabeling(req.user)) {
+      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
+    }
+
+    const assignment = await ImageAssignment.findById(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Image assignment not found' });
+    }
+
+    if (isLabeller(req.user) && !isAdmin(req.user)) {
+      if (!assignment.allowLabellerReference) {
+        return res.status(403).json({ message: 'Reference is not shared for this task' });
+      }
+      if (!isAssignedToUserId(assignment.assignedTo, req.user._id)) {
+        return res.status(403).json({ message: 'Claim this image before viewing reference' });
+      }
+    }
+
+    if (!assignment.hasReference) {
+      return res.json({ hasReference: false, raw: null });
+    }
+
+    const raw = loadReferenceRawJsonForAssignment(assignment);
+    if (!raw) {
+      return res.json({ hasReference: false, raw: null });
+    }
+
+    return res.json({
+      hasReference: true,
+      raw,
+      imageId: assignment.imageId,
+      title: assignment.title,
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.message });
   }
 });
 

@@ -14,6 +14,7 @@ import UploadGroupSelect, {
 import { resolveImageUrl } from '../utils/imageUrl';
 import { analyzeImageUploadFiles, buildImageUploadFormData } from '../utils/imageUploadFiles';
 import { matchesDateRange } from '../utils/tableFilter';
+import ReferenceJsonModal from '../components/ReferenceJsonModal';
 
 const MIN_PRICE = 0.3;
 const MAX_PRICE = 2;
@@ -44,6 +45,14 @@ export default function ManageImages() {
   const [sharingRef, setSharingRef] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [deletingBulk, setDeletingBulk] = useState(false);
+  const [referenceModal, setReferenceModal] = useState({
+    open: false,
+    title: '',
+    subtitle: '',
+    loading: false,
+    error: '',
+    json: null,
+  });
 
   const load = () => {
     setLoading(true);
@@ -257,6 +266,43 @@ export default function ManageImages() {
     } finally {
       setSharingRef(null);
     }
+  };
+
+  const handleViewReference = async (row) => {
+    setReferenceModal({
+      open: true,
+      title: 'Origin reference JSON',
+      subtitle: row.title || row.imageId,
+      loading: true,
+      error: '',
+      json: null,
+    });
+    try {
+      const data = await api.getImageAssignmentReference(row._id);
+      setReferenceModal((prev) => ({
+        ...prev,
+        loading: false,
+        json: data.hasReference ? data.raw : null,
+        error: data.hasReference ? '' : 'No reference JSON stored for this image.',
+      }));
+    } catch (err) {
+      setReferenceModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message,
+      }));
+    }
+  };
+
+  const closeReferenceModal = () => {
+    setReferenceModal({
+      open: false,
+      title: '',
+      subtitle: '',
+      loading: false,
+      error: '',
+      json: null,
+    });
   };
 
   const handleDelete = async (id, title) => {
@@ -621,15 +667,24 @@ export default function ManageImages() {
                     <td>
                       <div className="actions-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.35rem' }}>
                         {row.hasReference ? (
-                          <label style={{ fontSize: '0.82rem' }}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(row.allowLabellerReference)}
-                              disabled={sharingRef === `${row._id}:true` || sharingRef === `${row._id}:false`}
-                              onChange={(e) => handleToggleReferenceShare(row, e.target.checked)}
-                            />{' '}
-                            Share with labellers
-                          </label>
+                          <>
+                            <label style={{ fontSize: '0.82rem' }}>
+                              <input
+                                type="checkbox"
+                                checked={Boolean(row.allowLabellerReference)}
+                                disabled={sharingRef === `${row._id}:true` || sharingRef === `${row._id}:false`}
+                                onChange={(e) => handleToggleReferenceShare(row, e.target.checked)}
+                              />{' '}
+                              Share with labellers
+                            </label>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleViewReference(row)}
+                            >
+                              View JSON
+                            </button>
+                          </>
                         ) : (
                           <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
                             Upload JSON
@@ -685,6 +740,16 @@ export default function ManageImages() {
           </div>
         )}
       </div>
+
+      <ReferenceJsonModal
+        open={referenceModal.open}
+        title={referenceModal.title}
+        subtitle={referenceModal.subtitle}
+        loading={referenceModal.loading}
+        error={referenceModal.error}
+        json={referenceModal.json}
+        onClose={closeReferenceModal}
+      />
     </div>
   );
 }

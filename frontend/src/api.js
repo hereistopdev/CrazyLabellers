@@ -383,6 +383,7 @@ export const api = {
   getImageAssignment: (id) => request(`/image-assignments/${id}`),
   getImageGroupNav: (groupId) => request(`/image-assignments/groups/${groupId}/nav`),
   claimImageAssignment: (id) => request(`/image-assignments/${id}/claim`, { method: 'POST' }),
+  getImageAssignmentReference: (id) => request(`/image-assignments/${id}/reference`),
   getImageKeypoints: (id) => request(`/image-assignments/${id}/keypoints`),
   saveImageKeypoints: (id, body) =>
     request(`/image-assignments/${id}/keypoints`, { method: 'PUT', body: JSON.stringify(body) }),

@@ -38,6 +38,7 @@ import {
 } from '../utils/imageKeypointNudge';
 import { IMAGE_KEYPOINT_HOTKEYS } from '../config/imageKeypointHotkeys';
 import { isEditableTarget } from '../config/labelingHotkeys';
+import ReferenceJsonModal from '../components/ReferenceJsonModal';
 
 const MAX_UNDO_STEPS = 50;
 
@@ -95,6 +96,14 @@ export default function ImageGroupLabeling() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [imageDimensionsById, setImageDimensionsById] = useState({});
+  const [referenceModal, setReferenceModal] = useState({
+    open: false,
+    title: '',
+    subtitle: '',
+    loading: false,
+    error: '',
+    json: null,
+  });
 
   const images = useMemo(
     () => syncGalleryProgress(workspace?.images || [], keypointsById),
@@ -345,6 +354,50 @@ export default function ImageGroupLabeling() {
     () => images.some((row) => row.allowLabellerReference && row.hasReference),
     [images]
   );
+
+  const canViewReference = Boolean(
+    selectedImage?.hasReference &&
+      (isAdmin(user) ||
+        (selectedImage.allowLabellerReference && labelableIds.has(selectedKey)))
+  );
+
+  const handleViewReference = async () => {
+    if (!selectedImage || !canViewReference) return;
+    setReferenceModal({
+      open: true,
+      title: 'Origin reference JSON',
+      subtitle: selectedImage.title || selectedImage.imageId,
+      loading: true,
+      error: '',
+      json: null,
+    });
+    try {
+      const data = await api.getImageAssignmentReference(selectedImage._id);
+      setReferenceModal((prev) => ({
+        ...prev,
+        loading: false,
+        json: data.hasReference ? data.raw : null,
+        error: data.hasReference ? '' : 'No reference JSON stored for this frame.',
+      }));
+    } catch (err) {
+      setReferenceModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message,
+      }));
+    }
+  };
+
+  const closeReferenceModal = () => {
+    setReferenceModal({
+      open: false,
+      title: '',
+      subtitle: '',
+      loading: false,
+      error: '',
+      json: null,
+    });
+  };
 
   const handleClaimGroup = async () => {
     setClaiming(true);
@@ -674,6 +727,15 @@ export default function ImageGroupLabeling() {
                   : 'Download draft JSON'}
             </button>
           )}
+          {canViewReference && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleViewReference}
+            >
+              View reference JSON
+            </button>
+          )}
           {labelableIds.size > 0 && !projectLocked && (
             <button
               type="button"
@@ -838,6 +900,16 @@ export default function ImageGroupLabeling() {
           onRangeAutoMark={handleRangeAutoMark}
         />
       </div>
+
+      <ReferenceJsonModal
+        open={referenceModal.open}
+        title={referenceModal.title}
+        subtitle={referenceModal.subtitle}
+        loading={referenceModal.loading}
+        error={referenceModal.error}
+        json={referenceModal.json}
+        onClose={closeReferenceModal}
+      />
     </div>
   );
 }
