@@ -7,19 +7,33 @@ export function resolveImageUrl(imageUrl) {
   try {
     const parsed = new URL(trimmed, window.location.origin);
     if (parsed.pathname.startsWith('/api/images/')) {
+      if (parsed.origin !== window.location.origin) {
+        return trimmed;
+      }
       return `${parsed.pathname}${parsed.search}`;
     }
   } catch {
     // not a full URL
   }
 
-  // Legacy records may store http://localhost:5000/api/images/... — use same-origin path.
   const legacyMatch = trimmed.match(/\/api\/images\/[^?#]+/);
-  if (legacyMatch) {
+  if (legacyMatch && !/^https?:\/\//i.test(trimmed)) {
     return legacyMatch[0];
   }
 
   return trimmed;
+}
+
+export function isCrossOriginImageUrl(imageUrl) {
+  const resolved = resolveImageUrl(imageUrl);
+  if (!resolved || resolved.startsWith('/')) return false;
+
+  try {
+    const parsed = new URL(resolved);
+    return parsed.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
 }
 
 export function imageGroupPath(groupId, imageId) {

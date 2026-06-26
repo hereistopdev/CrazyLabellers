@@ -7,10 +7,10 @@ const { auth, requireVideoManagerAccess } = require('../middleware/auth');
 const { resolveUploadGroupId } = require('../services/taskGroups');
 const {
   storeImageFile,
-  deleteImageFile,
   resolveImageId,
   getImageExtension,
   normalizeImageUrl,
+  isRemoteImageStorage,
 } = require('../services/imageStorage');
 const {
   saveReferenceForImage,
@@ -95,7 +95,7 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
         }
 
         const extension = getImageExtension(file.originalname);
-        const stored = storeImageFile(imageId, file.buffer, extension);
+        const stored = await storeImageFile(imageId, file.buffer, extension);
 
         let hasReference = false;
         let width = null;
@@ -142,6 +142,7 @@ router.post('/upload', auth, requireVideoManagerAccess, (req, res) => {
         created: created.length,
         skipped: skipped.length,
         matchedReferences: created.filter((row) => row.hasReference).length,
+        storage: isRemoteImageStorage() ? 'vps' : 'local',
         items: created,
         skippedItems: skipped,
       });

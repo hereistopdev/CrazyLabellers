@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IMAGE_KEYPOINT_LABELS } from '../config/imageKeypoints';
+import { isCrossOriginImageUrl, resolveImageUrl } from '../utils/imageUrl';
 
 const MAGNIFIER_SIZE = 150;
 const MAGNIFIER_ZOOM_LEVELS = [2, 3, 4];
@@ -54,6 +55,11 @@ export default function ImageKeypointCanvas({
   const [dragLabel, setDragLabel] = useState(null);
   const [lensVisible, setLensVisible] = useState(false);
   const [lensCoords, setLensCoords] = useState(null);
+  const resolvedImageUrl = useMemo(() => resolveImageUrl(imageUrl), [imageUrl]);
+  const crossOrigin = useMemo(
+    () => (isCrossOriginImageUrl(resolvedImageUrl) ? 'anonymous' : undefined),
+    [resolvedImageUrl]
+  );
 
   useEffect(() => {
     onImageDimensionsRef.current = onImageDimensions;
@@ -64,7 +70,7 @@ export default function ImageKeypointCanvas({
     setImageSize({ width: 0, height: 0, offsetX: 0, offsetY: 0 });
     setLensVisible(false);
     setLensCoords(null);
-  }, [imageUrl]);
+  }, [resolvedImageUrl]);
 
   const updateImageSize = useCallback(() => {
     const img = imgRef.current;
@@ -313,8 +319,9 @@ export default function ImageKeypointCanvas({
       >
         <img
           ref={imgRef}
-          src={imageUrl}
+          src={resolvedImageUrl}
           alt="Labeling target"
+          crossOrigin={crossOrigin}
           onLoad={updateImageSize}
           draggable={false}
         />

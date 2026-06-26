@@ -1,7 +1,8 @@
 export const IMAGE_KEYPOINT_HOTKEYS = [
   { keys: 'A / D', action: 'Previous / next frame' },
   { keys: 'P', action: 'Select pitch' },
-  { keys: '0–8', action: 'Select keypoint' },
+  { keys: '0 / `', action: 'Select KP0' },
+  { keys: '1–8', action: 'Select keypoint' },
   { keys: 'Click', action: 'Place selected point' },
   { keys: '↑ ↓ ← →', action: 'Nudge marked point 0.25px' },
   { keys: 'Ctrl + arrows', action: 'Nudge 1px' },

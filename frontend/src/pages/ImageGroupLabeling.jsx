@@ -487,7 +487,7 @@ export default function ImageGroupLabeling() {
     const handleKeyDown = (event) => {
       if (event.target.closest('input, textarea, select')) return;
 
-      const labelId = labelIdFromHotkey(event.key);
+      const labelId = labelIdFromHotkey(event.key, event.code);
       if (labelId) {
         event.preventDefault();
         setActiveLabel(labelId);

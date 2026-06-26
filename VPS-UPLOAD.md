@@ -14,7 +14,8 @@ No manual `scp` or local import needed.
 
 ```bash
 sudo mkdir -p /var/www/football-clips
-sudo chmod 755 /var/www/football-clips
+sudo mkdir -p /var/www/football-images
+sudo chmod 755 /var/www/football-clips /var/www/football-images
 ```
 
 Configure nginx + SSL for `media.crazylabel.us`:
@@ -43,6 +44,18 @@ server {
         tcp_nopush on;
         aio on;
         directio 512;
+    }
+
+    location /api/images/ {
+        alias /var/www/football-images/;
+        types {
+            image/jpeg jpg jpeg;
+            image/png png;
+            image/webp webp;
+            image/gif gif;
+        }
+        add_header Access-Control-Allow-Origin * always;
+        add_header Cache-Control "public, max-age=86400";
     }
 
     location / { return 404; }
@@ -97,6 +110,7 @@ In **Render → backend → Environment**, add:
 | `VPS_SSH_PORT` | `22` |
 | `VPS_SSH_USER` | `root` |
 | `VPS_VIDEO_DIR` | `/var/www/football-clips` |
+| `VPS_IMAGE_DIR` | `/var/www/football-images` |
 | `VPS_SSH_PRIVATE_KEY` | Full private key (see below) |
 
 **Private key on Render:** paste the key as one line with `\n` where line breaks go:
@@ -107,7 +121,9 @@ In **Render → backend → Environment**, add:
 
 Or use `VPS_SSH_PASSWORD` instead (less secure).
 
-Remove `VIDEO_DATA_DIR` from Render if present.
+Remove `VIDEO_DATA_DIR` and `IMAGE_DATA_DIR` from Render if present.
+
+When VPS vars are set, **video and image admin uploads** are stored on the VPS over SFTP. Image URLs point at `VIDEO_BASE_URL/api/images/...` (same media host as videos).
 
 Redeploy Render.
 
@@ -122,6 +138,12 @@ Redeploy Render.
 5. Success: “Video uploaded to VPS and added to the app”
 6. On VPS: `ls /var/www/football-clips`
 7. Open the task as a labeller — video plays from `media.crazylabel.us`
+
+For cricket image tasks (**Admin → Image tasks**):
+
+8. Upload a test image + JSON pair
+9. On VPS: `ls /var/www/football-images`
+10. Open the image group as a labeller — image loads from `media.crazylabel.us/api/images/...`
 
 ---
 

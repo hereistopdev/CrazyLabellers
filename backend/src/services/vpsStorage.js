@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const SftpClient = require('ssh2-sftp-client');
 
 function isVpsStorageEnabled() {
@@ -11,6 +12,10 @@ function isVpsStorageEnabled() {
 
 function getVpsVideoDir() {
   return process.env.VPS_VIDEO_DIR?.trim() || '/var/www/football-clips';
+}
+
+function getVpsImageDir() {
+  return process.env.VPS_IMAGE_DIR?.trim() || '/var/www/football-images';
 }
 
 function getSftpConfig() {
@@ -50,13 +55,23 @@ async function ensureVpsVideoDir(sftp) {
   return dir;
 }
 
-async function uploadVideoToVps(clipId, data, extension = '.mp4') {
+async function ensureVpsImageDir(sftp) {
+  const dir = getVpsImageDir();
+  const exists = await sftp.exists(dir);
+  if (!exists) {
+    await sftp.mkdir(dir, true);
+  }
+  return dir;
+}
+
+async function uploadFileToVpsDir(remoteDir, fileId, data, extension) {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  const remotePath = `${getVpsVideoDir()}/${clipId}${ext}`;
+  const remotePath = `${remoteDir}/${fileId}${ext}`;
   const localSize = Buffer.isBuffer(data) ? data.length : fs.statSync(data).size;
 
   await withSftp(async (sftp) => {
-    await ensureVpsVideoDir(sftp);
+    const ensureDir = remoteDir === getVpsVideoDir() ? ensureVpsVideoDir : ensureVpsImageDir;
+    await ensureDir(sftp);
     await sftp.put(data, remotePath);
     const stat = await sftp.stat(remotePath);
     if (stat.size !== localSize) {
@@ -66,19 +81,42 @@ async function uploadVideoToVps(clipId, data, extension = '.mp4') {
   return remotePath;
 }
 
-async function deleteVideoFromVps(clipId) {
-  const dir = getVpsVideoDir();
+async function uploadVideoToVps(clipId, data, extension = '.mp4') {
+  return uploadFileToVpsDir(getVpsVideoDir(), clipId, data, extension);
+}
+
+async function uploadImageToVps(imageId, data, extension = '.jpg') {
+  return uploadFileToVpsDir(getVpsImageDir(), imageId, data, extension);
+}
+
+async function deleteFileFromVpsDir(remoteDir, fileId, extensions) {
   await withSftp(async (sftp) => {
-    const files = await sftp.list(dir);
+    const exists = await sftp.exists(remoteDir);
+    if (!exists) return;
+
+    const files = await sftp.list(remoteDir);
     for (const file of files) {
       if (file.type !== '-') continue;
       const stem = file.name.replace(/(\.[a-z0-9]+)$/i, '');
-      if (stem === clipId) {
-        await sftp.delete(`${dir}/${file.name}`);
+      if (stem !== fileId) continue;
+      if (extensions?.length) {
+        const ext = path.extname(file.name).toLowerCase();
+        if (!extensions.includes(ext)) continue;
       }
+      await sftp.delete(`${remoteDir}/${file.name}`);
     }
   });
   return true;
+}
+
+const IMAGE_EXTENSIONS_FOR_DELETE = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
+
+async function deleteVideoFromVps(clipId) {
+  return deleteFileFromVpsDir(getVpsVideoDir(), clipId);
+}
+
+async function deleteImageFromVps(imageId) {
+  return deleteFileFromVpsDir(getVpsImageDir(), imageId, IMAGE_EXTENSIONS_FOR_DELETE);
 }
 
 async function listVpsClipIds() {
@@ -113,8 +151,10 @@ async function testVpsConnection() {
       ok: true,
       host: process.env.VPS_SSH_HOST,
       videoDir: getVpsVideoDir(),
+      imageDir: getVpsImageDir(),
       clipCount: clipIds.length,
       videoBaseUrl: process.env.VIDEO_BASE_URL || null,
+      imageBaseUrl: process.env.IMAGE_BASE_URL || process.env.VIDEO_BASE_URL || null,
     };
   } catch (error) {
     return {
@@ -129,9 +169,12 @@ async function testVpsConnection() {
 module.exports = {
   isVpsStorageEnabled,
   getVpsVideoDir,
+  getVpsImageDir,
   withSftp,
   uploadVideoToVps,
+  uploadImageToVps,
   deleteVideoFromVps,
+  deleteImageFromVps,
   listVpsClipIds,
   testVpsConnection,
 };

@@ -1,6 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const { isSafeClipId, sanitizeClipId } = require('../utils/clipId');
+const {
+  isVpsStorageEnabled,
+  uploadImageToVps,
+  deleteImageFromVps,
+} = require('./vpsStorage');
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
 const IMAGE_EXTENSION_SET = new Set(IMAGE_EXTENSIONS.map((ext) => ext.toLowerCase()));
@@ -21,7 +26,17 @@ function ensureImageDataDir() {
   return dir;
 }
 
+function isRemoteImageStorage() {
+  return isVpsStorageEnabled();
+}
+
 function getImageBaseUrl() {
+  if (process.env.IMAGE_BASE_URL?.trim()) {
+    return process.env.IMAGE_BASE_URL.trim().replace(/\/$/, '');
+  }
+  if (isRemoteImageStorage() && process.env.VIDEO_BASE_URL?.trim()) {
+    return process.env.VIDEO_BASE_URL.trim().replace(/\/$/, '');
+  }
   if (process.env.API_BASE_URL?.trim()) {
     return process.env.API_BASE_URL.trim().replace(/\/$/, '');
   }
@@ -31,7 +46,11 @@ function getImageBaseUrl() {
 
 function buildImageUrl(imageId, extension = '.png') {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  return `/api/images/${encodeURIComponent(`${imageId}${ext}`)}`;
+  const imagePath = `/api/images/${encodeURIComponent(`${imageId}${ext}`)}`;
+  if (isRemoteImageStorage()) {
+    return `${getImageBaseUrl()}${imagePath}`;
+  }
+  return imagePath;
 }
 
 function normalizeImageUrl(imageUrl) {
@@ -43,9 +62,9 @@ function normalizeImageUrl(imageUrl) {
   }
 
   try {
-    const parsed = new URL(trimmed, 'http://local');
+    const parsed = new URL(trimmed);
     if (parsed.pathname.startsWith('/api/images/')) {
-      return `${parsed.pathname}${parsed.search}`;
+      return trimmed;
     }
   } catch {
     // not a URL
@@ -84,18 +103,30 @@ function findLocalImagePath(imageIdOrFilename) {
   return null;
 }
 
-function storeImageFile(imageId, fileBuffer, extension = '.png') {
+async function storeImageFile(imageId, fileBuffer, extension = '.png') {
   if (!isSafeClipId(imageId)) {
     throw new Error('Invalid image ID');
   }
   const ext = getImageExtension(`file${extension}`);
+  const imageUrl = buildImageUrl(imageId, ext);
+
+  if (isRemoteImageStorage()) {
+    await uploadImageToVps(imageId, fileBuffer, ext);
+    return { storage: 'vps', extension: ext, imageUrl };
+  }
+
   const dir = ensureImageDataDir();
   const filePath = path.join(dir, `${imageId}${ext}`);
   fs.writeFileSync(filePath, fileBuffer);
-  return { filePath, extension: ext, imageUrl: buildImageUrl(imageId, ext) };
+  return { storage: 'local', filePath, extension: ext, imageUrl };
 }
 
-function deleteImageFile(imageId) {
+async function deleteImageFile(imageId) {
+  if (isRemoteImageStorage()) {
+    await deleteImageFromVps(imageId);
+    return;
+  }
+
   const dataDir = ensureImageDataDir();
   for (const ext of IMAGE_EXTENSIONS) {
     const filePath = path.join(dataDir, `${imageId}${ext}`);
@@ -113,6 +144,7 @@ module.exports = {
   buildImageUrl,
   normalizeImageUrl,
   getImageBaseUrl,
+  isRemoteImageStorage,
   resolveImageId,
   findLocalImagePath,
   storeImageFile,

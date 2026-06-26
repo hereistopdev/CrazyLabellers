@@ -5,7 +5,7 @@ const { deleteReferenceForImage } = require('./imageReferenceStorage');
 
 async function deleteImageAssignmentRecord(assignment) {
   await ImageKeypointSubmission.deleteMany({ assignmentId: assignment._id });
-  deleteImageFile(assignment.imageId);
+  await deleteImageFile(assignment.imageId);
   deleteReferenceForImage(assignment.imageId);
   await ImageAssignment.findByIdAndDelete(assignment._id);
 }

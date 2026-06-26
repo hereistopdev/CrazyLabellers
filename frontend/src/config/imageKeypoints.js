@@ -34,9 +34,10 @@ export function formatKeypointCoords(point, width, height) {
   return `x: ${pixels.x}, y: ${pixels.y} · ${norm}`;
 }
 
-export function labelIdFromHotkey(key) {
+export function labelIdFromHotkey(key, code) {
   const normalized = String(key || '').toLowerCase();
   if (normalized === 'p') return 'pitch';
+  if (normalized === '`' || code === 'Backquote') return 'kp0';
   if (/^[0-8]$/.test(normalized)) return `kp${normalized}`;
   return null;
 }
