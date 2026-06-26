@@ -9,8 +9,6 @@ function getToken() {
 async function fetchJson(path, options = {}, attempt = 0) {
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache',
-    Pragma: 'no-cache',
     ...options.headers,
   };
 

@@ -16,6 +16,8 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
-        sync: false
+        value: https://crazylabel.us
+      - key: CORS_ALLOWED_DOMAINS
+        value: crazylabel.us
       - key: ALLOWED_ORIGINS
         sync: false

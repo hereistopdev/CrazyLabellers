@@ -38,8 +38,10 @@ function getAllowedOrigins() {
   return origins;
 }
 
+const PROJECT_DEFAULT_DOMAINS = ['crazylabel.us'];
+
 function getAllowedDomains() {
-  const domains = new Set();
+  const domains = new Set(PROJECT_DEFAULT_DOMAINS);
 
   for (const origin of getConfiguredOrigins()) {
     const hostname = originHostname(origin);

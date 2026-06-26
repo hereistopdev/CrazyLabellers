@@ -124,11 +124,11 @@ Open your Vercel URL → register → study terminology → take test.
 ## Troubleshooting
 
 **CORS error in browser**
-- The backend only allows origins listed in `CLIENT_URL`, `ALLOWED_ORIGINS`, matching domains in `CORS_ALLOWED_DOMAINS`, or `*.vercel.app`.
-- If you use a **custom domain** (e.g. `https://crazylabel.us`), set Render `CLIENT_URL` to that exact URL — not only the default `*.vercel.app` URL.
-- You can comma-separate multiple URLs: `CLIENT_URL=https://crazylabel.us,https://your-app.vercel.app`
-- After changing env vars on Render, **redeploy the backend** and check logs for `CORS allowed origins:`.
-- If login still fails, open DevTools → Network → failed request → confirm `VITE_API_URL` points to your Render API (`https://…onrender.com/api`) and redeploy Vercel after changing it.
+- The backend allows `crazylabel.us`, origins in `CLIENT_URL` / `ALLOWED_ORIGINS`, matching `CORS_ALLOWED_DOMAINS`, and `*.vercel.app`.
+- Set Render `CLIENT_URL` to the URL you open in the browser (e.g. `https://crazylabel.us`).
+- Confirm Vercel `VITE_API_URL` is your live Render API (`https://YOUR-SERVICE.onrender.com/api`) and **redeploy Vercel** after changing it.
+- Redeploy Render after changing env vars; check logs for `CORS allowed origins:`.
+- If the Network tab shows a failed **OPTIONS** preflight, redeploy the latest backend (older builds blocked extra request headers).
 
 **API unreachable from Vercel**
 - Confirm `VITE_API_URL` ends with `/api`.
