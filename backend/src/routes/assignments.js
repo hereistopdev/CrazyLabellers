@@ -359,9 +359,14 @@ router.get('/:id/export', auth, async (req, res) => {
     }
 
     const variant = req.query.variant === 'raw' ? 'raw' : 'post';
+    const { loadReferenceForClip } = require('../services/referenceStorage');
+    const reference = assignment.clipId
+      ? await loadReferenceForClip(assignment.clipId, variant)
+      : { events: [] };
     const payload = exportAnnotation(submission.events, {
       gameTime: assignment.gameTime || '1 - 00:00',
       variant,
+      referenceEvents: reference.events || [],
     });
     const filename = getExportFilename(exportBasename, variant);
 

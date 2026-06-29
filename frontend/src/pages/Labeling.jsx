@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -46,6 +46,7 @@ import { canUseLabeler } from '../utils/labelerAccess';
 import { extractClipIdFromVideoUrl, isOpenableVideoUrl, resolvePlaybackVideoUrl } from '../utils/videoUrl';
 import { loadPracticeLabels, savePracticeLabels, clearPracticeLabels } from '../utils/practiceLabelStorage';
 import { downloadAnnotationExport, resolveExportBasename, getExportFilename } from '../utils/exportAnnotation';
+import { buildEventReviewRows, compareAnnotations, getNewEventIndices } from '../utils/compareAnnotations';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -440,6 +441,19 @@ export default function Labeling() {
     reportSpacingValidationFailure(validation, 'Labeling rule violations found — fix before exporting');
   }, [events, fps, pushToast, reportSpacingValidationFailure]);
 
+  const applyNewFlagsFromReference = useCallback(
+    (nextEvents) => {
+      const refEvents = reference?.hasReference ? reference.events : [];
+      if (!refEvents.length) return nextEvents;
+      const newIndices = getNewEventIndices(nextEvents, refEvents, fps);
+      return nextEvents.map((event, index) => ({
+        ...event,
+        isNew: newIndices.has(index),
+      }));
+    },
+    [reference, fps]
+  );
+
   const markEvent = useCallback(
     async (eventType) => {
       pauseAll();
@@ -455,19 +469,21 @@ export default function Labeling() {
       const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
       const offset = resolveFrameOffset(eventType, options);
 
-      const newEvents = [
-        ...events,
-        {
-          eventType,
-          frameTime: adjustedTime,
-          playheadTime,
-          frameOffset: offset,
-          immediateFollowUp: useFollowUp,
-          afterEvent: useFollowUp ? lastEvent?.eventType : undefined,
-          needsDiscussion: false,
-          notes: '',
-        },
-      ].sort((a, b) => a.frameTime - b.frameTime);
+      const newEvents = applyNewFlagsFromReference(
+        [
+          ...events,
+          {
+            eventType,
+            frameTime: adjustedTime,
+            playheadTime,
+            frameOffset: offset,
+            immediateFollowUp: useFollowUp,
+            afterEvent: useFollowUp ? lastEvent?.eventType : undefined,
+            needsDiscussion: false,
+            notes: '',
+          },
+        ].sort((a, b) => a.frameTime - b.frameTime)
+      );
 
       setEvents(newEvents);
       setShowEventPicker(false);
@@ -482,7 +498,7 @@ export default function Labeling() {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [pauseAll, currentTime, lastEvent, events, fps, pushToast, persistEvents]
+    [pauseAll, currentTime, lastEvent, events, fps, pushToast, persistEvents, applyNewFlagsFromReference]
   );
 
   const resolveSelectedEventIndex = useCallback(() => {
@@ -513,21 +529,23 @@ export default function Labeling() {
       const adjustedTime = applyFrameOffset(playheadTime, eventType, options, fps);
       const offset = resolveFrameOffset(eventType, options);
 
-      const newEvents = events
-        .map((event, index) =>
-          index === editEventIndex
-            ? {
-                ...event,
-                eventType,
-                frameTime: adjustedTime,
-                playheadTime,
-                frameOffset: offset,
-                immediateFollowUp: useFollowUp,
-                afterEvent: useFollowUp ? priorEvent?.eventType : undefined,
-              }
-            : event
-        )
-        .sort((a, b) => a.frameTime - b.frameTime);
+      const newEvents = applyNewFlagsFromReference(
+        events
+          .map((event, index) =>
+            index === editEventIndex
+              ? {
+                  ...event,
+                  eventType,
+                  frameTime: adjustedTime,
+                  playheadTime,
+                  frameOffset: offset,
+                  immediateFollowUp: useFollowUp,
+                  afterEvent: useFollowUp ? priorEvent?.eventType : undefined,
+                }
+              : event
+          )
+          .sort((a, b) => a.frameTime - b.frameTime)
+      );
 
       setEvents(newEvents);
       setShowEventPicker(false);
@@ -545,7 +563,7 @@ export default function Labeling() {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [editEventIndex, events, fps, pauseAll, pushToast, persistEvents]
+    [editEventIndex, events, fps, pauseAll, pushToast, persistEvents, applyNewFlagsFromReference]
   );
 
   const openChangeEventPicker = useCallback(
@@ -565,7 +583,7 @@ export default function Labeling() {
     async (eventIndex) => {
       const index = typeof eventIndex === 'number' ? eventIndex : resolveSelectedEventIndex();
       if (index < 0) return;
-      const newEvents = events.filter((_, i) => i !== index);
+      const newEvents = applyNewFlagsFromReference(events.filter((_, i) => i !== index));
       setEvents(newEvents);
       setSelectedEventIndex(null);
       try {
@@ -574,7 +592,7 @@ export default function Labeling() {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [events, pushToast, resolveSelectedEventIndex, persistEvents]
+    [events, pushToast, resolveSelectedEventIndex, persistEvents, applyNewFlagsFromReference]
   );
 
   const handleEventPickerSelect = useCallback(
@@ -718,7 +736,7 @@ export default function Labeling() {
   }, [id, refreshUser, pushToast]);
 
   const removeEvent = async (index) => {
-    const newEvents = events.filter((_, i) => i !== index);
+    const newEvents = applyNewFlagsFromReference(events.filter((_, i) => i !== index));
     setEvents(newEvents);
     try {
       await persistEvents(newEvents, 'Event removed — saved');
@@ -786,11 +804,13 @@ export default function Labeling() {
 
       pauseAll();
       const newFrameTime = nudgeFrameTime(target.frameTime, frameDelta, fps);
-      const newEvents = events
-        .map((event, index) =>
-          index === eventIndex ? { ...event, frameTime: newFrameTime } : event
-        )
-        .sort((a, b) => a.frameTime - b.frameTime);
+      const newEvents = applyNewFlagsFromReference(
+        events
+          .map((event, index) =>
+            index === eventIndex ? { ...event, frameTime: newFrameTime } : event
+          )
+          .sort((a, b) => a.frameTime - b.frameTime)
+      );
 
       setEvents(newEvents);
       seekTo(newFrameTime);
@@ -804,7 +824,7 @@ export default function Labeling() {
         pushToast(err.message, { type: 'error', duration: 4000 });
       }
     },
-    [events, fps, pauseAll, seekTo, pushToast, persistEvents]
+    [events, fps, pauseAll, seekTo, pushToast, persistEvents, applyNewFlagsFromReference]
   );
 
   const nudgeEventAtFrame = useCallback(
@@ -934,6 +954,8 @@ export default function Labeling() {
         clipId: assignment?.clipId || 'practice',
         variant,
         fps,
+        referenceEvents: showReference ? referenceEvents : [],
+        gameTime: assignment?.gameTime || '1 - 00:00',
       });
       pushToast(`Downloaded ${getExportFilename(resolveExportBasename(assignment) || assignment?.clipId || 'practice', variant)}`);
       return;
@@ -994,6 +1016,17 @@ export default function Labeling() {
     (adminMode ||
       (labellerMode &&
         (assignment?.allowLabellerReference || approvedReviewMode || assignment?.status === 'approved')));
+
+  const labellerComparison = useMemo(() => {
+    if (!showReference || !referenceEvents.length) return null;
+    return compareAnnotations(events, referenceEvents, undefined, fps);
+  }, [showReference, referenceEvents, events, fps]);
+
+  const labellerEventRows = useMemo(() => {
+    if (!labellerComparison) return [];
+    return buildEventReviewRows(events, labellerComparison);
+  }, [events, labellerComparison]);
+
   const relabelMode =
     labellerMode &&
     assignment?.allowLabellerReference &&
@@ -1077,6 +1110,8 @@ export default function Labeling() {
           fps={fps}
           submissionEvents={events}
           referenceEvents={referenceEvents}
+          eventRows={labellerEventRows}
+          comparison={labellerComparison}
           labellerName={labellerMode && !adminMode ? 'Your labels' : 'Draft labels'}
           hasReference
           previewMode

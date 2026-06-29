@@ -7,9 +7,11 @@ const {
 } = require('./clipId');
 const {
   classifyJsonVariant,
+  isIgnoredBulkJsonName,
   MATCH_THRESHOLD,
   pickBestMatch,
   pickJsonByClipId,
+  pickJsonByExactStem,
 } = require('./fuzzyMatch');
 
 function parseFilenameEntry(entry) {
@@ -24,21 +26,31 @@ function parseFilenameEntry(entry) {
 }
 
 function usesClipIdJsonMatching(layout) {
-  return layout === 'group-labeling' || layout === 'clip-folders';
+  return (
+    layout === 'group-labeling' ||
+    layout === 'clip-folders' ||
+    layout === 'data-annotations' ||
+    layout === 'nested-clip-batches'
+  );
 }
 
 function matchJsonToClip(clipId, videoStem, jsonFiles, usedJson, variant, layout) {
-  const candidates =
-    variant === 'post'
-      ? jsonFiles.filter((item) => item.variant === 'post')
-      : jsonFiles.filter((item) => item.variant !== 'post');
+  const candidates = jsonFiles.filter((item) => !isIgnoredBulkJsonName(item.name));
+
+  const exactMatch = pickJsonByExactStem(videoStem, candidates, usedJson, variant);
+  if (exactMatch) return exactMatch;
 
   const clipIdMatch = pickJsonByClipId(clipId, candidates, usedJson, variant);
   if (clipIdMatch) return clipIdMatch;
 
   if (usesClipIdJsonMatching(layout)) return null;
 
-  return pickBestMatch(videoStem, candidates, usedJson, MATCH_THRESHOLD);
+  const pool =
+    variant === 'post'
+      ? candidates.filter((item) => item.variant === 'post')
+      : candidates.filter((item) => item.variant !== 'post');
+
+  return pickBestMatch(videoStem, pool, usedJson, MATCH_THRESHOLD);
 }
 
 function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD, layout = 'flat' } = {}) {
@@ -53,6 +65,10 @@ function matchBulkFiles(entries, { threshold = MATCH_THRESHOLD, layout = 'flat' 
       continue;
     }
     if (isJsonFilename(name)) {
+      if (isIgnoredBulkJsonName(name)) {
+        ignored.push({ name, reason: 'legacy _old.json reference skipped' });
+        continue;
+      }
       jsonFiles.push({
         ...parseFilenameEntry(name),
         variant: classifyJsonVariant(name),

@@ -11,6 +11,7 @@ const eventLabelSchema = new mongoose.Schema(
     afterEvent: { type: String },
     needsDiscussion: { type: Boolean, default: false },
     notes: { type: String, default: '' },
+    isNew: { type: Boolean, default: false },
   },
   { _id: false }
 );

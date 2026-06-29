@@ -49,6 +49,37 @@ export function classifyJsonVariant(filename) {
   return 'post';
 }
 
+function fileStem(name) {
+  return String(name || '').replace(/\.[^.]+$/, '');
+}
+
+export function isIgnoredBulkJsonName(filename) {
+  const lower = String(filename || '').toLowerCase();
+  return lower.endsWith('_old.json') || /_old\.json$/i.test(lower);
+}
+
+export function pickJsonByExactStem(videoStem, candidates, usedKeys, variant) {
+  const video = String(videoStem || '').toLowerCase();
+  const pool =
+    variant === 'post'
+      ? candidates.filter((candidate) => candidate.variant === 'post')
+      : candidates.filter((candidate) => candidate.variant !== 'post');
+
+  for (const candidate of pool) {
+    const key = candidate.key || candidate.name;
+    if (usedKeys.has(key)) continue;
+    const stem = fileStem(candidate.name).toLowerCase();
+    if (variant === 'post' && stem === video) {
+      return { ...candidate, score: 1, matchType: 'exactStem' };
+    }
+    if (variant !== 'post' && stem === `${video}_post`) {
+      return { ...candidate, score: 1, matchType: 'exactStem' };
+    }
+  }
+
+  return null;
+}
+
 export function pickBestMatch(targetName, candidates, usedKeys, threshold = MATCH_THRESHOLD) {
   let best = null;
 

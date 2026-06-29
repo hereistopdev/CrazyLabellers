@@ -19,6 +19,97 @@ function findCaseInsensitiveSubdir(parentDir, folderPattern) {
   return null;
 }
 
+function listVideosFromDir(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((name) => {
+      const filePath = path.join(dir, name);
+      return fs.statSync(filePath).isFile() && isVideoFilename(name);
+    })
+    .map((name) => ({ name }));
+}
+
+function listNestedClipBatchEntries(sourceDir) {
+  const entries = [];
+  const jsonEntries = [];
+
+  for (const subName of fs.readdirSync(sourceDir)) {
+    const subPath = path.join(sourceDir, subName);
+    if (!fs.statSync(subPath).isDirectory()) continue;
+    if (/^labeling$/i.test(subName)) continue;
+
+    const annotationsDir = findCaseInsensitiveSubdir(subPath, /^annotations$/i);
+    const dataDir = findCaseInsensitiveSubdir(subPath, /^data$/i);
+
+    const videoDir = dataDir || subPath;
+    const videos = listVideosFromDir(videoDir);
+    for (const video of videos) {
+      entries.push({ name: video.name });
+    }
+
+    if (annotationsDir) {
+      for (const json of listEntriesFromDir(annotationsDir)) {
+        if (json.name.toLowerCase().endsWith('.json')) {
+          jsonEntries.push({ name: json.name });
+        }
+      }
+    }
+  }
+
+  return { videoEntries: entries, jsonEntries };
+}
+
+function hasNestedClipBatchFolders(sourceDir) {
+  return fs.readdirSync(sourceDir).some((subName) => {
+    const subPath = path.join(sourceDir, subName);
+    if (!fs.statSync(subPath).isDirectory()) return false;
+    if (/^labeling$/i.test(subName)) return false;
+
+    const annotationsDir = findCaseInsensitiveSubdir(subPath, /^annotations$/i);
+    if (!annotationsDir) return false;
+
+    const dataDir = findCaseInsensitiveSubdir(subPath, /^data$/i);
+    const rootVideos = listVideosFromDir(subPath);
+    const dataVideos = dataDir ? listVideosFromDir(dataDir) : [];
+    return rootVideos.length > 0 || dataVideos.length > 0;
+  });
+}
+
+function findNestedVideoFile(sourceDir, videoName) {
+  if (!sourceDir || !videoName) return null;
+  for (const subName of fs.readdirSync(sourceDir)) {
+    const subPath = path.join(sourceDir, subName);
+    if (!fs.statSync(subPath).isDirectory()) continue;
+    if (/^labeling$/i.test(subName)) continue;
+
+    const dataDir = findCaseInsensitiveSubdir(subPath, /^data$/i);
+    const candidates = [dataDir, subPath].filter(Boolean);
+    for (const dir of candidates) {
+      const filePath = path.join(dir, videoName);
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        return filePath;
+      }
+    }
+  }
+  return null;
+}
+
+function findNestedAnnotationFile(sourceDir, filename) {
+  if (!sourceDir || !filename) return null;
+  for (const subName of fs.readdirSync(sourceDir)) {
+    const subPath = path.join(sourceDir, subName);
+    if (!fs.statSync(subPath).isDirectory()) continue;
+    const annotationsDir = findCaseInsensitiveSubdir(subPath, /^annotations$/i);
+    if (!annotationsDir) continue;
+    const filePath = path.join(annotationsDir, filename);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      return filePath;
+    }
+  }
+  return null;
+}
+
 function resolveBulkLayout(sourceDir) {
   const resolved = path.resolve(sourceDir);
   if (!fs.existsSync(resolved)) {
@@ -68,6 +159,16 @@ function resolveBulkLayout(sourceDir) {
   const nestedData = path.join(resolved, 'data');
   const nestedAnnotations = path.join(resolved, 'annotations');
 
+  if (hasNestedClipBatchFolders(resolved)) {
+    return {
+      sourceDir: resolved,
+      dataDir: resolved,
+      annotationsDir: null,
+      groupName: path.basename(resolved),
+      layout: 'nested-clip-batches',
+    };
+  }
+
   const dataDir = fs.existsSync(nestedData) && fs.statSync(nestedData).isDirectory()
     ? nestedData
     : resolved;
@@ -114,6 +215,11 @@ function listClipFolderVideoEntries(sourceDir) {
 }
 
 function listClipMatchesFromLayout(layout) {
+  if (layout.layout === 'nested-clip-batches') {
+    const { videoEntries, jsonEntries } = listNestedClipBatchEntries(layout.sourceDir);
+    return matchBulkFiles([...videoEntries, ...jsonEntries], { layout: layout.layout });
+  }
+
   const jsonEntries = layout.annotationsDir
     ? listEntriesFromDir(layout.annotationsDir)
         .filter((entry) => entry.name.toLowerCase().endsWith('.json'))
@@ -140,7 +246,7 @@ async function previewBulkFolder(sourceDir) {
   let withPostReference = 0;
   let withRawReference = 0;
 
-  if (layout.annotationsDir) {
+  if (layout.annotationsDir || layout.layout === 'nested-clip-batches') {
     for (const clip of clips) {
       if (clip.postRefName) withPostReference += 1;
       if (clip.rawRefName) withRawReference += 1;
@@ -175,8 +281,8 @@ async function previewBulkFolder(sourceDir) {
   };
 }
 
-async function importReferencesForClip(clipId, annotationsDir, clipMatch) {
-  if (!annotationsDir) {
+async function importReferencesForClip(clipId, annotationsDir, clipMatch, sourceDir = null) {
+  if (!annotationsDir && !sourceDir) {
     return { imported: 0 };
   }
 
@@ -184,8 +290,10 @@ async function importReferencesForClip(clipId, annotationsDir, clipMatch) {
 
   const importFile = async (filename, variant) => {
     if (!filename) return;
-    const filePath = path.join(annotationsDir, filename);
-    if (!fs.existsSync(filePath)) return;
+    const filePath = annotationsDir
+      ? path.join(annotationsDir, filename)
+      : findNestedAnnotationFile(sourceDir, filename);
+    if (!filePath || !fs.existsSync(filePath)) return;
     const rawJson = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     await saveReferenceForClip(clipId, rawJson, {
       variant,
@@ -292,8 +400,13 @@ async function importBulkFromFolder({
     try {
       if (skipExisting && existingAssignments.has(clipId)) {
         skipped += 1;
-        if (importReferences && layout.annotationsDir) {
-          const refResult = await importReferencesForClip(clipId, layout.annotationsDir, clipMatch);
+        if (importReferences && (layout.annotationsDir || layout.layout === 'nested-clip-batches')) {
+          const refResult = await importReferencesForClip(
+            clipId,
+            layout.annotationsDir,
+            clipMatch,
+            layout.layout === 'nested-clip-batches' ? layout.sourceDir : null
+          );
           referencesImported += refResult.imported;
           if (refResult.imported > 0 && referenceUpdatedBy) {
             await VideoAssignment.updateOne(
@@ -307,22 +420,55 @@ async function importBulkFromFolder({
 
       let extension = getVideoExtension(videoName);
       if (uploadVideos) {
-        const uploadResult = await uploadVideoFromFolder(
-          clipId,
-          layout.dataDir,
-          videoName,
-          existingVpsClips,
-          skipExistingVideos,
-          clipMatch.videoFolder
-        );
+        let uploadResult;
+        if (layout.layout === 'nested-clip-batches') {
+          const nestedPath = findNestedVideoFile(layout.sourceDir, videoName);
+          if (!nestedPath) {
+            throw new Error(`Video file missing for ${clipId}: ${videoName}`);
+          }
+          extension = getVideoExtension(videoName);
+          if (isVpsStorageEnabled()) {
+            if (skipExistingVideos && existingVpsClips.has(`${clipId}${extension}`)) {
+              uploadResult = { uploaded: false, skipped: true, extension };
+            } else {
+              await uploadVideoToVps(clipId, nestedPath, extension);
+              existingVpsClips.add(`${clipId}${extension}`);
+              uploadResult = { uploaded: true, skipped: false, extension };
+            }
+          } else {
+            const targetDir = getVideoDataDir();
+            fs.mkdirSync(targetDir, { recursive: true });
+            const targetPath = path.join(targetDir, `${clipId}${extension}`);
+            if (skipExistingVideos && fs.existsSync(targetPath)) {
+              uploadResult = { uploaded: false, skipped: true, extension };
+            } else {
+              fs.copyFileSync(nestedPath, targetPath);
+              uploadResult = { uploaded: true, skipped: false, extension };
+            }
+          }
+        } else {
+          uploadResult = await uploadVideoFromFolder(
+            clipId,
+            layout.dataDir,
+            videoName,
+            existingVpsClips,
+            skipExistingVideos,
+            clipMatch.videoFolder
+          );
+        }
         extension = uploadResult.extension || extension;
         if (uploadResult.uploaded) videosUploaded += 1;
         if (uploadResult.skipped) videosSkipped += 1;
       }
 
       let refsForClip = 0;
-      if (importReferences && layout.annotationsDir) {
-        const refResult = await importReferencesForClip(clipId, layout.annotationsDir, clipMatch);
+      if (importReferences && (layout.annotationsDir || layout.layout === 'nested-clip-batches')) {
+        const refResult = await importReferencesForClip(
+          clipId,
+          layout.annotationsDir,
+          clipMatch,
+          layout.layout === 'nested-clip-batches' ? layout.sourceDir : null
+        );
         referencesImported += refResult.imported;
         refsForClip = refResult.imported;
       }

@@ -27,7 +27,7 @@ export function buildCompareAttentionItems(comparison) {
   for (const item of comparison.extraInSubmission || []) {
     items.push({
       key: `extra-${item.submissionIndex}`,
-      label: `${item.eventType} · extra`,
+      label: `${item.eventType} · new`,
       time: item.frameTime,
       kind: 'extra',
     });
@@ -69,7 +69,7 @@ export default function CompareIssuesPanel({
         )}
         {comparison?.summary?.missingCount > 0 &&
           ` · ${comparison.summary.missingCount} missing`}
-        {comparison?.summary?.extraCount > 0 && ` · ${comparison.summary.extraCount} extra`}
+        {comparison?.summary?.extraCount > 0 && ` · ${comparison.summary.extraCount} new`}
       </div>
       {attentionItems.length > 0 ? (
         <div className="review-attention-chips review-compare-sidebar-chips">
@@ -85,7 +85,7 @@ export default function CompareIssuesPanel({
           ))}
         </div>
       ) : (
-        <p className="review-compare-empty">No frame mismatches, missing, or extra events.</p>
+        <p className="review-compare-empty">No frame mismatches, missing, or new events.</p>
       )}
     </div>
   );

@@ -70,7 +70,14 @@ export function detectBulkUploadLayout(entries) {
     }
   }
 
-  if (hasData || hasAnnotations) return 'data-annotations';
+  if (hasData || hasAnnotations) {
+    const hasNestedClipBatches = entries.some((entry) => {
+      const annotIdx = entry.parts.findIndex((part) => ANNOTATIONS_FOLDER.test(part));
+      const dataIdx = entry.parts.findIndex((part) => DATA_FOLDER.test(part));
+      return annotIdx > 0 || dataIdx > 0;
+    });
+    return hasNestedClipBatches ? 'nested-clip-batches' : 'data-annotations';
+  }
   if (hasLabeling && hasClipFolderVideos) return 'clip-folders';
   if (hasLabeling) return 'group-labeling';
   return 'flat';
@@ -86,13 +93,16 @@ export function includeBulkVideo(entry, layout, entries) {
     return isClipFolderVideoEntry(entry);
   }
 
-  if (layout === 'data-annotations') {
-    const anyDataPath = entries.some((item) => item.parts.some((part) => DATA_FOLDER.test(part)));
-    if (anyDataPath) {
-      const dataIdx = parts.findIndex((part) => DATA_FOLDER.test(part));
-      return dataIdx >= 0 && parts.length === dataIdx + 2;
+  if (layout === 'data-annotations' || layout === 'nested-clip-batches') {
+    if (isInsideFolder(parts, ANNOTATIONS_FOLDER)) return false;
+
+    const dataIdx = parts.findIndex((part) => DATA_FOLDER.test(part));
+    if (dataIdx >= 0) {
+      return parts.length === dataIdx + 2;
     }
-    return parts.length === 1;
+
+    // ClipFolder/Video.mkv (videos beside annotations/ without a data/ folder)
+    return parts.length >= 1;
   }
 
   if (layout === 'group-labeling') {
@@ -116,7 +126,7 @@ export function includeBulkJson(entry, layout) {
     return labelingIdx >= 0 && parts.length === labelingIdx + 2;
   }
 
-  if (layout === 'data-annotations') {
+  if (layout === 'data-annotations' || layout === 'nested-clip-batches') {
     const annotIdx = parts.findIndex((part) => ANNOTATIONS_FOLDER.test(part));
     if (annotIdx >= 0) {
       return parts.length === annotIdx + 2;
@@ -165,7 +175,12 @@ export function jsonMatchesClipId(jsonFilename, clipId) {
 }
 
 export function usesClipIdJsonMatching(layout) {
-  return layout === 'group-labeling' || layout === 'clip-folders';
+  return (
+    layout === 'group-labeling' ||
+    layout === 'clip-folders' ||
+    layout === 'data-annotations' ||
+    layout === 'nested-clip-batches'
+  );
 }
 
 export function pickJsonByClipId(clipId, candidates, usedKeys, variant) {

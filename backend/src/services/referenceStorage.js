@@ -57,7 +57,12 @@ async function saveReferenceEventsForClip(
     throw new Error('Reference must have at least one event');
   }
 
-  const rawJson = exportAnnotation(normalized, { gameTime, variant });
+  const previous = await loadReferenceForClip(clipId, variant);
+  const rawJson = exportAnnotation(normalized, {
+    gameTime,
+    variant,
+    referenceEvents: previous.hasReference ? previous.events : [],
+  });
   return saveReferenceForClip(clipId, rawJson, { variant, sourceFilename });
 }
 

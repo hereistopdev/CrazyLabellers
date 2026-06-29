@@ -49,6 +49,33 @@ function classifyJsonVariant(filename) {
   return 'post';
 }
 
+function pickJsonByExactStem(videoStem, candidates, usedKeys, variant) {
+  const video = String(videoStem || '').toLowerCase();
+  const pool =
+    variant === 'post'
+      ? candidates.filter((candidate) => candidate.variant === 'post')
+      : candidates.filter((candidate) => candidate.variant !== 'post');
+
+  for (const candidate of pool) {
+    const key = candidate.key || candidate.name;
+    if (usedKeys.has(key)) continue;
+    const stem = fileStem(candidate.name).toLowerCase();
+    if (variant === 'post' && stem === video) {
+      return { ...candidate, score: 1, matchType: 'exactStem' };
+    }
+    if (variant !== 'post' && stem === `${video}_post`) {
+      return { ...candidate, score: 1, matchType: 'exactStem' };
+    }
+  }
+
+  return null;
+}
+
+function isIgnoredBulkJsonName(filename) {
+  const lower = String(filename || '').toLowerCase();
+  return lower.endsWith('_old.json') || /_old\.json$/i.test(lower);
+}
+
 function pickBestMatch(targetName, candidates, usedKeys, threshold = MATCH_THRESHOLD) {
   let best = null;
 
@@ -103,6 +130,8 @@ module.exports = {
   nameSimilarity,
   classifyJsonVariant,
   pickBestMatch,
+  pickJsonByExactStem,
+  isIgnoredBulkJsonName,
   jsonMatchesClipId,
   pickJsonByClipId,
 };

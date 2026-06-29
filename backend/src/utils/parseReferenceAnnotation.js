@@ -45,6 +45,7 @@ function parseReferenceAnnotation(data) {
         eventType,
         frameTime: snapTimeToFrame(positionMs / 1000, FPS),
         index,
+        isNew: Boolean(annotation.is_new),
       };
     })
     .filter(Boolean);

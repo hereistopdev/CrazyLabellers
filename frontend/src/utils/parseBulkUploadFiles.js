@@ -1,4 +1,4 @@
-import { MATCH_THRESHOLD, nameSimilarity, classifyJsonVariant, pickBestMatch } from './fuzzyMatch';
+import { MATCH_THRESHOLD, nameSimilarity, classifyJsonVariant, pickBestMatch, pickJsonByExactStem, isIgnoredBulkJsonName } from './fuzzyMatch';
 import { sanitizeClipId, isSafeClipId, isVideoFilename, isJsonFilename } from './clipId';
 import {
   detectBulkUploadLayout,
@@ -36,17 +36,22 @@ function buildEntries(fileList) {
 }
 
 function matchJsonToClip(clipId, videoStem, jsonFiles, usedJson, variant, layout) {
-  const candidates =
-    variant === 'post'
-      ? jsonFiles.filter((item) => item.variant === 'post')
-      : jsonFiles.filter((item) => item.variant !== 'post');
+  const candidates = jsonFiles.filter((item) => !isIgnoredBulkJsonName(item.name));
+
+  const exactMatch = pickJsonByExactStem(videoStem, candidates, usedJson, variant);
+  if (exactMatch) return exactMatch;
 
   const clipIdMatch = pickJsonByClipId(clipId, candidates, usedJson, variant);
   if (clipIdMatch) return clipIdMatch;
 
   if (usesClipIdJsonMatching(layout)) return null;
 
-  return pickBestMatch(videoStem, candidates, usedJson, MATCH_THRESHOLD);
+  const pool =
+    variant === 'post'
+      ? candidates.filter((item) => item.variant === 'post')
+      : candidates.filter((item) => item.variant !== 'post');
+
+  return pickBestMatch(videoStem, pool, usedJson, MATCH_THRESHOLD);
 }
 
 /**
@@ -54,7 +59,8 @@ function matchJsonToClip(clipId, videoStem, jsonFiles, usedJson, variant, layout
  * Supports:
  * - Clip folders: ClipID/video.mkv + labeling/ClipID.json (clip ID from folder name)
  * - Group folder: VideoID.mkv + Labeling/VideoID....json (clip ID prefix match)
- * - Legacy: data/*.mp4 + annotations/*.json (80%+ fuzzy match)
+ * - Legacy: data/*.mp4 + annotations/*.json (exact stem match per clip)
+ * - Nested batches: GroupID/data/*.mkv + GroupID/annotations/*.json
  * - Flat folder: videos + optional JSON at same level
  */
 export function parseBulkUploadFiles(fileList) {
@@ -80,6 +86,10 @@ export function parseBulkUploadFiles(fileList) {
     }
 
     if (isJsonFilename(lower)) {
+      if (isIgnoredBulkJsonName(entry.name)) {
+        ignored.push({ name: entry.relativePath, reason: 'legacy _old.json reference skipped' });
+        continue;
+      }
       if (includeBulkJson(entry, layout)) {
         jsonFiles.push({
           ...entry,

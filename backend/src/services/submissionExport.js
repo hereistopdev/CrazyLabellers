@@ -1,6 +1,7 @@
 const LabelSubmission = require('../models/LabelSubmission');
 const VideoAssignment = require('../models/VideoAssignment');
 const { exportAnnotation, getExportFilename, resolveExportBasename } = require('../utils/exportAnnotation');
+const { loadReferenceForClip } = require('./referenceStorage');
 
 async function buildSubmissionExport(submissionId, variant = 'post') {
   const submission = await LabelSubmission.findById(submissionId);
@@ -19,9 +20,13 @@ async function buildSubmissionExport(submissionId, variant = 'post') {
   }
 
   const exportVariant = variant === 'raw' ? 'raw' : 'post';
+  const reference = assignment?.clipId
+    ? await loadReferenceForClip(assignment.clipId, exportVariant)
+    : { events: [] };
   const payload = exportAnnotation(submission.events, {
     gameTime: assignment.gameTime || '1 - 00:00',
     variant: exportVariant,
+    referenceEvents: reference.events || [],
   });
   const filename = getExportFilename(exportBasename, exportVariant);
 

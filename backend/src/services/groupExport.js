@@ -36,7 +36,7 @@ function getSubmissionEvents(submission) {
   return [];
 }
 
-function buildExportFile({ assignment, events, variant }) {
+function buildExportFile({ assignment, events, variant, referenceEvents = [] }) {
   const exportBasename = resolveExportBasename(assignment);
   if (!exportBasename) return null;
 
@@ -47,6 +47,7 @@ function buildExportFile({ assignment, events, variant }) {
   const payload = exportAnnotation(normalized, {
     gameTime: assignment.gameTime || '1 - 00:00',
     variant: exportVariant,
+    referenceEvents,
   });
   const filename = getExportFilename(exportBasename, exportVariant);
 
@@ -143,16 +144,20 @@ async function findSubmissionForGroupExport(assignment) {
 async function buildExportFileForAssignment(assignment, { variant = 'post' } = {}) {
   const submission = await findSubmissionForGroupExport(assignment);
   const submissionEvents = getSubmissionEvents(submission);
+  const exportVariant = variant === 'raw' ? 'raw' : 'post';
+  const reference = assignment.clipId
+    ? await loadReferenceForClip(assignment.clipId, exportVariant)
+    : { events: [] };
+  const referenceEvents = reference.events || [];
+
   if (submissionEvents.length) {
-    return buildExportFile({ assignment, events: submissionEvents, variant });
+    return buildExportFile({ assignment, events: submissionEvents, variant, referenceEvents });
   }
 
   if (!assignment.clipId) return null;
 
-  const exportVariant = variant === 'raw' ? 'raw' : 'post';
-  const reference = await loadReferenceForClip(assignment.clipId, exportVariant);
-  if (reference.hasReference && reference.events?.length) {
-    return buildExportFile({ assignment, events: reference.events, variant });
+  if (reference.hasReference && referenceEvents.length) {
+    return buildExportFile({ assignment, events: referenceEvents, variant, referenceEvents: [] });
   }
 
   return null;
@@ -169,7 +174,16 @@ async function buildLabellerGroupExport({ groupId, userId, variant = 'post' }) {
       userId,
     });
     const events = getSubmissionEvents(submission);
-    const file = buildExportFile({ assignment, events, variant });
+    const exportVariant = variant === 'raw' ? 'raw' : 'post';
+    const reference = assignment.clipId
+      ? await loadReferenceForClip(assignment.clipId, exportVariant)
+      : { events: [] };
+    const file = buildExportFile({
+      assignment,
+      events,
+      variant,
+      referenceEvents: reference.events || [],
+    });
     if (file) {
       files.push({ path: `${folderName}/${file.filename}`, content: file.content });
     }

@@ -423,9 +423,11 @@ export default function ManageVideos() {
           ? 'Clip-folder layout detected (ClipID/video.mkv + labeling/*.json).'
           : layout === 'group-labeling'
             ? `Group layout detected${summary.groupCount ? ` — ${summary.groupCount} group(s)` : ''}.`
-            : layout === 'data-annotations'
-              ? 'Legacy data/ + annotations/ layout detected.'
-              : '';
+            : layout === 'nested-clip-batches'
+              ? 'Nested clip batches detected (ClipID/data/*.mkv + ClipID/annotations/*.json).'
+              : layout === 'data-annotations'
+                ? 'data/ + annotations/ layout detected — JSON matched by exact filename.'
+                : '';
       setMessage(
         rejected.length > 0
           ? `Selected ${clips.length} video(s). ${layoutNote} Matched ${summary.withPostRef} JSON file(s) by video ID. Ignored ${rejected.length} unrelated file(s).`

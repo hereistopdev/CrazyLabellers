@@ -12,7 +12,7 @@ function comparisonLabel(status, frameDiff) {
   if (status === 'match') return 'Match';
   if (status === 'close') return '1f off';
   if (status === 'off') return `${frameDiff ?? '2+'}f off`;
-  if (status === 'extra') return 'Extra';
+  if (status === 'extra') return 'New';
   if (status === 'unmatched') return 'No ref';
   if (status === 'missing') return 'Missing';
   return null;
