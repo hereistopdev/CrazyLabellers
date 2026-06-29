@@ -200,7 +200,10 @@ export default function Dashboard() {
           <p>Read definitions and flow diagrams for all event types.</p>
           <div className="actions-row">
             <Link to="/terminology" className="btn btn-secondary btn-sm">
-              Open guide
+              Terminology
+            </Link>
+            <Link to="/labeling-guide" className="btn btn-secondary btn-sm">
+              Labeling rules
             </Link>
           </div>
         </div>

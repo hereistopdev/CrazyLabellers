@@ -152,11 +152,13 @@ async function buildLabellerProfile(labellerId, { viewer } = {}) {
     })),
     workHistory: submissions.map((s) => {
       const review = reviewBySubmission.get(String(s._id));
+      const assignment = s.assignmentId;
       return {
         id: s._id,
-        title: s.assignmentId?.title || 'Labeling task',
-        taskPrice: s.assignmentId?.taskPrice,
-        challengeNote: s.assignmentId?.challengeNote,
+        assignmentId: assignment?._id || assignment,
+        title: assignment?.title || 'Labeling task',
+        taskPrice: assignment?.taskPrice,
+        challengeNote: assignment?.challengeNote,
         status: s.status,
         reviewPoints: s.reviewPoints,
         earnings: s.earnings,

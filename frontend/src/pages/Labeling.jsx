@@ -37,10 +37,10 @@ import {
   toDisplayFrame,
 } from '../utils/frameTime';
 import {
-  validateEventSpacing,
   getEventSpacingRuleSummary,
   getEventPairTimingRuleSummary,
 } from '../utils/eventSpacingValidation';
+import { validateSubmissionLabeling } from '../utils/labelingRulesValidation';
 import { countEventSearchMatches, matchesEventSearch } from '../utils/eventSearch';
 import { canUseLabeler } from '../utils/labelerAccess';
 import { extractClipIdFromVideoUrl, isOpenableVideoUrl, resolvePlaybackVideoUrl } from '../utils/videoUrl';
@@ -87,6 +87,7 @@ export default function Labeling() {
   const [mediaDuration, setMediaDuration] = useState(null);
   const [reference, setReference] = useState(null);
   const [submissionStatus, setSubmissionStatus] = useState('draft');
+  const [submissionReview, setSubmissionReview] = useState(null);
   const [tutorialDone, setTutorialDone] = useState(false);
   const [spacingIssueIndices, setSpacingIssueIndices] = useState(() => new Set());
   const [spacingIssues, setSpacingIssues] = useState([]);
@@ -215,6 +216,14 @@ export default function Labeling() {
         setEventTypes(types);
         setEvents(labels.events || []);
         setSubmissionStatus(labels.status || 'draft');
+        setSubmissionReview({
+          reviewPoints: labels.reviewPoints,
+          reviewerNotes: labels.reviewerNotes,
+          reviewedAt: labels.reviewedAt,
+          originalEvents: labels.originalEvents || [],
+          correctionBreakdown: labels.correctionBreakdown,
+          correctedAt: labels.correctedAt,
+        });
       } catch (err) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -250,7 +259,11 @@ export default function Labeling() {
     }
 
     const labellerReferenceMode =
-      labellerMode && assignment?.allowLabellerReference && assignment?.kind !== 'tutorial';
+      labellerMode &&
+      assignment?.kind !== 'tutorial' &&
+      (assignment?.allowLabellerReference ||
+        submissionStatus === 'approved' ||
+        assignment?.status === 'approved');
 
     if (!adminMode && !labellerReferenceMode) {
       setReference(null);
@@ -264,7 +277,15 @@ export default function Labeling() {
     loader
       .then((ref) => setReference(ref?.hasReference != null ? ref : { hasReference: false, events: [] }))
       .catch(() => setReference(null));
-  }, [adminMode, labellerMode, id, assignment?.allowLabellerReference, assignment?.kind]);
+  }, [
+    adminMode,
+    labellerMode,
+    id,
+    assignment?.allowLabellerReference,
+    assignment?.kind,
+    assignment?.status,
+    submissionStatus,
+  ]);
 
   useEffect(() => {
     setMediaDuration(null);
@@ -409,14 +430,14 @@ export default function Labeling() {
   );
 
   const checkSpacingRules = useCallback(() => {
-    const spacing = validateEventSpacing(events, fps);
-    if (spacing.valid) {
+    const validation = validateSubmissionLabeling(events, fps);
+    if (validation.valid) {
       setSpacingIssueIndices(new Set());
       setSpacingIssues([]);
-      pushToast('All event spacing rules pass');
+      pushToast('All labeling rules pass');
       return;
     }
-    reportSpacingValidationFailure(spacing, 'Spacing violations found — fix before exporting');
+    reportSpacingValidationFailure(validation, 'Labeling rule violations found — fix before exporting');
   }, [events, fps, pushToast, reportSpacingValidationFailure]);
 
   const markEvent = useCallback(
@@ -591,13 +612,13 @@ export default function Labeling() {
         labellerMode &&
         assignment?.kind !== 'tutorial'
       ) {
-        const spacing = validateEventSpacing(events, fps);
-        if (!spacing.valid) {
+        const validation = validateSubmissionLabeling(events, fps);
+        if (!validation.valid) {
           reportSpacingValidationFailure(
-            spacing,
-            spacing.issues.length === 1
+            validation,
+            validation.issues.length === 1
               ? 'Fix this labeling rule before submitting'
-              : `Fix ${spacing.issues.length} labeling rules before submitting (listed below)`
+              : `Fix ${validation.issues.length} labeling rules before submitting (listed below)`
           );
           return;
         }
@@ -642,7 +663,10 @@ export default function Labeling() {
           }
         }
       } catch (err) {
-        if (err.code === 'EVENT_SPACING_INVALID' && err.issues?.length) {
+        if (
+          (err.code === 'LABELING_VALIDATION_INVALID' || err.code === 'EVENT_SPACING_INVALID') &&
+          err.issues?.length
+        ) {
           reportSpacingValidationFailure(
             {
               issues: err.issues,
@@ -837,7 +861,7 @@ export default function Labeling() {
         toggleFrameAutoPlay();
         return;
       }
-      if (!tutorialLabeller && (key === 'm' || key === 'M' || key === 'Enter')) {
+      if (!tutorialLabeller && !submissionLocked && (key === 'm' || key === 'M' || key === 'Enter')) {
         event.preventDefault();
         openEventPicker();
         return;
@@ -898,11 +922,11 @@ export default function Labeling() {
 
   const handleExport = async (variant) => {
     if (isPracticeMode) {
-      const spacing = validateEventSpacing(events, fps);
-      if (!spacing.valid) {
+      const validation = validateSubmissionLabeling(events, fps);
+      if (!validation.valid) {
         reportSpacingValidationFailure(
-          spacing,
-          'Fix spacing violations before exporting practice labels'
+          validation,
+          'Fix labeling rule violations before exporting practice labels'
         );
         return;
       }
@@ -960,9 +984,16 @@ export default function Labeling() {
   const showTutorialEditor = adminMode && isTutorial;
   const showTutorialGuide = tutorialLabellerMode;
   const referenceEvents = reference?.hasReference ? reference.events : [];
+  const approvedReviewMode = labellerMode && submissionStatus === 'approved';
+  const submissionHadCorrections =
+    approvedReviewMode &&
+    (submissionReview?.correctedAt ||
+      (submissionReview?.correctionBreakdown?.totalCorrections ?? 0) > 0);
   const showReference =
     reference?.hasReference &&
-    (adminMode || (labellerMode && assignment?.allowLabellerReference));
+    (adminMode ||
+      (labellerMode &&
+        (assignment?.allowLabellerReference || approvedReviewMode || assignment?.status === 'approved')));
   const relabelMode =
     labellerMode &&
     assignment?.allowLabellerReference &&
@@ -1102,7 +1133,7 @@ export default function Labeling() {
         <div className="page-header-main">
         <h1>{displayAssignmentTitle(assignment)}</h1>
         <p>{assignment?.description}</p>
-        {showReference && labellerMode && !adminMode && (
+        {showReference && labellerMode && !adminMode && canAdjustEvents && (
           <p style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
             Reference visible — compare gold-standard events (blue) with your labels (green).
             {events.length === 0
@@ -1111,15 +1142,34 @@ export default function Labeling() {
             then {relabelMode || pendingReviewResubmit ? 're-submit' : 'submit'} when ready.
           </p>
         )}
+        {approvedReviewMode && (
+          <div className="labeling-approved-review-banner">
+            <p>
+              <strong>Approved — read-only review.</strong> Compare your final labels (green) with
+              reference events (blue). A reviewer may have adjusted events before approval — study
+              the differences to improve future tasks.
+            </p>
+            {submissionReview?.reviewPoints != null && (
+              <p className="labeling-approved-review-meta">
+                Score: <strong>{submissionReview.reviewPoints}</strong>/100
+                {submissionReview.reviewerNotes ? ` — ${submissionReview.reviewerNotes}` : ''}
+              </p>
+            )}
+            {submissionHadCorrections && (
+              <p className="labeling-approved-review-meta">
+                Events were updated before approval (you submitted{' '}
+                {submissionReview.originalEvents.length}, approved version has {events.length}).
+              </p>
+            )}
+            <p className="labeling-approved-review-meta">
+              <Link to="/labeling-guide">Open labeling guide →</Link>
+            </p>
+          </div>
+        )}
         {pendingReviewResubmit && (
           <p style={{ fontSize: '0.85rem', color: '#93c5fd' }}>
             Already submitted — you can still edit events and <strong>Re-submit</strong> until a
             validator reviews this task.
-          </p>
-        )}
-        {submissionLocked && submissionStatus === 'approved' && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            This submission is approved and can no longer be edited.
           </p>
         )}
         {adminMode && (
@@ -1316,7 +1366,7 @@ export default function Labeling() {
 
             <section className="events-panel-add-event">
               <div className="events-panel-add-event-header">
-                <h3>Add event</h3>
+                <h3>{canAdjustEvents ? 'Add event' : 'Your events (read-only)'}</h3>
                 <button
                   type="button"
                   className="labeling-help-trigger"
@@ -1327,6 +1377,7 @@ export default function Labeling() {
                   ?
                 </button>
               </div>
+              {canAdjustEvents ? (
               <div className="mark-panel mark-panel--compact">
                 <button type="button" className="btn btn-primary btn-sm" onClick={openEventPicker}>
                   Mark event at {formatTime(currentTime)}
@@ -1337,6 +1388,11 @@ export default function Labeling() {
                   </p>
                 )}
               </div>
+              ) : (
+                <p className="mark-hint" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Playback and timeline only — select events below to jump to frames.
+                </p>
+              )}
             </section>
           </div>
 
@@ -1393,7 +1449,7 @@ export default function Labeling() {
                       <li key={`${issue.kind}-${issue.frame ?? issue.frameA}-${index}`}>
                         <button
                           type="button"
-                          className="labeling-spacing-issue-btn"
+                          className={`labeling-spacing-issue-btn${issue.severity === 'bad' ? ' labeling-spacing-issue-btn--bad' : ''}${issue.severity === 'warning' ? ' labeling-spacing-issue-btn--warning' : ''}`}
                           onClick={() => {
                             if (targetIndex != null && events[targetIndex]) {
                               selectEvent(targetIndex, events[targetIndex].frameTime);
@@ -1469,6 +1525,7 @@ export default function Labeling() {
                             ▶
                           </span>
                         </button>
+                        {canAdjustEvents && (
                         <button
                           type="button"
                           className="event-row-icon-btn event-row-icon-btn-danger"
@@ -1484,6 +1541,7 @@ export default function Labeling() {
                             ×
                           </span>
                         </button>
+                        )}
                         {canAdjustEvents && (
                           <EventDiscussionFlag
                             iconOnly
@@ -1574,7 +1632,7 @@ export default function Labeling() {
                   {pendingReviewResubmit || relabelMode ? 'Re-submit' : 'Submit'}
                 </button>
               )}
-              {submissionLocked && (
+              {submissionLocked && !approvedReviewMode && (
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                   {submissionStatus === 'approved'
                     ? 'Approved — no further edits'

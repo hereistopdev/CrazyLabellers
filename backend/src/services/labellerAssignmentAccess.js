@@ -23,6 +23,21 @@ function canLabellerEditSubmission(assignment, submission) {
   return submission.status === 'draft' || submission.status === 'submitted';
 }
 
+function canLabellerViewReference(user, assignment, submission) {
+  if (!assignment) return false;
+  if (!isLabeller(user) || isAdmin(user)) return true;
+  if (!isAssignedLabeller(user, assignment)) return false;
+  if (assignment.allowLabellerReference) return true;
+  if (submission?.status === 'approved' || assignment.status === 'approved') return true;
+  return false;
+}
+
+function canLabellerViewApprovedWork(user, assignment, submission) {
+  if (!isLabeller(user) || isAdmin(user)) return false;
+  if (!isAssignedLabeller(user, assignment)) return false;
+  return submission?.status === 'approved' || assignment.status === 'approved';
+}
+
 function assertLabellerProductionAssignment(user, assignment) {
   if (!isLabeller(user) || isAdmin(user)) return;
 
@@ -41,5 +56,7 @@ module.exports = {
   isAssignedLabeller,
   canLabellerRelabelWithReference,
   canLabellerEditSubmission,
+  canLabellerViewReference,
+  canLabellerViewApprovedWork,
   assertLabellerProductionAssignment,
 };

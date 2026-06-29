@@ -4,7 +4,7 @@ const LabelSubmission = require('../models/LabelSubmission');
 const { auth, requireRole } = require('../middleware/auth');
 const { isLabeller, isAdmin } = require('../config/roles');
 const { normalizeLabelEvents } = require('../utils/normalizeLabelEvents');
-const { validateEventSpacing } = require('../utils/eventSpacingValidation');
+const { validateSubmissionLabeling } = require('../utils/labelingRulesValidation');
 const {
   gradeSubmissionAgainstReference,
   recordLabelingTestAttempt,
@@ -23,6 +23,7 @@ const {
   assertLabellerProductionAssignment,
   canLabellerRelabelWithReference,
   canLabellerEditSubmission,
+  canLabellerViewReference,
   isAssignedLabeller,
 } = require('../services/labellerAssignmentAccess');
 const {
@@ -195,6 +196,13 @@ router.get('/groups/:groupId/export', auth, async (req, res) => {
           message: 'Pass the labeling pre-test (80/100+) before real tasks',
         });
       }
+      if (
+        kind === 'production' &&
+        !isAssignedLabeller(req.user, assignment) &&
+        assignment.status !== 'available'
+      ) {
+        return res.status(403).json({ message: 'You are not assigned to this video' });
+      }
     }
 
     return res.json(assignment);
@@ -282,8 +290,12 @@ router.get('/:id/reference', auth, async (req, res) => {
     }
 
     if (isLabeller(req.user) && !isAdmin(req.user)) {
-      if (!assignment.allowLabellerReference) {
-        return res.status(403).json({ message: 'Reference is not shared for this task' });
+      const submission = await LabelSubmission.findOne({
+        assignmentId: req.params.id,
+        userId: req.user._id,
+      });
+      if (!canLabellerViewReference(req.user, assignment, submission)) {
+        return res.status(403).json({ message: 'Reference is not available for this task' });
       }
       assertLabellerProductionAssignment(req.user, assignment);
     }
@@ -526,19 +538,19 @@ router.put('/:id/labels', auth, async (req, res) => {
       !isAdmin(req.user) &&
       assignment.kind !== 'tutorial'
     ) {
-      const spacing = validateEventSpacing(normalizedEvents, assignment.fps);
-      if (!spacing.valid) {
+      const validation = validateSubmissionLabeling(normalizedEvents, assignment.fps);
+      if (!validation.valid) {
         return res.status(400).json({
           message:
-            spacing.issues.length === 1
-              ? spacing.issues[0].message
-              : `${spacing.issues.length} labeling rule violations — fix each item below`,
-          code: 'EVENT_SPACING_INVALID',
-          issues: spacing.issues.map((issue, index) => ({
+            validation.issues.length === 1
+              ? validation.issues[0].message
+              : `${validation.issues.length} labeling rule violations — fix each item below`,
+          code: 'LABELING_VALIDATION_INVALID',
+          issues: validation.issues.map((issue, index) => ({
             ...issue,
             number: index + 1,
           })),
-          affectedIndices: spacing.affectedIndices,
+          affectedIndices: validation.affectedIndices,
         });
       }
     }

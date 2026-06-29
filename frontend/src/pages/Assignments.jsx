@@ -260,9 +260,12 @@ export default function Assignments() {
                 const isMine = a.assignedTo?._id === user?.id || a.assignedTo === user?.id;
                 const canRelabel =
                   isMine && a.allowLabellerReference && a.status === 'rejected';
+                const canViewApproved = isMine && a.status === 'approved';
                 const canOpen =
                   isMine &&
-                  (['assigned', 'in_progress', 'submitted'].includes(a.status) || canRelabel);
+                  (['assigned', 'in_progress', 'submitted'].includes(a.status) ||
+                    canRelabel ||
+                    canViewApproved);
                 const canClaim = a.status === 'available';
 
                 return (
@@ -309,12 +312,19 @@ export default function Assignments() {
                       )}
                       {canOpen && (
                         <Link to={`/label/${a._id}`} className="btn btn-primary btn-sm">
-                          {canRelabel
-                            ? 'Re-label with reference'
-                            : a.status === 'submitted' && isMine
-                              ? 'Edit & re-submit'
-                              : 'Open labeler'}
+                          {canViewApproved
+                            ? 'Review approved work'
+                            : canRelabel
+                              ? 'Re-label with reference'
+                              : a.status === 'submitted' && isMine
+                                ? 'Edit & re-submit'
+                                : 'Open labeler'}
                         </Link>
+                      )}
+                      {canViewApproved && (
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          Read-only — compare your approved labels with reference
+                        </span>
                       )}
                       {a.status === 'submitted' && isMine && (
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>

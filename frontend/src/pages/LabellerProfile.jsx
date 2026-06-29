@@ -212,6 +212,13 @@ export default function LabellerProfile() {
                   {task.challengeNote && (
                     <p className="profile-work-challenge">Challenge: {task.challengeNote}</p>
                   )}
+                  {isOwnProfile && task.status === 'approved' && task.assignmentId && (
+                    <div className="actions-row" style={{ marginTop: '0.5rem' }}>
+                      <Link to={`/label/${task.assignmentId}`} className="btn btn-secondary btn-sm">
+                        Review approved work
+                      </Link>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Terminology from './pages/Terminology';
+import LabelingGuide from './pages/LabelingGuide';
 import KnowledgeTest from './pages/KnowledgeTest';
 import Assignments from './pages/Assignments';
 import ImageAssignments from './pages/ImageAssignments';
@@ -162,6 +163,7 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="terminology" element={<Terminology />} />
+        <Route path="labeling-guide" element={<LabelingGuide />} />
         <Route path="faq" element={<FrequentQA />} />
         <Route
           path="test"

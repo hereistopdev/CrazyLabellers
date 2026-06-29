@@ -133,6 +133,9 @@ export default function Layout() {
               <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
                 Terminology
               </NavLink>
+              <NavLink to="/labeling-guide" className={navClass} onClick={() => setMenuOpen(false)}>
+                Labeling guide
+              </NavLink>
               <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
                 Frequent Q&amp;A
               </NavLink>
@@ -141,6 +144,9 @@ export default function Layout() {
             <>
               <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
                 Terminology
+              </NavLink>
+              <NavLink to="/labeling-guide" className={navClass} onClick={() => setMenuOpen(false)}>
+                Labeling guide
               </NavLink>
               <NavLink to="/test" className={navClass} onClick={() => setMenuOpen(false)}>
                 Knowledge Test
@@ -175,6 +181,9 @@ export default function Layout() {
             <>
               <NavLink to="/terminology" className={navClass} onClick={() => setMenuOpen(false)}>
                 Terminology
+              </NavLink>
+              <NavLink to="/labeling-guide" className={navClass} onClick={() => setMenuOpen(false)}>
+                Labeling guide
               </NavLink>
               <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
                 Frequent Q&amp;A

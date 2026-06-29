@@ -35,7 +35,7 @@ const OFFICIAL_DEFINITIONS = {
   'Highlight End':
     'Mark when non-main-board footage ends and live match action resumes on the main game board.',
   Referee:
-    'Mark when the referee blows the whistle to confirm a stoppage in play. Pair with Foul (infringement confirmed), Ball Out of Play (restart after the ball left the field), or Goal (goal confirmed). Use at 0 frames on the whistle — not for advantage or offside. When paired with Foul or Ball Out of Play, leave ≥ 6 even frames between the events.',
+    'Mark when the referee blows the whistle to confirm a stoppage in play. Pair with Foul (infringement confirmed), Ball Out of Play (restart after the ball left the field), or Goal (goal confirmed). Also mark Referee when play stops without a clear Foul — e.g. offside — even though no Foul is labeled. Use at 0 frames on the whistle. Do not mark Referee for advantage (play continues). When paired with Foul or Ball Out of Play, leave ≥ 6 even frames between the events.',
   Invalid:
     'Mark when a player receives or throws/kicks the ball to or from someone who is not an on-pitch player — e.g. ball to/from coaching staff, ball boy, or other non-player personnel at the touchline. Pair with Ball Out of Play when the ball leaves the field as part of that exchange.',
 };
@@ -124,7 +124,11 @@ const terminologies = [
     title: 'Clearance',
     order: 7,
     definition: OFFICIAL_DEFINITIONS.Clearance,
-    criteria: ['Immediate threat to own goal is removed', 'Action occurs within the goal section (penalty area)', 'Who gains possession afterwards does not matter'],
+    criteria: [
+      'Immediate threat to own goal is removed',
+      'Action occurs within the goal section (penalty area)',
+      'Follow-up: same team receives → Pass Received; opponent gains possession → Recovery',
+    ],
     commonMistakes: ['Labeling a targeted pass as clearance', 'Labeling a block as clearance', 'Marking clearance outside the goal section'],
   },
   {
@@ -267,12 +271,14 @@ const terminologies = [
     criteria: [
       'Referee whistle confirms a stoppage',
       'Pair with Foul, Ball Out of Play, or Goal when the whistle confirms that event',
-      'Not used for advantage or offside',
+      'Also mark for offside and other stoppages without Foul',
+      'Not used when the referee plays advantage (play continues)',
       'Gap ≥ 6 even frames after Foul or Ball Out of Play when both are marked',
     ],
     commonMistakes: [
       'Marking Referee instead of Foul at the contact frame',
-      'Omitting Referee after Ball Out of Play or Goal when the whistle is shown',
+      'Omitting Referee after Ball Out of Play, Goal, or offside when the whistle is shown',
+      'Marking Foul for offside',
     ],
   },
   {

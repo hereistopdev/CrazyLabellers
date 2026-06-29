@@ -31,6 +31,9 @@ export default function Terminology() {
           and while labeling clips. All videos are <strong>25 fps</strong>. Frame offsets:{' '}
           <strong>{frameOffsetSummary}</strong>.
           {' '}
+          <Link to="/labeling-guide" style={{ fontSize: '0.88rem', marginRight: '0.75rem' }}>
+            Full labeling guide →
+          </Link>
           <Link to="/faq" style={{ fontSize: '0.88rem' }}>
             Frequent Q&amp;A →
           </Link>
