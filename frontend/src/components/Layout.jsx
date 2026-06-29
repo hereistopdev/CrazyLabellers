@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdmin, isValidator, isVideoManager, canAccessReview, canAccessVideoManagement, roleLabel } from '../utils/roles';
+import { canAccessImageLabeling } from '../utils/labelerAccess';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -153,9 +154,11 @@ export default function Layout() {
               <NavLink to="/assignments" className={navClass} onClick={() => setMenuOpen(false)}>
                 Labeling
               </NavLink>
-              <NavLink to="/image-assignments" className={navClass} onClick={() => setMenuOpen(false)}>
-                Image projects
-              </NavLink>
+              {canAccessImageLabeling(user) && (
+                <NavLink to="/image-assignments" className={navClass} onClick={() => setMenuOpen(false)}>
+                  Image projects
+                </NavLink>
+              )}
               <NavLink to="/faq" className={navClass} onClick={() => setMenuOpen(false)}>
                 Frequent Q&amp;A
               </NavLink>

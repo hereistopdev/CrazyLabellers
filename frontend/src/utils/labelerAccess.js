@@ -4,6 +4,12 @@ export function canUseLabeler(user) {
   return isLabeller(user) || isAdmin(user) || isValidator(user);
 }
 
+export function canAccessImageLabeling(user) {
+  if (!canUseLabeler(user)) return false;
+  if (isAdmin(user) || isValidator(user)) return true;
+  return user?.labellerImageLabelingEnabled !== false;
+}
+
 export function labelerPath(assignmentId) {
   return `/label/${assignmentId}`;
 }

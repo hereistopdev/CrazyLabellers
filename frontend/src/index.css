@@ -1847,6 +1847,33 @@ body.nav-open {
   line-height: 1.45;
 }
 
+.labeling-spacing-alert-summary {
+  margin: 0.35rem 0 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.labeling-spacing-issue-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.labeling-spacing-issue-btn {
+  all: unset;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.labeling-spacing-issue-btn:hover {
+  color: #fff;
+}
+
 .event-search {
   display: flex;
   align-items: center;

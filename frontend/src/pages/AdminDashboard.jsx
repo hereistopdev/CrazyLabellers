@@ -1,14 +1,69 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../api';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const [imageLabelingEnabled, setImageLabelingEnabled] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const [settingsError, setSettingsError] = useState('');
+
+  useEffect(() => {
+    api
+      .getFinanceSettings()
+      .then((settings) => {
+        setImageLabelingEnabled(settings.labellerImageLabelingEnabled !== false);
+      })
+      .catch((err) => setSettingsError(err.message))
+      .finally(() => setSettingsLoading(false));
+  }, []);
+
+  const handleToggleImageLabeling = async (enabled) => {
+    setSettingsSaving(true);
+    setSettingsError('');
+    setSettingsMessage('');
+    try {
+      const settings = await api.updateFinanceSettings({ labellerImageLabelingEnabled: enabled });
+      setImageLabelingEnabled(settings.labellerImageLabelingEnabled !== false);
+      setSettingsMessage(
+        enabled
+          ? 'Labellers can now see image keypoint projects'
+          : 'Image projects hidden from labellers — they will only see video labeling tasks'
+      );
+    } catch (err) {
+      setSettingsError(err.message);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   return (
     <div>
       <div className="page-header">
         <h1>Admin — {user?.name}</h1>
         <p>Manage labellers, review work, score tasks, and track payments.</p>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <h3 style={{ marginBottom: '0.35rem' }}>Labeller task visibility</h3>
+        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+          Control whether labellers see image keypoint projects in the nav and dashboard. Video
+          labeling tasks are always available when onboarding is complete.
+        </p>
+        {settingsError && <div className="alert alert-error">{settingsError}</div>}
+        {settingsMessage && <div className="alert alert-success">{settingsMessage}</div>}
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.92rem' }}>
+          <input
+            type="checkbox"
+            checked={imageLabelingEnabled}
+            disabled={settingsLoading || settingsSaving}
+            onChange={(e) => handleToggleImageLabeling(e.target.checked)}
+          />
+          Show image labeling tasks to labellers
+        </label>
       </div>
 
       <div className="step-cards">

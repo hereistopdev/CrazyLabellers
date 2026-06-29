@@ -4,13 +4,14 @@ const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const { isLabeller } = require('../config/roles');
 const { getOnboardingStatus } = require('../services/onboarding');
+const { getPlatformSettings, isLabellerImageLabelingEnabled } = require('../services/platformSettings');
 
 const router = express.Router();
 
 const PUBLIC_REGISTER_ROLES = ['labeller', 'validator', 'video_manager'];
 
-function buildAuthUser(user) {
-  return {
+async function buildAuthUser(user) {
+  const payload = {
     id: user._id,
     name: user.name,
     email: user.email,
@@ -22,6 +23,13 @@ function buildAuthUser(user) {
     tutorialsCompleted: user.tutorialsCompleted,
     labelingTestAttempts: user.labelingTestAttempts,
   };
+
+  if (isLabeller(user)) {
+    const settings = await getPlatformSettings();
+    payload.labellerImageLabelingEnabled = isLabellerImageLabelingEnabled(settings);
+  }
+
+  return payload;
 }
 
 router.post('/register', async (req, res) => {
@@ -55,7 +63,7 @@ router.post('/register', async (req, res) => {
 
     return res.status(201).json({
       token,
-      user: buildAuthUser(user),
+      user: await buildAuthUser(user),
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -79,7 +87,7 @@ router.post('/login', async (req, res) => {
 
     return res.json({
       token,
-      user: buildAuthUser(user),
+      user: await buildAuthUser(user),
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -102,6 +110,9 @@ router.get('/me', auth, async (req, res) => {
   };
 
   if (isLabeller(req.user)) {
+    const settings = await getPlatformSettings();
+    userPayload.labellerImageLabelingEnabled = isLabellerImageLabelingEnabled(settings);
+
     const onboarding = await getOnboardingStatus(req.user._id);
     userPayload.onboarding = {
       currentStep: onboarding.currentStep,

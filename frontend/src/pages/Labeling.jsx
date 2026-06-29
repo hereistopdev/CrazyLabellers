@@ -89,6 +89,7 @@ export default function Labeling() {
   const [submissionStatus, setSubmissionStatus] = useState('draft');
   const [tutorialDone, setTutorialDone] = useState(false);
   const [spacingIssueIndices, setSpacingIssueIndices] = useState(() => new Set());
+  const [spacingIssues, setSpacingIssues] = useState([]);
   const [eventSearchQuery, setEventSearchQuery] = useState('');
 
   const fps = assignment?.fps || FPS;
@@ -387,11 +388,9 @@ export default function Labeling() {
 
   const reportSpacingValidationFailure = useCallback(
     (validation, summaryMessage) => {
+      setSpacingIssues(validation.issues || []);
       setSpacingIssueIndices(new Set(validation.affectedIndices));
       pushToast(summaryMessage, { type: 'error', duration: 5000 });
-      for (const issue of validation.issues) {
-        pushToast(issue.message, { type: 'error', duration: 6500 });
-      }
     },
     [pushToast]
   );
@@ -413,6 +412,7 @@ export default function Labeling() {
     const spacing = validateEventSpacing(events, fps);
     if (spacing.valid) {
       setSpacingIssueIndices(new Set());
+      setSpacingIssues([]);
       pushToast('All event spacing rules pass');
       return;
     }
@@ -595,7 +595,9 @@ export default function Labeling() {
         if (!spacing.valid) {
           reportSpacingValidationFailure(
             spacing,
-            'Cannot submit — fix event spacing violations listed below'
+            spacing.issues.length === 1
+              ? 'Fix this labeling rule before submitting'
+              : `Fix ${spacing.issues.length} labeling rules before submitting (listed below)`
           );
           return;
         }
@@ -606,6 +608,7 @@ export default function Labeling() {
       try {
         const data = await api.saveLabels(id, { events, status });
         setSpacingIssueIndices(new Set());
+        setSpacingIssues([]);
         setSubmissionStatus(data.submission?.status || status);
         if (status === 'submitted' && data.tutorial?.completed) {
           await refreshUser();
@@ -1373,7 +1376,39 @@ export default function Labeling() {
                 />
               </div>
             )}
-            {spacingIssueIndices.size > 0 && (
+            {spacingIssues.length > 0 && (
+              <div className="labeling-spacing-alert" role="alert">
+                <strong>
+                  {spacingIssues.length === 1
+                    ? '1 labeling rule to fix before submit'
+                    : `${spacingIssues.length} labeling rules to fix before submit`}
+                </strong>
+                <p className="labeling-spacing-alert-summary">
+                  {getEventSpacingRuleSummary()} {getEventPairTimingRuleSummary()}
+                </p>
+                <ol className="labeling-spacing-issue-list">
+                  {spacingIssues.map((issue, index) => {
+                    const targetIndex = issue.events?.[0]?.index;
+                    return (
+                      <li key={`${issue.kind}-${issue.frame ?? issue.frameA}-${index}`}>
+                        <button
+                          type="button"
+                          className="labeling-spacing-issue-btn"
+                          onClick={() => {
+                            if (targetIndex != null && events[targetIndex]) {
+                              selectEvent(targetIndex, events[targetIndex].frameTime);
+                            }
+                          }}
+                        >
+                          {issue.message}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+            {spacingIssues.length === 0 && spacingIssueIndices.size > 0 && (
               <div className="labeling-spacing-alert" role="alert">
                 <strong>Labeling rules not met.</strong> {getEventSpacingRuleSummary()}{' '}
                 {getEventPairTimingRuleSummary()} Fix the highlighted events before submitting.

@@ -1,7 +1,10 @@
 const { getFrameNumber, toDisplayFrame } = require('./frameTime');
 const { FPS } = require('../config/frameOffsets');
 
-/** Paired events: gap = second.frame - first.frame must be >= minGap and even. */
+/** Max frame gap for paired-event even-frame timing rules (Take on → End, Foul → Referee, etc.). */
+const PAIR_MAX_GAP = 100;
+
+/** Paired events: gap = second.frame - first.frame must be >= minGap and even (when gap ≤ PAIR_MAX_GAP). */
 const PAIR_TIMING_RULES = [
   {
     id: 'take-on-end',
@@ -43,17 +46,20 @@ function buildEventFrames(events, fps = FPS) {
 }
 
 function isValidPairGap(gap, minGap = 6) {
-  return gap >= minGap && gap % 2 === 0;
+  if (gap < minGap) return false;
+  if (gap > PAIR_MAX_GAP) return true;
+  return gap % 2 === 0;
 }
 
 function pairTimingMessage(rule, first, second, gap) {
   const problems = [];
   if (gap < rule.minGap) {
-    problems.push(`gap is ${gap} frames (need ≥ ${rule.minGap})`);
-  } else if (gap % 2 !== 0) {
-    problems.push(`gap is ${gap} frames (must be an even number)`);
+    problems.push(`need at least ${rule.minGap} frames between them (currently ${gap})`);
+  } else if (gap <= PAIR_MAX_GAP && gap % 2 !== 0) {
+    problems.push(`gap must be an even number of frames when ≤ ${PAIR_MAX_GAP} apart (currently ${gap})`);
   }
-  return `${rule.label}: ${first.eventType} (F${toDisplayFrame(first.frame)}) and ${second.eventType} (F${toDisplayFrame(second.frame)}) — ${problems.join(' and ')}`;
+  const detail = problems.length ? problems.join('; ') : 'spacing rule violated';
+  return `${rule.label}: ${first.eventType} at frame ${toDisplayFrame(first.frame)} → ${second.eventType} at frame ${toDisplayFrame(second.frame)} — ${detail}`;
 }
 
 function validatePairTiming(items) {
@@ -76,6 +82,8 @@ function validatePairTiming(items) {
 
       usedSecond.add(second.index);
       const gap = second.frame - first.frame;
+      if (gap > PAIR_MAX_GAP) continue;
+
       if (!isValidPairGap(gap, rule.minGap)) {
         issues.push({
           kind: 'pair_timing',
@@ -113,7 +121,7 @@ function validateEventSpacing(events, fps = FPS) {
         kind: 'same_frame',
         frame,
         events: frameItems,
-        message: `Frame ${toDisplayFrame(frame)} has ${frameItems.length} events (${frameItems.map((i) => i.eventType).join(', ')}) — only one event per frame is allowed`,
+        message: `Frame ${toDisplayFrame(frame)} has ${frameItems.length} events (${frameItems.map((i) => i.eventType).join(', ')}) — move one event to a different frame (only one event per frame)`,
       });
     }
   }
@@ -129,7 +137,7 @@ function validateEventSpacing(events, fps = FPS) {
         frameA: current.frame,
         frameB: next.frame,
         events: [current, next],
-        message: `${current.eventType} (F${toDisplayFrame(current.frame)}) and ${next.eventType} (F${toDisplayFrame(next.frame)}) are on consecutive frames — leave at least one blank frame between events`,
+        message: `${current.eventType} at frame ${toDisplayFrame(current.frame)} and ${next.eventType} at frame ${toDisplayFrame(next.frame)} are on consecutive frames — leave at least one blank frame between them`,
       });
     }
   }
@@ -150,7 +158,7 @@ function getEventSpacingRuleSummary() {
 }
 
 function getEventPairTimingRuleSummary() {
-  return 'Paired timings need a gap of ≥ 6 even frames: Take on → Take on End; Tackle → Foul; Foul → Referee; Ball Out of Play → Referee.';
+  return `Paired timings within ${PAIR_MAX_GAP} frames need a gap of ≥ 6 even frames: Take on → Take on End; Tackle → Foul; Foul → Referee; Ball Out of Play → Referee.`;
 }
 
 function getTackleFoulRuleSummary() {
@@ -163,6 +171,7 @@ function getTackleFoulRuleSummary() {
 
 module.exports = {
   PAIR_TIMING_RULES,
+  PAIR_MAX_GAP,
   validateEventSpacing,
   validatePairTiming,
   buildEventFrames,

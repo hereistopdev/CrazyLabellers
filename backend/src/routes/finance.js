@@ -53,11 +53,14 @@ router.get('/settings', auth, requireRole('admin', 'checker', 'validator'), asyn
 
 router.patch('/settings', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { ratePerPoint, currency } = req.body;
+    const { ratePerPoint, currency, labellerImageLabelingEnabled } = req.body;
     const settings = await getSettings();
 
     if (ratePerPoint !== undefined) settings.ratePerPoint = ratePerPoint;
     if (currency) settings.currency = currency;
+    if (labellerImageLabelingEnabled !== undefined) {
+      settings.labellerImageLabelingEnabled = Boolean(labellerImageLabelingEnabled);
+    }
     await settings.save();
 
     return res.json(settings);

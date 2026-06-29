@@ -17,6 +17,7 @@ const {
 const { normalizeImageUrl } = require('../services/imageStorage');
 const { ensureImageSubmissionSeeded } = require('../services/imageReferenceDraftSeed');
 const { loadReferenceRawJsonForAssignment, hasStoredReferenceForAssignment, getReferenceDimensions, syncAssignmentReferenceDimensions } = require('../services/imageReferenceStorage');
+const { getPlatformSettings, isLabellerImageLabelingEnabled } = require('../services/platformSettings');
 
 const router = express.Router();
 
@@ -25,18 +26,37 @@ router.use((_req, res, next) => {
   next();
 });
 
-function canAccessImageLabeling(user) {
+async function canAccessImageLabeling(user) {
   if (!user) return false;
   if (isAdmin(user)) return true;
   if (!isLabeller(user)) return false;
+
+  const settings = await getPlatformSettings();
+  if (!isLabellerImageLabelingEnabled(settings)) {
+    return false;
+  }
+
   return hasPassedKnowledgeTest(user) || user.status === 'approved' || user.status === 'passed_test';
+}
+
+async function requireImageLabelingAccess(req, res) {
+  if (!(await canAccessImageLabeling(req.user))) {
+    if (isLabeller(req.user) && !isAdmin(req.user)) {
+      const settings = await getPlatformSettings();
+      if (!isLabellerImageLabelingEnabled(settings)) {
+        res.status(403).json({ message: 'Image labeling tasks are not available for labellers right now' });
+        return false;
+      }
+    }
+    res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
+    return false;
+  }
+  return true;
 }
 
 router.get('/', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const filter = isLabeller(req.user) && !isAdmin(req.user)
       ? { $or: [{ assignedTo: req.user._id }, { status: 'available' }] }
@@ -110,9 +130,7 @@ function isAssignedToUserId(assignedTo, userId) {
 
 router.get('/groups', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const filter =
       isLabeller(req.user) && !isAdmin(req.user)
@@ -203,9 +221,7 @@ router.get('/groups', auth, async (req, res) => {
 
 router.get('/groups/:groupId', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const groupId = req.params.groupId;
     const groupFilter =
@@ -296,9 +312,7 @@ router.get('/groups/:groupId', auth, async (req, res) => {
 
 router.get('/groups/:groupId/nav', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const groupFilter =
       req.params.groupId === 'ungrouped' ? { groupId: null } : { groupId: req.params.groupId };
@@ -315,9 +329,7 @@ router.get('/groups/:groupId/nav', auth, async (req, res) => {
 
 router.post('/groups/:groupId/claim', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const groupFilter =
       req.params.groupId === 'ungrouped' ? { groupId: null } : { groupId: req.params.groupId };
@@ -353,9 +365,7 @@ router.post('/groups/:groupId/claim', auth, async (req, res) => {
 
 router.get('/groups/:groupId/export', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const { buildImageGroupExport } = require('../services/imageGroupExport');
     const { sendGroupExportZip } = require('../services/groupExport');
@@ -372,9 +382,7 @@ router.get('/groups/:groupId/export', auth, async (req, res) => {
 
 router.post('/groups/:groupId/export', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const submissions = Array.isArray(req.body.submissions) ? req.body.submissions : [];
     if (!submissions.length) {
@@ -414,9 +422,7 @@ router.post('/groups/:groupId/export', auth, async (req, res) => {
 
 router.post('/groups/:groupId/submit', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const mode = req.body.mode === 'draft' ? 'draft' : 'final';
     const groupFilter =
@@ -545,9 +551,7 @@ router.get('/:id', auth, async (req, res) => {
 
 router.post('/:id/claim', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const assignment = await ImageAssignment.findById(req.params.id);
     if (!assignment) {
@@ -712,9 +716,7 @@ router.post('/:id/submit', auth, async (req, res) => {
 
 router.get('/:id/reference', auth, async (req, res) => {
   try {
-    if (!canAccessImageLabeling(req.user)) {
-      return res.status(403).json({ message: 'Pass the knowledge test before image labeling tasks' });
-    }
+    if (!(await requireImageLabelingAccess(req, res))) return;
 
     const assignment = await ImageAssignment.findById(req.params.id);
     if (!assignment) {

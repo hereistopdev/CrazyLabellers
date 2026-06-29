@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { isAdmin, isLabeller, isReviewer, canAccessReview, canAccessVideoManagement, getAuthedHomePath } from './utils/roles';
-import { canUseLabeler } from './utils/labelerAccess';
+import { canUseLabeler, canAccessImageLabeling } from './utils/labelerAccess';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -62,6 +62,10 @@ function ProtectedRoute({
 
   if (labelerAccess && !canUseLabeler(user)) {
     return <Navigate to="/" replace />;
+  }
+
+  if (labelerAccess && !canAccessImageLabeling(user)) {
+    return <Navigate to="/assignments" replace />;
   }
 
   if (labellerOnly && !isLabeller(user)) {

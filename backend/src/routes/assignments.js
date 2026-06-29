@@ -530,9 +530,14 @@ router.put('/:id/labels', auth, async (req, res) => {
       if (!spacing.valid) {
         return res.status(400).json({
           message:
-            'Fix labeling rules before submitting — one event per frame, blank frame between events, and ≥ 6 even-frame gaps for paired events',
+            spacing.issues.length === 1
+              ? spacing.issues[0].message
+              : `${spacing.issues.length} labeling rule violations — fix each item below`,
           code: 'EVENT_SPACING_INVALID',
-          issues: spacing.issues,
+          issues: spacing.issues.map((issue, index) => ({
+            ...issue,
+            number: index + 1,
+          })),
           affectedIndices: spacing.affectedIndices,
         });
       }
