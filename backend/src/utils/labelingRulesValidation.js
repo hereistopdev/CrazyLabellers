@@ -1,208 +1,528 @@
 const { getFrameNumber, toDisplayFrame } = require('./frameTime');
 const { FPS } = require('../config/frameOffsets');
-const { validateEventSpacing } = require('./eventSpacingValidation');
+const { validateSameFrameOnly } = require('./eventSpacingValidation');
 
-const RECOVERY_PASS_RECEIVED = new Set(['Recovery', 'Pass Received']);
-const GAMEPLAY_INSIDE_HIGHLIGHT = new Set([
-  'Pass',
-  'Pass Received',
-  'Recovery',
-  'Tackle',
-  'Interception',
-  'Interception 2',
-  'Ball Out of Play',
-  'Clearance',
-  'Take on',
-  'Take on End',
-  'Block',
-  'Aerial Duel',
-  'Shot',
-  'Save',
-  'Foul',
-  'Goal',
-  'Referee',
-]);
-const CONTINUATION_AFTER_FOUL = new Set([
-  'Pass',
-  'Pass Received',
-  'Recovery',
-  'Shot',
-  'Take on',
-  'Take on End',
-  'Interception',
-  'Interception 2',
-]);
-const STOPPAGE_BEFORE_REFEREE = new Set(['Foul', 'Ball Out of Play', 'Goal']);
+const MIN_GAP_FRAMES = 2;
+const MIN_PAIR_FRAMES = 6;
+const REFEREE_MIN_FRAMES = 4;
+const TACKLE_FOUL_LOOKBACK_FRAMES = 24;
+const TACKLE_FOUL_VALID_GAPS = new Set([4, 6, 8, 10, 12]);
+const REFEREE_MAX_FRAMES = 150;
+const TAKE_ON_RECOMMEND_FRAMES = 100;
 
-const ADVANTAGE_LOOKAHEAD_FRAMES = 50;
+const RECOVERY_TRIGGERS = new Set(['TACKLE', 'AERIAL_DUEL', 'INTERCEPTION', 'CLEARANCE']);
+const BLOCKING_SEVERITIES = new Set(['critical', 'very_bad', 'bad']);
+
+function toLabelKey(eventType) {
+  return String(eventType || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+}
 
 function buildEventFrames(events, fps = FPS) {
   return (events || []).map((event, index) => ({
     index,
     eventType: event.eventType,
+    labelKey: toLabelKey(event.eventType),
     frame: getFrameNumber(event.frameTime, fps),
     frameTime: event.frameTime,
   }));
 }
 
-function validateFirstEvent(items) {
-  if (!items.length) return [];
-  const first = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index)[0];
-  if (!RECOVERY_PASS_RECEIVED.has(first.eventType)) return [];
-  return [
-    {
-      kind: 'first_event_recovery_pass_received',
-      severity: 'error',
-      events: [first],
-      message: `${first.eventType} cannot be the first event in the clip — the first mark must be another event type (often Pass, Ball Out of Play, Highlight Start, or Tackle)`,
-    },
-  ];
+function makeIssue(rule, severity, category, message, ...eventItems) {
+  return {
+    kind: rule,
+    severity,
+    category,
+    events: eventItems.filter(Boolean),
+    message,
+  };
 }
 
-function validateAfterHighlightEnd(items) {
-  const issues = [];
+function checkMarkerPairing(items, startLabel, endLabel, humanName) {
+  const markers = [];
+  for (const item of items) {
+    if (item.labelKey === startLabel) markers.push({ frame: item.frame, tie: 0, kind: 'START', item });
+    else if (item.labelKey === endLabel) markers.push({ frame: item.frame, tie: 1, kind: 'END', item });
+  }
+  if (!markers.length) return [];
+
+  markers.sort((a, b) => a.frame - b.frame || a.tie - b.tie);
+  const findings = [];
+  const stack = [];
+
+  for (const marker of markers) {
+    if (marker.kind === 'START') {
+      stack.push(marker);
+    } else if (!stack.length) {
+      findings.push(
+        makeIssue(
+          humanName,
+          'critical',
+          'Critical',
+          `${endLabel.replace(/_/g, ' ')} without matching ${startLabel.replace(/_/g, ' ')}`,
+          marker.item
+        )
+      );
+    } else {
+      const start = stack.pop();
+      if (marker.frame < start.frame) {
+        findings.push(
+          makeIssue(
+            humanName,
+            'critical',
+            'Critical',
+            `${endLabel.replace(/_/g, ' ')} is before ${startLabel.replace(/_/g, ' ')}`,
+            start.item,
+            marker.item
+          )
+        );
+      }
+    }
+  }
+
+  for (const start of stack) {
+    findings.push(
+      makeIssue(
+        humanName,
+        'critical',
+        'Critical',
+        `${startLabel.replace(/_/g, ' ')} without matching ${endLabel.replace(/_/g, ' ')}`,
+        start.item
+      )
+    );
+  }
+
+  return findings;
+}
+
+function highlightPairs(items) {
+  const markers = [];
+  for (const item of items) {
+    if (item.labelKey === 'HIGHLIGHT_START') markers.push({ frame: item.frame, tie: 0, kind: 'START' });
+    else if (item.labelKey === 'HIGHLIGHT_END') markers.push({ frame: item.frame, tie: 1, kind: 'END' });
+  }
+  markers.sort((a, b) => a.frame - b.frame || a.tie - b.tie);
+
+  const pairs = [];
+  const stack = [];
+  for (const marker of markers) {
+    if (marker.kind === 'START') stack.push(marker.frame);
+    else if (stack.length) {
+      const startFrame = stack.pop();
+      if (marker.frame >= startFrame) pairs.push([startFrame, marker.frame]);
+    }
+  }
+  return pairs;
+}
+
+function isInsideHighlight(frame, pairs) {
+  return pairs.some(([start, end]) => frame >= start && frame <= end);
+}
+
+function stripHighlightEvents(items, pairs) {
+  if (!pairs.length) return [...items];
+  return items.filter((item) => !isInsideHighlight(item.frame, pairs));
+}
+
+function highlightBetween(frameA, frameB, pairs) {
+  const lo = Math.min(frameA, frameB);
+  const hi = Math.max(frameA, frameB);
+  return pairs.some(([start, end]) => lo < start && end < hi);
+}
+
+function checkMinGap(items) {
+  const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
+  const findings = [];
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    const gap = b.frame - a.frame;
+    if (gap < MIN_GAP_FRAMES) {
+      findings.push(
+        makeIssue(
+          'min_gap',
+          'critical',
+          'Critical',
+          `gap=${gap} frame(s) (< ${MIN_GAP_FRAMES}) between ${a.eventType} and ${b.eventType}`,
+          a,
+          b
+        )
+      );
+    }
+  }
+  return findings;
+}
+
+function takeOnPairs(items) {
+  const markers = [];
+  for (const item of items) {
+    if (item.labelKey === 'TAKE_ON') markers.push({ frame: item.frame, tie: 0, kind: 'START', item });
+    else if (item.labelKey === 'TAKE_ON_END') markers.push({ frame: item.frame, tie: 1, kind: 'END', item });
+  }
+  markers.sort((a, b) => a.frame - b.frame || a.tie - b.tie);
+
+  const pairs = [];
+  const stack = [];
+  for (const marker of markers) {
+    if (marker.kind === 'START') stack.push(marker);
+    else if (stack.length) {
+      const start = stack.pop();
+      if (marker.frame >= start.frame) pairs.push([start, marker]);
+    }
+  }
+  return pairs;
+}
+
+function checkTakeOnTiming(items) {
+  const findings = [];
+  for (const [start, end] of takeOnPairs(items)) {
+    const frames = end.frame - start.frame;
+    if (frames < MIN_PAIR_FRAMES) {
+      findings.push(
+        makeIssue(
+          'take_on_timing',
+          'critical',
+          'Critical',
+          `Take on → Take on End: ${frames} frame(s) (< ${MIN_PAIR_FRAMES})`,
+          start.item,
+          end.item
+        )
+      );
+    } else if (frames % 2 !== 0) {
+      findings.push(
+        makeIssue(
+          'take_on_timing',
+          'critical',
+          'Critical',
+          `Take on → Take on End: ${frames} frame(s) (must be even)`,
+          start.item,
+          end.item
+        )
+      );
+    }
+  }
+  return findings;
+}
+
+function checkTackleFoul(items) {
+  const bad = [];
+  const suspicious = [];
+  const validGaps = [...TACKLE_FOUL_VALID_GAPS].sort((a, b) => a - b).join(', ');
+  const tackles = items
+    .filter((item) => item.labelKey === 'TACKLE')
+    .sort((a, b) => a.frame - b.frame || a.index - b.index);
+  const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
+
+  for (let i = 0; i < sorted.length; i += 1) {
+    const foul = sorted[i];
+    if (foul.labelKey !== 'FOUL') continue;
+    if (i > 0 && sorted[i - 1].labelKey === 'PASS') continue;
+
+    const preceding = tackles
+      .filter((t) => t.frame <= foul.frame && foul.frame - t.frame <= TACKLE_FOUL_LOOKBACK_FRAMES)
+      .map((t) => t.frame);
+
+    if (!preceding.length) {
+      suspicious.push(
+        makeIssue(
+          'tackle_foul',
+          'suspicious',
+          'Suspicious',
+          `Foul with no Tackle within ${TACKLE_FOUL_LOOKBACK_FRAMES} frames before it`,
+          foul
+        )
+      );
+      continue;
+    }
+
+    const tackleFrame = Math.max(...preceding);
+    const tackle = tackles.find((t) => t.frame === tackleFrame);
+    const frames = foul.frame - tackleFrame;
+    if (!TACKLE_FOUL_VALID_GAPS.has(frames)) {
+      bad.push(
+        makeIssue(
+          'tackle_foul',
+          'bad',
+          'Bad',
+          `Tackle → Foul: ${frames} frame(s) (must be ${validGaps})`,
+          tackle,
+          foul
+        )
+      );
+    }
+  }
+
+  return { bad, suspicious };
+}
+
+function refereeFollowupAfter(items, afterFrame) {
+  const refs = items
+    .filter(
+      (item) =>
+        item.labelKey === 'REFEREE' &&
+        item.frame > afterFrame &&
+        item.frame - afterFrame <= REFEREE_MAX_FRAMES
+    )
+    .map((item) => item.frame);
+  return refs.length ? Math.min(...refs) : null;
+}
+
+function checkRefereeFollowup(items) {
+  const bad = [];
+  const suspicious = [];
+  const triggers = items
+    .filter((item) => item.labelKey === 'BALL_OUT_OF_PLAY' || item.labelKey === 'FOUL')
+    .sort((a, b) => a.frame - b.frame || a.index - b.index);
+
+  for (const trigger of triggers) {
+    const refFrame = refereeFollowupAfter(items, trigger.frame);
+    const triggerName = trigger.eventType;
+    if (refFrame == null) {
+      suspicious.push(
+        makeIssue(
+          'referee_followup',
+          'suspicious',
+          'Suspicious',
+          `${triggerName} not followed by Referee within ${REFEREE_MAX_FRAMES} frames`,
+          trigger
+        )
+      );
+      continue;
+    }
+
+    const ref = items.find((item) => item.frame === refFrame && item.labelKey === 'REFEREE');
+    const frames = refFrame - trigger.frame;
+    if (frames < REFEREE_MIN_FRAMES) {
+      bad.push(
+        makeIssue(
+          'referee_followup',
+          'critical',
+          'Critical',
+          `${triggerName} → Referee: ${frames} frame(s) (< ${REFEREE_MIN_FRAMES})`,
+          trigger,
+          ref
+        )
+      );
+    } else if (frames % 2 !== 0) {
+      bad.push(
+        makeIssue(
+          'referee_followup',
+          'critical',
+          'Critical',
+          `${triggerName} → Referee: ${frames} frame(s) (must be even)`,
+          trigger,
+          ref
+        )
+      );
+    }
+  }
+
+  return { bad, suspicious };
+}
+
+function recoveryCheckSkipped(triggerKey, triggerFrame, next) {
+  const nextKey = next.labelKey;
+  const gap = next.frame - triggerFrame;
+
+  if (triggerKey === 'TACKLE' && nextKey === 'TACKLE') return true;
+  if (triggerKey === 'TACKLE' && nextKey === 'FOUL') return true;
+  if (triggerKey === 'TACKLE' && nextKey === 'CLEARANCE') return true;
+  if (triggerKey === 'TACKLE' && (nextKey === 'TAKE_ON' || nextKey === 'TAKE_ON_END')) return true;
+  if ((triggerKey === 'TACKLE' || triggerKey === 'INTERCEPTION') && nextKey === 'PASS') return true;
+  if (triggerKey === 'INTERCEPTION' && nextKey === 'CLEARANCE') return true;
+  if (triggerKey === 'CLEARANCE' && nextKey === 'AERIAL_DUEL') return true;
+  if (triggerKey === 'CLEARANCE' && nextKey === 'PASS_RECEIVED') return true;
+  if (triggerKey === 'CLEARANCE' && nextKey === 'FOUL') return true;
+  if (triggerKey === 'CLEARANCE' && nextKey === 'SHOT') return true;
+  if (triggerKey === 'CLEARANCE' && nextKey === 'REFEREE') return true;
+  if (triggerKey === 'CLEARANCE' && nextKey === 'CLEARANCE') return true;
+  if (triggerKey === 'AERIAL_DUEL' && nextKey === 'BALL_OUT_OF_PLAY') return true;
+  if (triggerKey === 'AERIAL_DUEL' && nextKey === 'AERIAL_DUEL') return true;
+  if (triggerKey === 'AERIAL_DUEL' && nextKey === 'CLEARANCE') return true;
+  if (triggerKey === 'AERIAL_DUEL' && nextKey === 'SHOT') return true;
+  if (triggerKey === 'AERIAL_DUEL' && nextKey === 'PASS' && (gap === 2 || gap === 3)) return true;
+  if (RECOVERY_TRIGGERS.has(triggerKey) && nextKey === 'HIGHLIGHT_START') return true;
+  if (
+    (triggerKey === 'TACKLE' || triggerKey === 'CLEARANCE' || triggerKey === 'INTERCEPTION') &&
+    nextKey === 'BALL_OUT_OF_PLAY'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function checkRecovery(items, pairs) {
+  const veryBad = [];
+  const suspicious = [];
   const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
 
   for (let i = 0; i < sorted.length - 1; i += 1) {
     const current = sorted[i];
+    if (!RECOVERY_TRIGGERS.has(current.labelKey)) continue;
     const next = sorted[i + 1];
-    if (current.eventType !== 'Highlight End') continue;
-    if (!RECOVERY_PASS_RECEIVED.has(next.eventType)) continue;
+    if (next.labelKey === 'RECOVERY') continue;
+    if (highlightBetween(current.frame, next.frame, pairs)) continue;
+    if (recoveryCheckSkipped(current.labelKey, current.frame, next)) continue;
 
-    issues.push({
-      kind: 'after_highlight_end_recovery_pass_received',
-      severity: 'error',
-      events: [current, next],
-      message: `${next.eventType} must not come immediately after Highlight End (frame ${toDisplayFrame(current.frame)}) — remove it or extend the highlight segment to include it`,
-    });
+    const finding = makeIssue(
+      'recovery',
+      current.labelKey === 'CLEARANCE' ? 'very_bad' : 'suspicious',
+      current.labelKey === 'CLEARANCE' ? 'Very bad' : 'Suspicious',
+      `${current.eventType} not followed by Recovery (next: ${next.eventType})`,
+      current,
+      next
+    );
+
+    if (current.labelKey === 'CLEARANCE') veryBad.push(finding);
+    else suspicious.push(finding);
   }
 
-  return issues;
+  return { veryBad, suspicious };
 }
 
-function validateGameplayInsideHighlight(items) {
-  const issues = [];
-  const starts = items
-    .filter((item) => item.eventType === 'Highlight Start')
-    .sort((a, b) => a.frame - b.frame || a.index - b.index);
+function checkForbiddenAtStart(items) {
+  if (!items.length) return [];
+  const first = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index)[0];
+  if (first.labelKey !== 'PASS_RECEIVED' && first.labelKey !== 'RECOVERY') return [];
+  return [
+    makeIssue(
+      'forbidden_at_start',
+      'very_bad',
+      'Very bad',
+      `${first.eventType} must not be the first event`,
+      first
+    ),
+  ];
+}
 
-  for (const start of starts) {
-    const end = items
-      .filter((item) => item.eventType === 'Highlight End' && item.frame > start.frame)
-      .sort((a, b) => a.frame - b.frame || a.index - b.index)[0];
+function checkForbiddenAfterHighlightEnd(fullItems) {
+  const findings = [];
+  const sorted = [...fullItems].sort((a, b) => a.frame - b.frame || a.index - b.index);
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    if (sorted[i].labelKey !== 'HIGHLIGHT_END') continue;
+    const next = sorted[i + 1];
+    if (next.labelKey !== 'PASS_RECEIVED' && next.labelKey !== 'RECOVERY') continue;
+    findings.push(
+      makeIssue(
+        'after_highlight_end',
+        'very_bad',
+        'Very bad',
+        `${next.eventType} must not immediately follow Highlight End`,
+        sorted[i],
+        next
+      )
+    );
+  }
+  return findings;
+}
 
-    if (!end) {
-      issues.push({
-        kind: 'highlight_unclosed',
-        severity: 'error',
-        events: [start],
-        message: `Highlight Start at frame ${toDisplayFrame(start.frame)} has no matching Highlight End — add Highlight End before live play resumes`,
-      });
-      continue;
+function checkTakeOnRecommended(items, pairs) {
+  const findings = [];
+  const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const current = sorted[i];
+    if (current.labelKey !== 'PASS_RECEIVED' && current.labelKey !== 'RECOVERY') continue;
+    const next = sorted[i + 1];
+    if (next.labelKey === 'TAKE_ON' || next.labelKey === 'TAKE_ON_END') continue;
+    if (highlightBetween(current.frame, next.frame, pairs)) continue;
+    const gapFrames = next.frame - current.frame;
+    if (gapFrames > TAKE_ON_RECOMMEND_FRAMES) {
+      findings.push(
+        makeIssue(
+          'take_on_recommended',
+          'recommended',
+          'Recommended',
+          `${current.eventType} is ${gapFrames} frames before ${next.eventType} (> ${TAKE_ON_RECOMMEND_FRAMES}); Take on may be missing`,
+          current,
+          next
+        )
+      );
     }
-
-    const inside = items.filter(
-      (item) =>
-        item.frame > start.frame &&
-        item.frame < end.frame &&
-        GAMEPLAY_INSIDE_HIGHLIGHT.has(item.eventType)
-    );
-
-    for (const event of inside) {
-      issues.push({
-        kind: 'gameplay_inside_highlight',
-        severity: 'error',
-        events: [start, event, end],
-        message: `${event.eventType} at frame ${toDisplayFrame(event.frame)} sits inside highlight segment (frames ${toDisplayFrame(start.frame)}–${toDisplayFrame(end.frame)}) — widen Highlight Start/End or move this event outside the replay/non-board segment`,
-      });
-    }
   }
-
-  return issues;
+  return findings;
 }
 
-function validatePassPassReceivedPattern(items) {
-  const issues = [];
+function checkConsecutivePass(items, pairs) {
+  const findings = [];
   const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
-  const pattern = ['Pass', 'Pass', 'Pass Received', 'Pass Received'];
-
-  for (let i = 0; i <= sorted.length - pattern.length; i += 1) {
-    const slice = sorted.slice(i, i + pattern.length);
-    const matches = slice.every((item, idx) => item.eventType === pattern[idx]);
-    if (!matches) continue;
-
-    issues.push({
-      kind: 'bad_pass_pass_received_chain',
-      severity: 'bad',
-      events: slice,
-      message: `BAD pattern: Pass → Pass → Pass Received → Pass Received (frames ${slice.map((e) => toDisplayFrame(e.frame)).join(', ')}) — review each mark; this chain is usually wrong`,
-    });
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if (a.labelKey !== 'PASS' || b.labelKey !== 'PASS') continue;
+    if (highlightBetween(a.frame, b.frame, pairs)) continue;
+    findings.push(
+      makeIssue(
+        'consecutive_pass',
+        'suspicious',
+        'Suspicious',
+        `Pass immediately followed by Pass (gap=${b.frame - a.frame} frame(s))`,
+        a,
+        b
+      )
+    );
   }
-
-  return issues;
+  return findings;
 }
 
-function validateFoulAdvantage(items) {
-  const issues = [];
+function checkPassTackle(items, pairs) {
+  const findings = [];
   const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
-
-  for (const foul of sorted.filter((item) => item.eventType === 'Foul')) {
-    const following = sorted.filter(
-      (item) => item.frame > foul.frame && item.frame <= foul.frame + ADVANTAGE_LOOKAHEAD_FRAMES
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if (a.labelKey !== 'PASS' || b.labelKey !== 'TACKLE') continue;
+    if (highlightBetween(a.frame, b.frame, pairs)) continue;
+    findings.push(
+      makeIssue(
+        'pass_tackle',
+        'suspicious',
+        'Suspicious',
+        `Pass immediately followed by Tackle (gap=${b.frame - a.frame} frame(s))`,
+        a,
+        b
+      )
     );
-
-    const hasReferee = following.some((item) => item.eventType === 'Referee');
-    if (hasReferee) continue;
-
-    const continuesPlay = following.some((item) => CONTINUATION_AFTER_FOUL.has(item.eventType));
-    if (!continuesPlay) continue;
-
-    issues.push({
-      kind: 'foul_advantage_play_continues',
-      severity: 'error',
-      events: [foul, ...following.filter((item) => CONTINUATION_AFTER_FOUL.has(item.eventType)).slice(0, 1)],
-      message: `Foul at frame ${toDisplayFrame(foul.frame)} but play continues without Referee — remove Foul (advantage) and do not add Referee unless the whistle stops play`,
-    });
   }
-
-  return issues;
-}
-
-function validateRefereeWithoutStoppageCause(items) {
-  const issues = [];
-  const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
-  const LOOKBACK = 100;
-
-  for (const ref of sorted.filter((item) => item.eventType === 'Referee')) {
-    const before = sorted.filter(
-      (item) => item.frame < ref.frame && item.frame >= ref.frame - LOOKBACK
-    );
-    const hasCause = before.some((item) => STOPPAGE_BEFORE_REFEREE.has(item.eventType));
-    if (hasCause) continue;
-
-    issues.push({
-      kind: 'referee_without_stoppage_cause',
-      severity: 'warning',
-      events: [ref],
-      message: `Referee at frame ${toDisplayFrame(ref.frame)} with no recent Foul, Ball Out of Play, or Goal — OK for offside/indirect stoppages; confirm the whistle actually stopped play`,
-    });
-  }
-
-  return issues;
+  return findings;
 }
 
 function validateLabelingRules(events, fps = FPS) {
-  const items = buildEventFrames(events, fps);
-  const issues = [
-    ...validateFirstEvent(items),
-    ...validateAfterHighlightEnd(items),
-    ...validateGameplayInsideHighlight(items),
-    ...validatePassPassReceivedPattern(items),
-    ...validateFoulAdvantage(items),
-    ...validateRefereeWithoutStoppageCause(items),
-  ];
+  const fullItems = buildEventFrames(events, fps);
+  if (!fullItems.length) {
+    return { valid: true, issues: [], affectedIndices: [], blockingCount: 0, warningCount: 0 };
+  }
 
-  const blocking = issues.filter((issue) => issue.severity !== 'warning');
+  const issues = [];
+
+  issues.push(
+    ...checkMarkerPairing(fullItems, 'HIGHLIGHT_START', 'HIGHLIGHT_END', 'highlight_pairing')
+  );
+  issues.push(...checkForbiddenAfterHighlightEnd(fullItems));
+
+  const pairs = highlightPairs(fullItems);
+  const stripped = stripHighlightEvents(fullItems, pairs);
+
+  issues.push(...checkMarkerPairing(stripped, 'TAKE_ON', 'TAKE_ON_END', 'take_on_pairing'));
+  issues.push(...checkMinGap(stripped));
+  issues.push(...checkTakeOnTiming(stripped));
+
+  const tackleFoul = checkTackleFoul(stripped);
+  issues.push(...tackleFoul.bad, ...tackleFoul.suspicious);
+
+  const referee = checkRefereeFollowup(stripped);
+  issues.push(...referee.bad, ...referee.suspicious);
+
+  const recovery = checkRecovery(stripped, pairs);
+  issues.push(...recovery.veryBad, ...recovery.suspicious);
+
+  issues.push(...checkForbiddenAtStart(stripped));
+  issues.push(...checkConsecutivePass(stripped, pairs));
+  issues.push(...checkPassTackle(stripped, pairs));
+  issues.push(...checkTakeOnRecommended(stripped, pairs));
+
+  const blocking = issues.filter((issue) => BLOCKING_SEVERITIES.has(issue.severity));
   const affectedIndices = [...new Set(issues.flatMap((issue) => issue.events.map((e) => e.index)))];
 
   return {
@@ -214,32 +534,24 @@ function validateLabelingRules(events, fps = FPS) {
   };
 }
 
-function mergeLabelingValidations(spacingResult, rulesResult) {
-  const issues = [...(spacingResult?.issues || []), ...(rulesResult?.issues || [])];
-  const affectedIndices = [
-    ...new Set([
-      ...(spacingResult?.affectedIndices || []),
-      ...(rulesResult?.affectedIndices || []),
-    ]),
-  ];
+function mergeLabelingValidations(...results) {
+  const issues = results.flatMap((result) => result?.issues || []);
+  const affectedIndices = [...new Set(results.flatMap((result) => result?.affectedIndices || []))];
+  const valid = results.every((result) => result?.valid !== false);
 
-  return {
-    valid: Boolean(spacingResult?.valid) && Boolean(rulesResult?.valid),
-    issues,
-    affectedIndices,
-  };
+  return { valid, issues, affectedIndices };
 }
 
 function validateSubmissionLabeling(events, fps = FPS) {
-  const spacing = validateEventSpacing(events, fps);
+  const sameFrame = validateSameFrameOnly(events, fps);
   const rules = validateLabelingRules(events, fps);
-  return mergeLabelingValidations(spacing, rules);
+  return mergeLabelingValidations(sameFrame, rules);
 }
 
 module.exports = {
   validateLabelingRules,
   validateSubmissionLabeling,
   buildEventFrames,
-  RECOVERY_PASS_RECEIVED,
-  GAMEPLAY_INSIDE_HIGHLIGHT,
+  toLabelKey,
+  BLOCKING_SEVERITIES,
 };

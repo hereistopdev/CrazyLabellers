@@ -29,10 +29,10 @@ import {
 } from '../utils/reviewPlayback';
 import { formatEventTime, toDisplayFrame } from '../utils/frameTime';
 import {
-  validateEventSpacing,
   getEventSpacingRuleSummary,
   getEventPairTimingRuleSummary,
 } from '../utils/eventSpacingValidation';
+import { validateSubmissionLabeling } from '../utils/labelingRulesValidation';
 
 const FRAME_PLAY_INTERVAL_MS = 500;
 
@@ -904,7 +904,7 @@ export default function ReviewSubmission() {
   const asideHeight = useSyncElementHeight(videoDisplayRef, !isPreview && Boolean(reviewData));
 
   const checkSpacingRules = useCallback(() => {
-    const spacing = validateEventSpacing(submissionEvents, fps);
+    const spacing = validateSubmissionLabeling(submissionEvents, fps);
     if (spacing.valid) {
       setSpacingIssueIndices(new Set());
       setError('');

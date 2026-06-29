@@ -1878,6 +1878,11 @@ body.nav-open {
   color: #fca5a5;
 }
 
+.labeling-spacing-issue-btn--critical {
+  color: #f87171;
+  font-weight: 600;
+}
+
 .labeling-spacing-issue-btn--warning {
   color: #fcd34d;
 }

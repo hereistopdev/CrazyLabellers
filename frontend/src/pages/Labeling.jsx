@@ -1440,6 +1440,8 @@ export default function Labeling() {
                     : `${spacingIssues.length} labeling rules to fix before submit`}
                 </strong>
                 <p className="labeling-spacing-alert-summary">
+                  Critical, Very bad, and Bad block submit. Recommended and Suspicious are warnings.
+                  {' '}
                   {getEventSpacingRuleSummary()} {getEventPairTimingRuleSummary()}
                 </p>
                 <ol className="labeling-spacing-issue-list">
@@ -1449,13 +1451,22 @@ export default function Labeling() {
                       <li key={`${issue.kind}-${issue.frame ?? issue.frameA}-${index}`}>
                         <button
                           type="button"
-                          className={`labeling-spacing-issue-btn${issue.severity === 'bad' ? ' labeling-spacing-issue-btn--bad' : ''}${issue.severity === 'warning' ? ' labeling-spacing-issue-btn--warning' : ''}`}
+                          className={`labeling-spacing-issue-btn${
+                            issue.severity === 'critical' || issue.severity === 'very_bad'
+                              ? ' labeling-spacing-issue-btn--critical'
+                              : issue.severity === 'bad'
+                                ? ' labeling-spacing-issue-btn--bad'
+                                : issue.severity === 'recommended' || issue.severity === 'suspicious'
+                                  ? ' labeling-spacing-issue-btn--warning'
+                                  : ''
+                          }`}
                           onClick={() => {
                             if (targetIndex != null && events[targetIndex]) {
                               selectEvent(targetIndex, events[targetIndex].frameTime);
                             }
                           }}
                         >
+                          {issue.category ? `[${issue.category}] ` : ''}
                           {issue.message}
                         </button>
                       </li>

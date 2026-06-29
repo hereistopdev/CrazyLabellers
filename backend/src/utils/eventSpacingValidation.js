@@ -102,6 +102,10 @@ function validatePairTiming(items) {
 }
 
 function validateEventSpacing(events, fps = FPS) {
+  return validateSameFrameOnly(events, fps);
+}
+
+function validateSameFrameOnly(events, fps = FPS) {
   const items = buildEventFrames(events, fps);
   const issues = [];
 
@@ -119,30 +123,14 @@ function validateEventSpacing(events, fps = FPS) {
     if (frameItems.length > 1) {
       issues.push({
         kind: 'same_frame',
+        severity: 'critical',
+        category: 'Critical',
         frame,
         events: frameItems,
-        message: `Frame ${toDisplayFrame(frame)} has ${frameItems.length} events (${frameItems.map((i) => i.eventType).join(', ')}) — move one event to a different frame (only one event per frame)`,
+        message: `Frame ${toDisplayFrame(frame)} has ${frameItems.length} events (${frameItems.map((i) => i.eventType).join(', ')}) — only one event per frame`,
       });
     }
   }
-
-  const sorted = [...items].sort((a, b) => a.frame - b.frame || a.index - b.index);
-  for (let i = 0; i < sorted.length - 1; i += 1) {
-    const current = sorted[i];
-    const next = sorted[i + 1];
-    const gap = next.frame - current.frame;
-    if (gap === 1) {
-      issues.push({
-        kind: 'adjacent_frames',
-        frameA: current.frame,
-        frameB: next.frame,
-        events: [current, next],
-        message: `${current.eventType} at frame ${toDisplayFrame(current.frame)} and ${next.eventType} at frame ${toDisplayFrame(next.frame)} are on consecutive frames — leave at least one blank frame between them`,
-      });
-    }
-  }
-
-  issues.push(...validatePairTiming(items));
 
   const affectedIndices = [...new Set(issues.flatMap((issue) => issue.events.map((e) => e.index)))];
 
@@ -154,11 +142,11 @@ function validateEventSpacing(events, fps = FPS) {
 }
 
 function getEventSpacingRuleSummary() {
-  return 'Only one event per frame, with at least one blank frame between any two events.';
+  return 'Only one event per frame, with at least two frames (80 ms) between consecutive events. Highlight segments are excluded from gameplay checks.';
 }
 
 function getEventPairTimingRuleSummary() {
-  return `Paired timings within ${PAIR_MAX_GAP} frames need a gap of ≥ 6 even frames: Take on → Take on End; Tackle → Foul; Foul → Referee; Ball Out of Play → Referee.`;
+  return 'Take on → Take on End: ≥ 6 even frames. Tackle → Foul: gap must be 4, 6, 8, 10, or 12 frames. Foul / Ball Out of Play → Referee: ≥ 4 even frames within 150 frames.';
 }
 
 function getTackleFoulRuleSummary() {
@@ -173,6 +161,7 @@ module.exports = {
   PAIR_TIMING_RULES,
   PAIR_MAX_GAP,
   validateEventSpacing,
+  validateSameFrameOnly,
   validatePairTiming,
   buildEventFrames,
   getEventSpacingRuleSummary,
